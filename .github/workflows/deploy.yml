@@ -1,0 +1,27 @@
+name: Deploy to Homelab
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOMELAB_HOST }}
+          username: ${{ secrets.HOMELAB_USER }}
+          key: ${{ secrets.HOMELAB_SSH_KEY }}
+          port: ${{ secrets.HOMELAB_SSH_PORT }}
+          script: |
+            cd ${{ secrets.HOMELAB_APP_PATH }}
+            git pull origin main
+            docker compose build --no-cache
+            docker compose up -d
+            docker compose exec app npx prisma migrate deploy
+            echo "✅ Deployment abgeschlossen: $(date)"
