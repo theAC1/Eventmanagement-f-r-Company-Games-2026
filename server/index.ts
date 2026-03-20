@@ -34,7 +34,7 @@ app.prepare().then(() => {
   setupSocketHandlers(io);
 
   // Alle anderen Requests → Next.js
-  expressApp.all("*", (req, res) => {
+  expressApp.all("/{*path}", (req, res) => {
     const parsedUrl = parse(req.url!, true);
     handle(req, res, parsedUrl);
   });
