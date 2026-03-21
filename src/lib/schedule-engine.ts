@@ -30,6 +30,13 @@ export type PauseInput = {
   name: string;
 };
 
+export type MittagspauseConfig = {
+  nachRunde: number;          // Nach welcher Runde
+  dauerMin: number;           // Dauer pro Schicht (z.B. 45)
+  maxTeamsGleichzeitig: number; // Küchen-Kapazität (z.B. 8)
+  versatzMin: number;          // Versatz zwischen Schichten (z.B. 5)
+};
+
 export type ScheduleConfig = {
   teams: { id: string; name: string; nummer: number }[];
   games: GameInput[];
@@ -37,6 +44,7 @@ export type ScheduleConfig = {
   wechselzeitMin: number;
   startZeit: string;
   pausen: PauseInput[];
+  mittagspause?: MittagspauseConfig;
 };
 
 export type SlotOutput = {
@@ -57,6 +65,14 @@ export type ScheduleStatistiken = {
   theoretischesMinimum: number;
 };
 
+export type MittagsSchicht = {
+  schicht: number;
+  startZeit: string;
+  endZeit: string;
+  teamIds: string[];
+  teamNames: string[];
+};
+
 export type ScheduleResult = {
   slots: SlotOutput[];
   runden: number;
@@ -64,6 +80,7 @@ export type ScheduleResult = {
   konflikte: string[];
   teamZeitplaene: Record<string, SlotOutput[]>;
   statistiken?: ScheduleStatistiken;
+  mittagsSchichten?: MittagsSchicht[];
 };
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────
@@ -423,7 +440,7 @@ function tryAssignment(
 // ─── Hauptfunktion ───────────────────────────────────────────────────
 
 export function generateSchedule(config: ScheduleConfig): ScheduleResult {
-  const { teams, games, blockDauerMin, wechselzeitMin, startZeit, pausen } = config;
+  const { teams, games, blockDauerMin, wechselzeitMin, startZeit, pausen, mittagspause } = config;
   const N = teams.length;
   const M = games.length;
 
@@ -512,6 +529,32 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
     }
   }
 
+  // ── Gestaffelte Mittagspause berechnen ──
+  let mittagsSchichten: MittagsSchicht[] | undefined;
+
+  if (mittagspause && N > 0) {
+    const { dauerMin, maxTeamsGleichzeitig, versatzMin } = mittagspause;
+    const anzahlSchichten = Math.ceil(N / maxTeamsGleichzeitig);
+
+    if (anzahlSchichten > 1) {
+      mittagsSchichten = [];
+      // Teams gleichmässig auf Schichten verteilen
+      const teamsProSchicht = Math.ceil(N / anzahlSchichten);
+      for (let s = 0; s < anzahlSchichten; s++) {
+        const startIdx = s * teamsProSchicht;
+        const endIdx = Math.min(startIdx + teamsProSchicht, N);
+        const schichtTeams = teams.slice(startIdx, endIdx);
+        mittagsSchichten.push({
+          schicht: s + 1,
+          startZeit: "", // wird unten beim Zeitslot-Bau gesetzt
+          endZeit: "",
+          teamIds: schichtTeams.map(t => t.id),
+          teamNames: schichtTeams.map(t => t.name),
+        });
+      }
+    }
+  }
+
   // ── Zeitslots ──
   const slots: SlotOutput[] = [];
   let currentTime = parseTime(startZeit);
@@ -533,8 +576,34 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
       });
     }
     currentTime = roundEnd + wechselzeitMin;
+
+    // Einfache Pausen (nicht-Mittag)
     const pause = pauseMap.get(roundNum);
     if (pause) currentTime += pause.dauerMin;
+
+    // Gestaffelte Mittagspause
+    if (mittagspause && roundNum === mittagspause.nachRunde) {
+      if (mittagsSchichten && mittagsSchichten.length > 1) {
+        // Gestaffelt: Schichten mit Versatz
+        const pauseStart = currentTime;
+        for (let s = 0; s < mittagsSchichten.length; s++) {
+          const schichtStart = pauseStart + s * mittagspause.versatzMin;
+          const schichtEnd = schichtStart + mittagspause.dauerMin;
+          mittagsSchichten[s].startZeit = formatTime(schichtStart);
+          mittagsSchichten[s].endZeit = formatTime(schichtEnd);
+        }
+        // Gesamtpause = letzte Schicht Ende - erste Schicht Start
+        const totalPause = (mittagsSchichten.length - 1) * mittagspause.versatzMin + mittagspause.dauerMin;
+        currentTime += totalPause;
+      } else {
+        // Alle passen gleichzeitig → einfache Pause
+        if (mittagsSchichten && mittagsSchichten.length === 1) {
+          mittagsSchichten[0].startZeit = formatTime(currentTime);
+          mittagsSchichten[0].endZeit = formatTime(currentTime + mittagspause.dauerMin);
+        }
+        currentTime += mittagspause.dauerMin;
+      }
+    }
   }
 
   // ── Team-Zeitpläne ──
@@ -583,5 +652,6 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
       teamAuslastung,
       theoretischesMinimum: theoretischesMinimum(N, soloCount, duellCount),
     },
+    mittagsSchichten,
   };
 }

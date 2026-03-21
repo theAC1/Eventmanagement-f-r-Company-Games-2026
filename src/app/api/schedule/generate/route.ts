@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateSchedule, type PauseInput } from "@/lib/schedule-engine";
+import { generateSchedule, type PauseInput, type MittagspauseConfig } from "@/lib/schedule-engine";
 
 // POST /api/schedule/generate – Zeitplan generieren (Preview, ohne DB-Speicherung)
 export async function POST(request: NextRequest) {
@@ -11,7 +11,14 @@ export async function POST(request: NextRequest) {
       wechselzeitMin = 5,
       startZeit = "09:00",
       pausen = [] as PauseInput[],
-    } = body;
+      mittagspause,
+    } = body as {
+      blockDauerMin?: number;
+      wechselzeitMin?: number;
+      startZeit?: string;
+      pausen?: PauseInput[];
+      mittagspause?: MittagspauseConfig;
+    };
 
     // Load all active/ready games
     const games = await prisma.game.findMany({
@@ -47,6 +54,7 @@ export async function POST(request: NextRequest) {
       wechselzeitMin,
       startZeit,
       pausen,
+      mittagspause,
     });
 
     return NextResponse.json(result);

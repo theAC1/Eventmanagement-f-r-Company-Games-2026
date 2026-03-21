@@ -163,8 +163,10 @@ model ZeitplanConfig {
   startZeit      String
   endZeit        String
   pausen         Json     @default("[]")
+  mittagspause   Json?
   istAktiv       Boolean  @default(false)
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   slots ZeitplanSlot[]
 }

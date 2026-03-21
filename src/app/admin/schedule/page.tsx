@@ -15,12 +15,31 @@ type SlotOutput = {
   teamNames: string[];
 };
 
+type MittagsSchicht = {
+  schicht: number;
+  startZeit: string;
+  endZeit: string;
+  teamIds: string[];
+  teamNames: string[];
+};
+
 type ScheduleResult = {
   slots: SlotOutput[];
   runden: number;
   endZeit: string;
   konflikte: string[];
   teamZeitplaene: Record<string, SlotOutput[]>;
+  mittagsSchichten?: MittagsSchicht[];
+};
+
+type SavedConfig = {
+  id: string;
+  name: string;
+  anzahlTeams: number;
+  istAktiv: boolean;
+  createdAt: string;
+  endZeit: string;
+  _count: { slots: number };
 };
 
 export default function SchedulePage() {
@@ -32,13 +51,30 @@ export default function SchedulePage() {
   const [viewMode, setViewMode] = useState<"matrix" | "team">("matrix");
   const [selectedTeam, setSelectedTeam] = useState<string>("");
 
+  // Gespeicherte Zeitpläne
+  const [savedConfigs, setSavedConfigs] = useState<SavedConfig[]>([]);
+  const [loadedConfigId, setLoadedConfigId] = useState<string | null>(null);
+  const [saveName, setSaveName] = useState("");
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
   // Config
   const [blockDauer, setBlockDauer] = useState(15);
   const [wechselzeit, setWechselzeit] = useState(5);
   const [startZeit, setStartZeit] = useState("09:00");
 
+  // Mittagspause
+  const [mittagAktiv, setMittagAktiv] = useState(true);
+  const [mittagNachRunde, setMittagNachRunde] = useState(6);
+  const [mittagDauer, setMittagDauer] = useState(45);
+  const [mittagMaxTeams, setMittagMaxTeams] = useState(8);
+  const [mittagVersatz, setMittagVersatz] = useState(5);
+
   // Quick team generator
   const [quickTeamCount, setQuickTeamCount] = useState(16);
+
+  const loadSavedConfigs = () => {
+    fetch("/api/schedule").then((r) => r.json()).then(setSavedConfigs);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -48,7 +84,98 @@ export default function SchedulePage() {
       setTeams(t);
       setGames(g);
     });
+    loadSavedConfigs();
   }, []);
+
+  const handleSave = async () => {
+    if (!result || !saveName.trim()) return;
+    setLoading(true);
+    try {
+      const body = {
+        name: saveName,
+        blockDauerMin: blockDauer,
+        wechselzeitMin: wechselzeit,
+        startZeit,
+        endZeit: result.endZeit,
+        pausen: [],
+        mittagspause: mittagAktiv ? { nachRunde: mittagNachRunde, dauerMin: mittagDauer, maxTeamsGleichzeitig: mittagMaxTeams, versatzMin: mittagVersatz } : null,
+        slots: result.slots,
+      };
+
+      let res;
+      if (loadedConfigId) {
+        res = await fetch("/api/schedule/" + loadedConfigId, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } else {
+        res = await fetch("/api/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
+
+      if (!res.ok) throw new Error("Fehler beim Speichern");
+      const saved = await res.json();
+      setLoadedConfigId(saved.id);
+      setSaveMsg("Gespeichert");
+      setTimeout(() => setSaveMsg(null), 2000);
+      loadSavedConfigs();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoad = async (configId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/schedule/" + configId);
+      if (!res.ok) throw new Error("Fehler beim Laden");
+      const data = await res.json();
+      setResult(data);
+      setLoadedConfigId(data.id);
+      setSaveName(data.name);
+      setBlockDauer(data.blockDauerMin);
+      setWechselzeit(data.wechselzeitMin);
+      setStartZeit(data.startZeit);
+      if (data.mittagspause) {
+        setMittagAktiv(true);
+        setMittagNachRunde(data.mittagspause.nachRunde);
+        setMittagDauer(data.mittagspause.dauerMin);
+        setMittagMaxTeams(data.mittagspause.maxTeamsGleichzeitig);
+        setMittagVersatz(data.mittagspause.versatzMin);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (configId: string) => {
+    if (!confirm("Zeitplan wirklich loeschen?")) return;
+    await fetch("/api/schedule/" + configId, { method: "DELETE" });
+    if (loadedConfigId === configId) {
+      setLoadedConfigId(null);
+      setResult(null);
+      setSaveName("");
+    }
+    loadSavedConfigs();
+  };
+
+  const handleSetActive = async (configId: string) => {
+    await fetch("/api/schedule/" + configId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nameOnly: true, istAktiv: true, name: savedConfigs.find(c => c.id === configId)?.name }),
+    });
+    loadSavedConfigs();
+  };
 
   const readyGames = games.filter(
     (g) => g.status === "BEREIT" || g.status === "AKTIV"
@@ -88,6 +215,14 @@ export default function SchedulePage() {
           wechselzeitMin: wechselzeit,
           startZeit,
           pausen: [],
+          mittagspause: mittagAktiv
+            ? {
+                nachRunde: mittagNachRunde,
+                dauerMin: mittagDauer,
+                maxTeamsGleichzeitig: mittagMaxTeams,
+                versatzMin: mittagVersatz,
+              }
+            : undefined,
         }),
       });
 
@@ -120,6 +255,60 @@ export default function SchedulePage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Zeitplan-Engine</h1>
+
+      {/* Gespeicherte Zeitpläne */}
+      {savedConfigs.length > 0 && (
+        <div className="border border-zinc-800 rounded-lg p-4 space-y-3">
+          <h3 className="text-sm font-medium text-zinc-400">Gespeicherte Zeitpläne</h3>
+          <div className="space-y-2">
+            {savedConfigs.map((c) => (
+              <div
+                key={c.id}
+                className={`flex items-center justify-between px-3 py-2 rounded-lg border transition ${
+                  loadedConfigId === c.id
+                    ? "border-blue-700 bg-blue-950/30"
+                    : c.istAktiv
+                      ? "border-emerald-800 bg-emerald-950/20"
+                      : "border-zinc-800 hover:border-zinc-700"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleLoad(c.id)}
+                    className="text-sm font-medium hover:text-blue-400 transition"
+                  >
+                    {c.name}
+                  </button>
+                  <span className="text-xs text-zinc-500">
+                    {c.anzahlTeams} Teams &middot; {c._count.slots} Slots
+                  </span>
+                  {c.istAktiv && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300">
+                      Aktiv
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {!c.istAktiv && (
+                    <button
+                      onClick={() => handleSetActive(c.id)}
+                      className="text-xs text-zinc-500 hover:text-emerald-400 transition"
+                    >
+                      Aktivieren
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    className="text-xs text-zinc-600 hover:text-red-400 transition"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Config Panel */}
       <div className="border border-zinc-800 rounded-lg p-6 space-y-5">
@@ -169,6 +358,76 @@ export default function SchedulePage() {
           </div>
         </div>
 
+        {/* Mittagspause */}
+        <div className="border border-zinc-800 rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium">Mittagspause</h3>
+            <button
+              onClick={() => setMittagAktiv(!mittagAktiv)}
+              className={`px-3 py-1 text-xs rounded-lg border transition ${
+                mittagAktiv
+                  ? "bg-emerald-900/40 border-emerald-700 text-emerald-300"
+                  : "bg-zinc-900 border-zinc-700 text-zinc-500"
+              }`}
+            >
+              {mittagAktiv ? "Aktiv" : "Aus"}
+            </button>
+          </div>
+          {mittagAktiv && (
+            <div className="grid grid-cols-4 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-zinc-500">Nach Runde</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={mittagNachRunde}
+                  onChange={(e) => setMittagNachRunde(parseInt(e.target.value) || 6)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-zinc-500">Dauer (min)</label>
+                <input
+                  type="number"
+                  min={15}
+                  step={5}
+                  value={mittagDauer}
+                  onChange={(e) => setMittagDauer(parseInt(e.target.value) || 45)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-zinc-500">Max Teams gleichzeitig</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={mittagMaxTeams}
+                  onChange={(e) => setMittagMaxTeams(parseInt(e.target.value) || 8)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-zinc-500">Versatz (min)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={mittagVersatz}
+                  onChange={(e) => setMittagVersatz(parseInt(e.target.value) || 5)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+            </div>
+          )}
+          {mittagAktiv && teams.length > mittagMaxTeams && (
+            <p className="text-xs text-amber-400">
+              {teams.length} Teams &gt; {mittagMaxTeams} Kapazit&auml;t →{" "}
+              {Math.ceil(teams.length / mittagMaxTeams)} Schichten mit je{" "}
+              {mittagVersatz} min Versatz
+            </p>
+          )}
+        </div>
+
         {/* Status */}
         <div className="flex items-center gap-6 text-sm text-zinc-400">
           <span>
@@ -210,18 +469,54 @@ export default function SchedulePage() {
           </p>
         )}
 
-        <button
-          onClick={handleGenerate}
-          disabled={loading || teams.length === 0 || readyGames.length === 0}
-          className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? "Generiert..." : "Zeitplan generieren"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleGenerate}
+            disabled={loading || teams.length === 0 || readyGames.length === 0}
+            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? "Generiert..." : "Zeitplan generieren"}
+          </button>
+          {loadedConfigId && (
+            <span className="text-xs text-blue-400">
+              Geladen: {saveName}
+            </span>
+          )}
+        </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}
       </div>
 
-      {/* Result */}
+      {/* Result + Save */}
+      {result && (
+        <div className="flex items-center gap-3 border border-zinc-800 rounded-lg p-4">
+          <input
+            type="text"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            placeholder="Name fuer diesen Zeitplan..."
+            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+          />
+          <button
+            onClick={handleSave}
+            disabled={!saveName.trim() || loading}
+            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
+          >
+            {loadedConfigId ? "Aktualisieren" : "Speichern"}
+          </button>
+          {loadedConfigId && (
+            <button
+              onClick={() => { setLoadedConfigId(null); setSaveName(""); }}
+              className="px-3 py-2 text-xs text-zinc-500 hover:text-white transition"
+            >
+              Als neu speichern
+            </button>
+          )}
+          {saveMsg && <span className="text-sm text-emerald-400">{saveMsg}</span>}
+        </div>
+      )}
+
+      {/* Result Details */}
       {result && (
         <div className="space-y-6">
           {/* Summary */}
@@ -249,6 +544,30 @@ export default function SchedulePage() {
                   ... und {result.konflikte.length - 10} weitere
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Mittagsschichten */}
+          {result.mittagsSchichten && result.mittagsSchichten.length > 1 && (
+            <div className="border border-amber-800/50 bg-amber-950/20 rounded-lg p-4 space-y-3">
+              <p className="text-sm font-medium text-amber-300">
+                Mittagspause: {result.mittagsSchichten.length} Schichten
+              </p>
+              <div className="space-y-2">
+                {result.mittagsSchichten.map((s) => (
+                  <div
+                    key={s.schicht}
+                    className="flex items-center justify-between text-sm border border-amber-900/30 rounded px-3 py-2"
+                  >
+                    <span className="text-zinc-400">
+                      Schicht {s.schicht}: {s.startZeit}–{s.endZeit}
+                    </span>
+                    <span className="text-zinc-300">
+                      {s.teamNames.join(", ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
