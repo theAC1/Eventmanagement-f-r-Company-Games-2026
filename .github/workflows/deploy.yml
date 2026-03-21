@@ -6,22 +6,25 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Pull latest code
+        working-directory: /home/deploy/company-games-2026
+        run: git pull origin main
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOMELAB_HOST }}
-          username: ${{ secrets.HOMELAB_USER }}
-          key: ${{ secrets.HOMELAB_SSH_KEY }}
-          port: ${{ secrets.HOMELAB_SSH_PORT }}
-          script: |
-            cd ${{ secrets.HOMELAB_APP_PATH }}
-            git pull origin main
-            docker compose build --no-cache
-            docker compose up -d
-            docker compose exec app npx prisma migrate deploy
-            echo "✅ Deployment abgeschlossen: $(date)"
+      - name: Build containers
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose build --no-cache
+
+      - name: Restart containers
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose up -d
+
+      - name: Run database migrations
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose exec -T app npx prisma migrate deploy
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          curl -sf http://localhost:80 > /dev/null && echo "✅ Deployment OK: $(date)" || echo "❌ Health check failed"
