@@ -106,6 +106,14 @@ export default function RefereeGamePage() {
         )}
       </div>
 
+      {/* Ergebnis eintragen Button */}
+      <Link
+        href={`/referee/${slug}/eingabe`}
+        className="block w-full py-3 bg-white text-black text-center text-sm font-semibold rounded-lg hover:bg-zinc-200 transition"
+      >
+        Ergebnis eintragen
+      </Link>
+
       {/* Quick Info Bar */}
       <div className="flex flex-wrap gap-3">
         <InfoChip label="Modus" value={game.modus === "DUELL" ? `Duell (${game.teamsProSlot} Teams)` : "Solo"} />

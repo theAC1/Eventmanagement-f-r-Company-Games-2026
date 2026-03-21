@@ -36,9 +36,12 @@ export default function AdminLayout({
               >
                 Zeitplan
               </Link>
-              <span className="px-3 py-1.5 rounded-md text-zinc-600 cursor-not-allowed">
+              <Link
+                href="/admin/gameday"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
                 Gameday
-              </span>
+              </Link>
             </nav>
           </div>
           <Link
