@@ -24,12 +24,18 @@ export default function AdminLayout({
               >
                 Games
               </Link>
-              <span className="px-3 py-1.5 rounded-md text-zinc-600 cursor-not-allowed">
+              <Link
+                href="/admin/materials"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
                 Material
-              </span>
-              <span className="px-3 py-1.5 rounded-md text-zinc-600 cursor-not-allowed">
+              </Link>
+              <Link
+                href="/admin/schedule"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
                 Zeitplan
-              </span>
+              </Link>
               <span className="px-3 py-1.5 rounded-md text-zinc-600 cursor-not-allowed">
                 Gameday
               </span>
