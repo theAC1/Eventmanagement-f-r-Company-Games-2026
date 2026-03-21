@@ -3,7 +3,7 @@ const { defineConfig } = require("prisma/config");
 
 module.exports = defineConfig({
   schema: path.join(__dirname, "prisma/schema.prisma"),
-  migrate: {
+  datasource: {
     url: process.env.DATABASE_URL,
   },
 });
