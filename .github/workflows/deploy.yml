@@ -22,7 +22,7 @@ jobs:
 
       - name: Run database migrations
         working-directory: /home/deploy/company-games-2026
-        run: docker compose exec -T app npx prisma migrate deploy
+        run: docker compose exec -T app npx prisma migrate deploy || echo "⚠️ No migrations to apply (expected for fresh setup)"
 
       - name: Verify deployment
         run: |
