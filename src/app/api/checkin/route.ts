@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     let team;
     if (checkinCode) {
       // 3-Zeichen Code Lookup
-      team = await prisma.team.findUnique({
+      team = await prisma.team.findFirst({
         where: { checkinCode: checkinCode.toUpperCase().trim() },
         select: { id: true, name: true, nummer: true, farbe: true, logoUrl: true },
       });
