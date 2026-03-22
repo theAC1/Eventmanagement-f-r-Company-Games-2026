@@ -106,13 +106,21 @@ export default function RefereeGamePage() {
         )}
       </div>
 
-      {/* Ergebnis eintragen Button */}
-      <Link
-        href={`/referee/${slug}/eingabe`}
-        className="block w-full py-3 bg-white text-black text-center text-sm font-semibold rounded-lg hover:bg-zinc-200 transition"
-      >
-        Ergebnis eintragen
-      </Link>
+      {/* Action Buttons */}
+      <div className="flex gap-3">
+        <Link
+          href={`/referee/${slug}/checkin`}
+          className="flex-1 py-3 bg-amber-600 text-white text-center text-sm font-semibold rounded-lg hover:bg-amber-500 transition"
+        >
+          Check-in
+        </Link>
+        <Link
+          href={`/referee/${slug}/eingabe`}
+          className="flex-1 py-3 bg-white text-black text-center text-sm font-semibold rounded-lg hover:bg-zinc-200 transition"
+        >
+          Ergebnis eintragen
+        </Link>
+      </div>
 
       {/* Quick Info Bar */}
       <div className="flex flex-wrap gap-3">

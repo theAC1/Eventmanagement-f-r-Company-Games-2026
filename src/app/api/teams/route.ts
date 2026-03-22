@@ -1,12 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { generateUniqueCheckinCode } from "@/lib/checkin-code";
 
 // GET /api/teams
 export async function GET() {
   try {
-    const teams = await prisma.team.findMany({
-      orderBy: { nummer: "asc" },
-    });
+    const teams = await prisma.team.findMany({ orderBy: { nummer: "asc" } });
     return NextResponse.json(teams);
   } catch (error) {
     console.error("GET /api/teams error:", error);
@@ -18,6 +18,12 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    // Existierende Codes laden für Uniqueness
+    const existing = await prisma.team.findMany({ select: { checkinCode: true } });
+    const existingCodes = new Set<string>(existing.map((t: any) => t.checkinCode as string).filter(Boolean));
+    const checkinCode = generateUniqueCheckinCode(existingCodes);
+
     const team = await prisma.team.create({
       data: {
         name: body.name,
@@ -29,6 +35,7 @@ export async function POST(request: NextRequest) {
         motto: body.motto || null,
         teilnehmerAnzahl: body.teilnehmerAnzahl || null,
         teilnehmerNamen: body.teilnehmerNamen || null,
+        checkinCode,
       },
     });
     return NextResponse.json(team, { status: 201 });
