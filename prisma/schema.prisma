@@ -130,6 +130,9 @@ model MaterialItem {
   updatedAt        DateTime          @updatedAt
 
   kommentare MaterialKommentar[]
+
+  @@index([gameId])
+  @@index([status])
 }
 
 enum MaterialKategorie {
@@ -194,6 +197,8 @@ model ZeitplanSlot {
   teams      ZeitplanSlotTeam[]
   ergebnisse Ergebnis[]
   qrScans    QRVerifikation[]
+
+  @@index([configId])
 }
 
 model ZeitplanSlotTeam {
@@ -237,6 +242,8 @@ model GamePosition {
   rotation    Float          @default(0)
   nummer      String         @default("")
   oeffentlich Boolean        @default(true)
+
+  @@unique([planId, gameId])
 }
 
 model CustomFeld {
@@ -299,6 +306,8 @@ model Ergebnis {
   updatedAt        DateTime       @updatedAt
 
   @@unique([gameId, teamId])
+  @@index([gameId])
+  @@index([teamId])
 }
 
 enum ErgebnisStatus {

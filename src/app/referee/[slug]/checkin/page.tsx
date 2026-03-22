@@ -19,6 +19,7 @@ export default function CheckinPage() {
   const [error, setError] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState<CheckedInTeam[]>([]);
   const [scanning, setScanning] = useState(false);
+  const scanningRef = useRef(false); // Fix: useRef statt Closure für requestAnimationFrame
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,6 +32,16 @@ export default function CheckinPage() {
       .then(r => r.json())
       .then(g => { setGame(g); setLoading(false); });
   }, [slug]);
+
+  // Cleanup: Kamera stoppen bei Unmount
+  useEffect(() => {
+    return () => {
+      scanningRef.current = false;
+      if (videoRef.current?.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
 
   // Auto-focus code input
   useEffect(() => {
@@ -91,24 +102,23 @@ export default function CheckinPage() {
     }]);
   };
 
-  // QR-Scanner via Kamera
+  // QR-Scanner via Kamera (Fix: useRef für Loop-Control)
   const startScanner = async () => {
+    scanningRef.current = true;
     setScanning(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
-        // Scan-Loop via BarcodeDetector (Chrome)
         if ("BarcodeDetector" in window) {
           const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
           const scanLoop = async () => {
-            if (!videoRef.current || !scanning) return;
+            if (!scanningRef.current || !videoRef.current) return;
             try {
               const barcodes = await detector.detect(videoRef.current);
               if (barcodes.length > 0) {
                 const url = barcodes[0].rawValue;
-                // Extract token from URL: .../checkin/CODE or .../team/TOKEN
                 const checkinMatch = url.match(/checkin\/([A-Z0-9]{3})/i);
                 const tokenMatch = url.match(/team\/([a-z0-9]+)/i);
                 if (checkinMatch) {
@@ -118,18 +128,20 @@ export default function CheckinPage() {
                 }
               }
             } catch { /* ignore scan errors */ }
-            if (scanning) requestAnimationFrame(scanLoop);
+            if (scanningRef.current) requestAnimationFrame(scanLoop);
           };
           requestAnimationFrame(scanLoop);
         }
       }
     } catch {
       setError("Kamera-Zugriff verweigert");
+      scanningRef.current = false;
       setScanning(false);
     }
   };
 
   const stopScanner = () => {
+    scanningRef.current = false;
     setScanning(false);
     if (videoRef.current?.srcObject) {
       (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());

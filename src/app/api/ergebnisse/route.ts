@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { berechneGameRang } from "@/lib/rangpunkte";
+import { validateErgebnisCreate, validationResponse } from "@/lib/validation";
 
 // GET /api/ergebnisse – Alle Ergebnisse (optional filter by gameId oder teamId)
 export async function GET(request: NextRequest) {
@@ -36,11 +37,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { gameId, teamId, rohdaten, zeitplanSlotId } = body;
 
-    if (!gameId || !teamId || !rohdaten) {
-      return NextResponse.json(
-        { error: "gameId, teamId und rohdaten sind erforderlich" },
-        { status: 400 }
-      );
+    const errors = validateErgebnisCreate(body);
+    if (errors.length > 0) {
+      return NextResponse.json(validationResponse(errors), { status: 400 });
     }
 
     // Game + Wertungslogik laden

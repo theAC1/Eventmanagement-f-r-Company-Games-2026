@@ -28,16 +28,16 @@ export default function GamedayDashboard() {
 
   const loadData = () => {
     Promise.all([
-      fetch("/api/rangliste").then(r => r.json()),
-      fetch("/api/ergebnisse").then(r => r.json()),
-      fetch("/api/games").then(r => r.json()),
+      fetch("/api/rangliste").then(r => r.ok ? r.json() : { rangliste: [] }),
+      fetch("/api/ergebnisse").then(r => r.ok ? r.json() : []),
+      fetch("/api/games").then(r => r.ok ? r.json() : []),
     ]).then(([rang, erg, g]) => {
       setRangliste(rang.rangliste ?? []);
-      setErgebnisse(erg);
-      setGames(g.filter((x: GameInfo) => x.status === "BEREIT" || x.status === "AKTIV"));
+      setErgebnisse(Array.isArray(erg) ? erg : []);
+      setGames((Array.isArray(g) ? g : []).filter((x: GameInfo) => x.status === "BEREIT" || x.status === "AKTIV"));
       setLastUpdate(new Date());
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   };
 
   useEffect(() => {

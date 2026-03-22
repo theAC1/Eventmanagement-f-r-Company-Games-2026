@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { validateGameCreate, validationResponse } from "@/lib/validation";
 
 // GET /api/games – Alle Games mit Varianten-Count
 export async function GET() {
@@ -24,6 +25,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    const errors = validateGameCreate(body);
+    if (errors.length > 0) {
+      return NextResponse.json(validationResponse(errors), { status: 400 });
+    }
 
     // Slug generieren falls nicht vorhanden
     if (!body.slug) {

@@ -27,11 +27,15 @@ export default function ScoreboardPage() {
 
   const loadData = () => {
     fetch("/api/rangliste")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         setData(d);
         setLastUpdate(new Date());
       })
+      .catch(() => { /* Stille Fehler beim Polling – nächster Versuch in 10s */ })
       .finally(() => setLoading(false));
   };
 

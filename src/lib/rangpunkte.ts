@@ -56,14 +56,21 @@ export function berechneGameRang(
       return (b.gamePunkte ?? 0) - (a.gamePunkte ?? 0);
     });
 
-  return sortiert.map((e, idx) => ({
-    teamId: e.teamId,
-    gameId: e.gameId,
-    ergebnisId: e.id,
-    gamePunkte: e.gamePunkte ?? 0,
-    rangImGame: idx + 1,
-    rangPunkte: idx + 1,
-  }));
+  // Gleichstands-Logik: Gleiche Punkte → gleicher Rang, nächster Rang = Position
+  let currentRang = 1;
+  return sortiert.map((e, idx) => {
+    if (idx > 0 && e.gamePunkte !== sortiert[idx - 1].gamePunkte) {
+      currentRang = idx + 1;
+    }
+    return {
+      teamId: e.teamId,
+      gameId: e.gameId,
+      ergebnisId: e.id,
+      gamePunkte: e.gamePunkte ?? 0,
+      rangImGame: currentRang,
+      rangPunkte: currentRang,
+    };
+  });
 }
 
 /**
