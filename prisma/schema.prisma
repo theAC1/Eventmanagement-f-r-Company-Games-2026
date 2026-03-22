@@ -216,27 +216,46 @@ model Situationsplan {
 
   gamePositionen GamePosition[]
   infrastruktur  InfrastrukturElement[]
+  customFelder   CustomFeld[]
 }
 
 model GamePosition {
-  id       String         @id @default(cuid())
-  planId   String
-  plan     Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  gameId   String
-  game     Game           @relation(fields: [gameId], references: [id])
-  x        Float
-  y        Float
-  rotation Float          @default(0)
+  id          String         @id @default(cuid())
+  planId      String
+  plan        Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  gameId      String
+  game        Game           @relation(fields: [gameId], references: [id])
+  x           Float
+  y           Float
+  rotation    Float          @default(0)
+  nummer      String         @default("")
+  oeffentlich Boolean        @default(true)
+}
+
+model CustomFeld {
+  id          String         @id @default(cuid())
+  planId      String
+  plan        Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  label       String
+  nummer      String         @default("")
+  farbe       String         @default("#6b7280")
+  breiteM     Float          @default(10)
+  laengeM     Float          @default(10)
+  x           Float
+  y           Float
+  rotation    Float          @default(0)
+  oeffentlich Boolean        @default(true)
 }
 
 model InfrastrukturElement {
-  id     String         @id @default(cuid())
-  planId String
-  plan   Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  typ    InfraTyp
-  label  String?
-  x      Float
-  y      Float
+  id          String         @id @default(cuid())
+  planId      String
+  plan        Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  typ         InfraTyp
+  label       String?
+  x           Float
+  y           Float
+  oeffentlich Boolean        @default(true)
 }
 
 enum InfraTyp {

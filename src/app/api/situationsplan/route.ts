@@ -2,90 +2,99 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/situationsplan – Aktiven Situationsplan mit allen Positionen laden
+const GAME_INCLUDE = {
+  gamePositionen: {
+    include: {
+      game: { select: { id: true, name: true, slug: true, modus: true, flaecheLaengeM: true, flaecheBreiteM: true, helferAnzahl: true, stromNoetig: true } },
+    },
+  },
+  infrastruktur: true,
+  customFelder: true,
+};
+
+// GET /api/situationsplan
 export async function GET() {
   try {
-    // Aktiven Plan laden, oder den neuesten
     let plan = await prisma.situationsplan.findFirst({
       where: { istAktiv: true },
-      include: {
-        gamePositionen: {
-          include: {
-            game: { select: { id: true, name: true, slug: true, modus: true, flaecheLaengeM: true, flaecheBreiteM: true, helferAnzahl: true, stromNoetig: true } },
-          },
-        },
-        infrastruktur: true,
-      },
+      include: GAME_INCLUDE,
     });
 
     if (!plan) {
-      // Erstelle Default-Plan
       plan = await prisma.situationsplan.create({
-        data: {
-          name: "Hauptplan",
-          istAktiv: true,
-        },
-        include: {
-          gamePositionen: { include: { game: { select: { id: true, name: true, slug: true, modus: true, flaecheLaengeM: true, flaecheBreiteM: true, helferAnzahl: true, stromNoetig: true } } } },
-          infrastruktur: true,
-        },
+        data: { name: "Hauptplan", istAktiv: true },
+        include: GAME_INCLUDE,
       });
     }
 
     return NextResponse.json(plan);
   } catch (error) {
     console.error("GET /api/situationsplan error:", error);
-    return NextResponse.json({ error: "Fehler beim Laden" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler" }, { status: 500 });
   }
 }
 
-// PUT /api/situationsplan – Game-Position setzen/aktualisieren
+// PUT /api/situationsplan – Game-Position upsert
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { planId, gameId, x, y, rotation } = body;
+    const { planId, gameId, x, y, nummer, oeffentlich } = body;
 
     if (!planId || !gameId) {
       return NextResponse.json({ error: "planId und gameId erforderlich" }, { status: 400 });
     }
 
-    // Upsert: Position erstellen oder aktualisieren
-    const existing = await prisma.gamePosition.findFirst({
-      where: { planId, gameId },
-    });
+    const existing = await prisma.gamePosition.findFirst({ where: { planId, gameId } });
 
     let position;
     if (existing) {
-      position = await prisma.gamePosition.update({
-        where: { id: existing.id },
-        data: { x, y, rotation: rotation ?? 0 },
-      });
+      const data: any = {};
+      if (x !== undefined) data.x = x;
+      if (y !== undefined) data.y = y;
+      if (nummer !== undefined) data.nummer = nummer;
+      if (oeffentlich !== undefined) data.oeffentlich = oeffentlich;
+      position = await prisma.gamePosition.update({ where: { id: existing.id }, data });
     } else {
       position = await prisma.gamePosition.create({
-        data: { planId, gameId, x, y, rotation: rotation ?? 0 },
+        data: { planId, gameId, x, y, rotation: 0, nummer: nummer ?? "", oeffentlich: oeffentlich ?? true },
       });
     }
 
     return NextResponse.json(position);
   } catch (error) {
     console.error("PUT /api/situationsplan error:", error);
-    return NextResponse.json({ error: "Fehler beim Speichern" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler" }, { status: 500 });
   }
 }
 
-// POST /api/situationsplan – Infrastruktur-Element hinzufügen
+// POST /api/situationsplan – Infrastruktur oder Custom-Feld
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { planId, typ, label, x, y } = body;
+
+    if (body.type === "custom") {
+      const feld = await prisma.customFeld.create({
+        data: {
+          planId: body.planId,
+          label: body.label ?? "Neues Feld",
+          nummer: body.nummer ?? "",
+          farbe: body.farbe ?? "#6b7280",
+          breiteM: body.breiteM ?? 10,
+          laengeM: body.laengeM ?? 10,
+          x: body.x ?? 50,
+          y: body.y ?? 50,
+          oeffentlich: body.oeffentlich ?? true,
+        },
+      });
+      return NextResponse.json(feld, { status: 201 });
+    }
 
     const element = await prisma.infrastrukturElement.create({
-      data: { planId, typ, label: label ?? null, x, y },
+      data: { planId: body.planId, typ: body.typ, label: body.label ?? null, x: body.x, y: body.y },
     });
-
     return NextResponse.json(element, { status: 201 });
   } catch (error) {
     console.error("POST /api/situationsplan error:", error);
-    return NextResponse.json({ error: "Fehler beim Erstellen" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler" }, { status: 500 });
   }
 }
