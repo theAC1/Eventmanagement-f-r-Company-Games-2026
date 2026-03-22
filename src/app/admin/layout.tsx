@@ -25,6 +25,12 @@ export default function AdminLayout({
                 Games
               </Link>
               <Link
+                href="/admin/teams"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
+                Teams
+              </Link>
+              <Link
                 href="/admin/materials"
                 className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
               >

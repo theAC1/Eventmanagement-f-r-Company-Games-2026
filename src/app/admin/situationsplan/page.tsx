@@ -46,7 +46,7 @@ const MODUS_TW: Record<string, string> = {
   DUELL: "bg-blue-900/80 border-blue-600 text-blue-200",
 };
 
-const DEFAULT_MPP = 1.615;
+const DEFAULT_MPP = 2.8;
 const IMG_RATIO = 2078 / 1342;
 
 export default function SituationsplanPage() {

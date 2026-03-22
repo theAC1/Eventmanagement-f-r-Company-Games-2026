@@ -68,13 +68,19 @@ model GameVariante {
 }
 
 model Team {
-  id           String   @id @default(cuid())
-  name         String
-  nummer       Int      @unique
-  captainName  String?
-  captainEmail String?
-  qrToken      String   @unique @default(cuid())
-  createdAt    DateTime @default(now())
+  id              String   @id @default(cuid())
+  name            String
+  nummer          Int      @unique
+  captainName     String?
+  captainEmail    String?
+  farbe           String   @default("#6b7280")
+  logoUrl         String?
+  motto           String?
+  teilnehmerAnzahl Int?
+  teilnehmerNamen  Json?    // String-Array ["Max", "Anna", ...]
+  qrToken         String   @unique @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   slotTeams  ZeitplanSlotTeam[]
   ergebnisse Ergebnis[]
