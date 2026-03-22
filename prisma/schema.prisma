@@ -79,7 +79,7 @@ model Team {
   teilnehmerAnzahl Int?
   teilnehmerNamen  Json?    // String-Array ["Max", "Anna", ...]
   qrToken         String   @unique @default(cuid())
-  checkinCode     String   @unique @default(cuid())  // Wird durch 3-Zeichen-Code ersetzt (z.B. B6J)
+  checkinCode     String   @default(cuid())  // @unique wird nach Seed hinzugefügt
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
 
