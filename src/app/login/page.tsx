@@ -39,6 +39,11 @@ function LoginForm() {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
+          <img
+            src="/images/logo.png"
+            alt="Company Games 2026"
+            className="mx-auto h-24 w-auto mb-4"
+          />
           <h1 className="text-2xl font-semibold text-white">CG26</h1>
           <p className="text-sm text-zinc-500 mt-1">Company Games 2026</p>
         </div>

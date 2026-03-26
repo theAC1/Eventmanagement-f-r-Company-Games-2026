@@ -11,9 +11,10 @@ export default function RefereeLayout({
         <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between">
           <Link
             href="/referee"
-            className="text-sm font-semibold tracking-tight hover:text-white transition"
+            className="flex items-center gap-2 hover:opacity-80 transition"
           >
-            Schiedsrichter
+            <img src="/images/logo.png" alt="CG26" className="h-6 w-auto" />
+            <span className="text-sm font-semibold tracking-tight">Schiedsrichter</span>
           </Link>
           <Link
             href="/"

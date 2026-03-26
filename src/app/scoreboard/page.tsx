@@ -80,10 +80,13 @@ export default function ScoreboardPage() {
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-sm font-semibold tracking-tight">
-              Company Games 2026
-            </h1>
-            <span className="text-xs text-zinc-500">Live Rangliste</span>
+            <img src="/images/logo.png" alt="CG26" className="h-8 w-auto" />
+            <div>
+              <h1 className="text-sm font-semibold tracking-tight">
+                Company Games 2026
+              </h1>
+              <span className="text-xs text-zinc-500">Live Rangliste</span>
+            </div>
           </div>
           <div className="flex items-center gap-3 text-xs text-zinc-500">
             <span>

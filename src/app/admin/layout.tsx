@@ -19,9 +19,10 @@ export default async function AdminLayout({
           <div className="flex items-center gap-6">
             <Link
               href="/admin"
-              className="text-sm font-semibold tracking-tight hover:text-white transition"
+              className="flex items-center gap-2 hover:opacity-80 transition"
             >
-              CG26 Admin
+              <img src="/images/logo.png" alt="CG26" className="h-8 w-auto" />
+              <span className="text-sm font-semibold tracking-tight">Admin</span>
             </Link>
             <nav className="flex items-center gap-1 text-sm">
               <Link
