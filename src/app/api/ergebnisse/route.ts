@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
     }
 
-    const { gameId, teamId, zeitplanSlotId } = parsed.data;
+    const { gameId, teamId, zeitplanSlotId, commitId } = parsed.data;
     const rohdaten = parsed.data.rohdaten as Prisma.InputJsonValue & Record<string, any>;
 
     // Game + Wertungslogik laden
@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
         eingetragenVonId: userId,
         eingetragenUm: new Date(),
         istTest,
+        commitId: commitId || null,
       },
       update: {
         rohdaten,
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
         eingetragenVonId: userId,
         eingetragenUm: new Date(),
         istTest,
+        commitId: commitId || null,
       },
     });
 

@@ -188,6 +188,7 @@ export default function BestaetigungPage() {
 
     try {
       const ids: string[] = [];
+      const commitId = crypto.randomUUID();
 
       for (const entry of payload.entries) {
         const res = await fetch("/api/ergebnisse", {
@@ -198,6 +199,7 @@ export default function BestaetigungPage() {
             teamId: entry.teamId,
             zeitplanSlotId: payload.slotId ?? null,
             rohdaten: entry.rohdaten,
+            commitId,
           }),
         });
 

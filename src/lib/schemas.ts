@@ -64,6 +64,7 @@ export const ErgebnisCreateSchema = z.object({
   teamId: z.string().min(1, "teamId ist erforderlich"),
   rohdaten: z.record(z.string(), z.unknown()),
   zeitplanSlotId: z.string().nullable().optional(),
+  commitId: z.string().optional(),
 });
 
 export const ErgebnisUpdateSchema = z.object({
