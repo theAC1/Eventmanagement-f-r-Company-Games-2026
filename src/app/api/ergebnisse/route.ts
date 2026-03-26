@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         prisma.ergebnis.findMany({
           where: where as Prisma.ErgebnisWhereInput,
           include: {
-            game: { select: { id: true, name: true, slug: true } },
+            game: { select: { id: true, name: true, slug: true, wertungslogik: true } },
             team: { select: { id: true, name: true, nummer: true } },
             eingetragenVon: { select: { id: true, name: true } },
           },
