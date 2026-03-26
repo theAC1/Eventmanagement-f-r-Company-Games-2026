@@ -103,10 +103,39 @@ export default function GamedayDashboard() {
             )}
           </div>
         </div>
-        <Link href="/scoreboard" target="_blank"
-          className="px-4 py-2 border border-zinc-700 text-sm rounded-lg hover:border-zinc-500 transition">
-          Scoreboard
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="relative group">
+            <button className="px-3 py-2 border border-zinc-700 text-sm rounded-lg hover:border-zinc-500 transition flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export
+            </button>
+            <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <button onClick={() => window.open("/api/export/rangliste", "_blank")}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 rounded-t-lg transition">
+                Rangliste CSV
+              </button>
+              <button onClick={() => window.open("/api/export/ergebnisse", "_blank")}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 transition">
+                Ergebnisse CSV
+              </button>
+              <button onClick={() => window.open("/api/export/teams", "_blank")}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 transition">
+                Teams CSV
+              </button>
+              <div className="border-t border-zinc-700" />
+              <button onClick={() => window.open("/admin/gameday/print", "_blank")}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 rounded-b-lg transition text-zinc-400">
+                Druckansicht
+              </button>
+            </div>
+          </div>
+          <Link href="/scoreboard" target="_blank"
+            className="px-3 py-2 border border-zinc-700 text-sm rounded-lg hover:border-zinc-500 transition">
+            Scoreboard
+          </Link>
+        </div>
       </div>
 
       {fetchError && (
