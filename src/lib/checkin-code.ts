@@ -10,7 +10,7 @@ import { randomInt } from "crypto";
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // ohne I und O (Verwechslungsgefahr mit 1 und 0)
 const DIGITS = "23456789"; // ohne 0 und 1 (Verwechslungsgefahr)
 
-export function generateCheckinCode(): string {
+function generateCheckinCode(): string {
   const l1 = LETTERS[randomInt(LETTERS.length)];
   const d = DIGITS[randomInt(DIGITS.length)];
   const l2 = LETTERS[randomInt(LETTERS.length)];
