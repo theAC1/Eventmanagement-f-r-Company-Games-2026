@@ -134,9 +134,17 @@ export function berechneGesamtrangliste(
     return 0;
   });
 
-  // Rang zuweisen
+  // Rang zuweisen (Gleichstands-Logik: gleiche Summe + Tiebreaker → gleicher Rang)
+  let currentRang = 1;
   rangliste.forEach((r, idx) => {
-    r.gesamtRang = idx + 1;
+    if (idx > 0) {
+      const prev = rangliste[idx - 1];
+      const isTied =
+        r.rangPunkteSumme === prev.rangPunkteSumme &&
+        JSON.stringify(r.platzierungen) === JSON.stringify(prev.platzierungen);
+      if (!isTied) currentRang = idx + 1;
+    }
+    r.gesamtRang = currentRang;
   });
 
   return rangliste;

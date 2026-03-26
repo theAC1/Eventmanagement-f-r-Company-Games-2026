@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserId } from "@/lib/auth-helpers";
+import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
+import { MaterialCreateSchema, zodValidationError } from "@/lib/schemas";
 
 // GET /api/materials – Alle Material-Items mit Game + Verantwortlicher
 export async function GET(request: NextRequest) {
@@ -39,22 +40,30 @@ export async function GET(request: NextRequest) {
 
 // POST /api/materials – Neues Material-Item erstellen
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
+    const parsed = MaterialCreateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+    }
 
+    const data = parsed.data;
     const userId = await getCurrentUserId();
 
     const item = await prisma.materialItem.create({
       data: {
-        name: body.name,
-        gameId: body.gameId || null,
-        kategorie: body.kategorie,
-        menge: body.menge || null,
-        beschreibung: body.beschreibung || null,
-        status: body.status || "OFFEN",
-        sponsor: body.sponsor || null,
-        kostenGeschaetzt: body.kostenGeschaetzt || null,
-        kostenEffektiv: body.kostenEffektiv || null,
+        name: data.name,
+        gameId: data.gameId || null,
+        kategorie: data.kategorie,
+        menge: data.menge || null,
+        beschreibung: data.beschreibung || null,
+        status: data.status || "OFFEN",
+        sponsor: data.sponsor || null,
+        kostenGeschaetzt: data.kostenGeschaetzt || null,
+        kostenEffektiv: data.kostenEffektiv || null,
         createdById: userId,
       },
       include: {

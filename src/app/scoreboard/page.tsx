@@ -24,6 +24,7 @@ export default function ScoreboardPage() {
   const [data, setData] = useState<RanglisteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const loadData = () => {
     fetch("/api/rangliste")
@@ -34,8 +35,11 @@ export default function ScoreboardPage() {
       .then((d) => {
         setData(d);
         setLastUpdate(new Date());
+        setFetchError(null);
       })
-      .catch(() => { /* Stille Fehler beim Polling – nächster Versuch in 10s */ })
+      .catch((err) => {
+        setFetchError(`Verbindung verloren: ${err.message}`);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -93,6 +97,9 @@ export default function ScoreboardPage() {
             </div>
             {lastUpdate && (
               <span>{lastUpdate.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}</span>
+            )}
+            {fetchError && (
+              <span className="text-red-400">● Offline</span>
             )}
           </div>
         </div>

@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateUniqueCheckinCode } from "@/lib/checkin-code";
-import { getCurrentUserId } from "@/lib/auth-helpers";
+import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
+import { TeamCreateSchema, zodValidationError } from "@/lib/schemas";
 
 // GET /api/teams
 export async function GET() {
@@ -11,33 +11,42 @@ export async function GET() {
     return NextResponse.json(teams);
   } catch (error) {
     console.error("GET /api/teams error:", error);
-    return NextResponse.json({ error: "Fehler" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler beim Laden der Teams" }, { status: 500 });
   }
 }
 
 // POST /api/teams
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
+    const parsed = TeamCreateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+    }
+
+    const data = parsed.data;
 
     // Existierende Codes laden für Uniqueness
     const existing = await prisma.team.findMany({ select: { checkinCode: true } });
-    const existingCodes = new Set<string>(existing.map((t: any) => t.checkinCode as string).filter(Boolean));
+    const existingCodes = new Set<string>(existing.map((t: { checkinCode: string }) => t.checkinCode).filter(Boolean));
     const checkinCode = generateUniqueCheckinCode(existingCodes);
 
     const userId = await getCurrentUserId();
 
     const team = await prisma.team.create({
       data: {
-        name: body.name,
-        nummer: body.nummer,
-        captainName: body.captainName || null,
-        captainEmail: body.captainEmail || null,
-        farbe: body.farbe || "#6b7280",
-        logoUrl: body.logoUrl || null,
-        motto: body.motto || null,
-        teilnehmerAnzahl: body.teilnehmerAnzahl || null,
-        teilnehmerNamen: body.teilnehmerNamen || null,
+        name: data.name,
+        nummer: data.nummer,
+        captainName: data.captainName || null,
+        captainEmail: data.captainEmail || null,
+        farbe: data.farbe || "#6b7280",
+        logoUrl: data.logoUrl || null,
+        motto: data.motto || null,
+        teilnehmerAnzahl: data.teilnehmerAnzahl || null,
+        teilnehmerNamen: data.teilnehmerNamen || null,
         checkinCode,
         createdById: userId,
       },
@@ -45,6 +54,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(team, { status: 201 });
   } catch (error) {
     console.error("POST /api/teams error:", error);
-    return NextResponse.json({ error: "Fehler" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler beim Erstellen des Teams" }, { status: 500 });
   }
 }

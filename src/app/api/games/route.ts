@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { validateGameCreate, validationResponse } from "@/lib/validation";
-import { getCurrentUserId } from "@/lib/auth-helpers";
+import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
+import { GameCreateSchema, zodValidationError } from "@/lib/schemas";
 
 // GET /api/games – Alle Games mit Varianten-Count
 export async function GET() {
@@ -24,45 +24,47 @@ export async function GET() {
 
 // POST /api/games – Neues Game erstellen
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
-
-    const errors = validateGameCreate(body);
-    if (errors.length > 0) {
-      return NextResponse.json(validationResponse(errors), { status: 400 });
+    const parsed = GameCreateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
     }
+
+    const data = parsed.data;
 
     // Slug generieren falls nicht vorhanden
-    if (!body.slug) {
-      body.slug = body.name
-        .toLowerCase()
-        .replace(/[äÄ]/g, "ae")
-        .replace(/[öÖ]/g, "oe")
-        .replace(/[üÜ]/g, "ue")
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "");
-    }
+    const slug = data.slug || data.name
+      .toLowerCase()
+      .replace(/[äÄ]/g, "ae")
+      .replace(/[öÖ]/g, "oe")
+      .replace(/[üÜ]/g, "ue")
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "");
 
     const userId = await getCurrentUserId();
 
     const game = await prisma.game.create({
       data: {
-        name: body.name,
-        slug: body.slug,
-        typ: body.typ,
-        modus: body.modus,
-        teamsProSlot: body.teamsProSlot ?? 1,
-        kurzbeschreibung: body.kurzbeschreibung ?? null,
-        einfuehrungMin: body.einfuehrungMin ?? 3,
-        playtimeMin: body.playtimeMin ?? 10,
-        reserveMin: body.reserveMin ?? 2,
-        regeln: body.regeln ?? null,
-        wertungstyp: body.wertungstyp ?? null,
-        wertungslogik: body.wertungslogik ?? null,
-        flaecheLaengeM: body.flaecheLaengeM ?? null,
-        flaecheBreiteM: body.flaecheBreiteM ?? null,
-        helferAnzahl: body.helferAnzahl ?? 1,
-        stromNoetig: body.stromNoetig ?? false,
+        name: data.name,
+        slug,
+        typ: data.typ,
+        modus: data.modus,
+        teamsProSlot: data.teamsProSlot ?? 1,
+        kurzbeschreibung: data.kurzbeschreibung ?? null,
+        einfuehrungMin: data.einfuehrungMin ?? 3,
+        playtimeMin: data.playtimeMin ?? 10,
+        reserveMin: data.reserveMin ?? 2,
+        regeln: data.regeln ?? null,
+        wertungstyp: data.wertungstyp ?? null,
+        wertungslogik: data.wertungslogik ?? null,
+        flaecheLaengeM: data.flaecheLaengeM ?? null,
+        flaecheBreiteM: data.flaecheBreiteM ?? null,
+        helferAnzahl: data.helferAnzahl ?? 1,
+        stromNoetig: data.stromNoetig ?? false,
         createdById: userId,
       },
     });

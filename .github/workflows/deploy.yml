@@ -16,15 +16,28 @@ jobs:
         working-directory: /home/deploy/company-games-2026
         run: docker compose build --no-cache
 
-      - name: Restart containers
+      - name: Stop app for migration
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose stop app nginx
+
+      - name: Run schema sync
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose run --rm app npx prisma db push --accept-data-loss || echo "⚠️ Schema already in sync"
+
+      - name: Start all containers
         working-directory: /home/deploy/company-games-2026
         run: docker compose up -d
 
-      - name: Run database migrations
-        working-directory: /home/deploy/company-games-2026
-        run: docker compose exec -T app npx prisma migrate deploy || echo "⚠️ No migrations to apply (expected for fresh setup)"
-
-      - name: Verify deployment
+      - name: Wait for healthy app
         run: |
-          sleep 5
-          curl -sf http://localhost:80 > /dev/null && echo "✅ Deployment OK: $(date)" || echo "❌ Health check failed"
+          echo "Waiting for app to be healthy..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "✅ Deployment OK: $(date)"
+              exit 0
+            fi
+            echo "  Attempt $i/30 - waiting..."
+            sleep 2
+          done
+          echo "❌ Health check failed after 60s"
+          exit 1

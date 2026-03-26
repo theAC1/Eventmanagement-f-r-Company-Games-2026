@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // PUT /api/situationsplan/position/:id – Position + Rotation aktualisieren
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const body = await request.json();
@@ -25,6 +29,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/situationsplan/position/:id – Game-Position entfernen
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     await prisma.gamePosition.delete({ where: { id } });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 // GET /api/schedule – Alle gespeicherten Zeitpläne
 export async function GET() {
@@ -19,6 +20,9 @@ export async function GET() {
 
 // POST /api/schedule – Zeitplan speichern (Config + Slots)
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const { name, blockDauerMin, wechselzeitMin, startZeit, endZeit, mittagspause, pausen, slots } = body;

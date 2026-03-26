@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserId } from "@/lib/auth-helpers";
+import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
+import { GameUpdateSchema, zodValidationError } from "@/lib/schemas";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -34,31 +35,23 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 // PUT /api/games/:id – Game aktualisieren
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const body = await request.json();
+    const parsed = GameUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+    }
+
     const userId = await getCurrentUserId();
 
     const game = await prisma.game.update({
       where: { id },
       data: {
-        name: body.name,
-        slug: body.slug,
-        typ: body.typ,
-        status: body.status,
-        modus: body.modus,
-        teamsProSlot: body.teamsProSlot,
-        kurzbeschreibung: body.kurzbeschreibung,
-        einfuehrungMin: body.einfuehrungMin,
-        playtimeMin: body.playtimeMin,
-        reserveMin: body.reserveMin,
-        regeln: body.regeln,
-        wertungstyp: body.wertungstyp,
-        wertungslogik: body.wertungslogik,
-        flaecheLaengeM: body.flaecheLaengeM,
-        flaecheBreiteM: body.flaecheBreiteM,
-        helferAnzahl: body.helferAnzahl,
-        stromNoetig: body.stromNoetig,
+        ...parsed.data,
         updatedById: userId,
       },
       include: {
@@ -78,6 +71,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/games/:id – Game löschen
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     await prisma.game.delete({ where: { id } });

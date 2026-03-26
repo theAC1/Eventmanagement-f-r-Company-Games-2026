@@ -2,7 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { berechneGameRang } from "@/lib/rangpunkte";
-import { validateErgebnisCreate, validationResponse } from "@/lib/validation";
+import { requireRole } from "@/lib/auth-helpers";
+import { ErgebnisCreateSchema, zodValidationError } from "@/lib/schemas";
+import type { Prisma } from "@prisma/client";
 
 // GET /api/ergebnisse – Alle Ergebnisse (optional filter by gameId oder teamId)
 export async function GET(request: NextRequest) {
@@ -33,14 +35,18 @@ export async function GET(request: NextRequest) {
 
 // POST /api/ergebnisse – Ergebnis eintragen (Schiedsrichter)
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
-    const { gameId, teamId, rohdaten, zeitplanSlotId } = body;
-
-    const errors = validateErgebnisCreate(body);
-    if (errors.length > 0) {
-      return NextResponse.json(validationResponse(errors), { status: 400 });
+    const parsed = ErgebnisCreateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
     }
+
+    const { gameId, teamId, zeitplanSlotId } = parsed.data;
+    const rohdaten = parsed.data.rohdaten as Prisma.InputJsonValue & Record<string, any>;
 
     // Game + Wertungslogik laden
     const game = await prisma.game.findUnique({
@@ -54,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     // gamePunkte aus Rohdaten berechnen
     const gamePunkte = berechneGamePunkteAusRohdaten(
-      rohdaten,
+      rohdaten as Record<string, any>,
       game.wertungslogik as any,
     );
 
@@ -141,7 +147,7 @@ function berechneGamePunkteAusRohdaten(
       let summe = 0;
       for (const f of felder) {
         const val = Number(rohdaten[f.name] ?? 0);
-        summe += val * val; // hoehe^2
+        summe += val * val;
       }
       return summe;
     }

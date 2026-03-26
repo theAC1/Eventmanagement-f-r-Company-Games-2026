@@ -50,11 +50,20 @@ export default function EingabePage() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/games/by-slug/${slug}`).then((r) => r.json()),
-      fetch("/api/teams").then((r) => r.json()),
+      fetch(`/api/games/by-slug/${slug}`).then((r) => {
+        if (!r.ok) throw new Error(`Game laden fehlgeschlagen (HTTP ${r.status})`);
+        return r.json();
+      }),
+      fetch("/api/teams").then((r) => {
+        if (!r.ok) throw new Error(`Teams laden fehlgeschlagen (HTTP ${r.status})`);
+        return r.json();
+      }),
     ]).then(([g, t]) => {
       setGame(g);
       setTeams(t);
+      setLoading(false);
+    }).catch((err) => {
+      setError(err instanceof Error ? err.message : "Daten konnten nicht geladen werden");
       setLoading(false);
     });
   }, [slug]);
@@ -121,6 +130,16 @@ export default function EingabePage() {
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
+  if (error && !game) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-red-400 text-sm">{error}</p>
+        <button onClick={() => window.location.reload()} className="px-4 py-2 text-sm border border-zinc-700 rounded-lg hover:border-zinc-500 transition">
+          Erneut versuchen
+        </button>
+      </div>
+    );
+  }
   if (!game) return <div className="text-red-400 text-center py-12">Game nicht gefunden</div>;
 
   const wl = game.wertungslogik;

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -75,6 +76,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 // PUT /api/schedule/:id – Zeitplan aktualisieren (Name, aktiv, oder Slots ersetzen)
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const body = await request.json();
@@ -145,6 +149,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/schedule/:id
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     await prisma.zeitplanConfig.delete({ where: { id } });

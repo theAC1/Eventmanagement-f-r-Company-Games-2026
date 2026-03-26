@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // PUT /api/situationsplan/custom/:id
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const body = await request.json();
@@ -31,6 +35,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 // DELETE /api/situationsplan/custom/:id
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     await prisma.customFeld.delete({ where: { id } });

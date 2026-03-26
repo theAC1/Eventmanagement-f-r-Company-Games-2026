@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateSchedule, type PauseInput, type MittagspauseConfig } from "@/lib/schedule-engine";
+import { requireRole } from "@/lib/auth-helpers";
 
 // POST /api/schedule/generate – Zeitplan generieren (Preview, ohne DB-Speicherung)
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const {

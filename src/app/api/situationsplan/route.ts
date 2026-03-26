@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 const GAME_INCLUDE = {
   gamePositionen: {
@@ -36,6 +37,9 @@ export async function GET() {
 
 // PUT /api/situationsplan – Game-Position upsert
 export async function PUT(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const { planId, gameId, x, y, nummer, oeffentlich } = body;
@@ -69,6 +73,9 @@ export async function PUT(request: NextRequest) {
 
 // POST /api/situationsplan – Infrastruktur oder Custom-Feld
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
 

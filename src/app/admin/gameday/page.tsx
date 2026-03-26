@@ -25,19 +25,24 @@ export default function GamedayDashboard() {
   const [games, setGames] = useState<GameInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const loadData = () => {
     Promise.all([
-      fetch("/api/rangliste").then(r => r.ok ? r.json() : { rangliste: [] }),
-      fetch("/api/ergebnisse").then(r => r.ok ? r.json() : []),
-      fetch("/api/games").then(r => r.ok ? r.json() : []),
+      fetch("/api/rangliste").then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch("/api/ergebnisse").then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch("/api/games").then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     ]).then(([rang, erg, g]) => {
       setRangliste(rang.rangliste ?? []);
       setErgebnisse(Array.isArray(erg) ? erg : []);
       setGames((Array.isArray(g) ? g : []).filter((x: GameInfo) => x.status === "BEREIT" || x.status === "AKTIV"));
       setLastUpdate(new Date());
+      setFetchError(null);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      setFetchError(`Verbindung fehlgeschlagen: ${err.message}`);
+      setLoading(false);
+    });
   };
 
   useEffect(() => {
@@ -61,6 +66,17 @@ export default function GamedayDashboard() {
     .slice(0, 8);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade Dashboard...</div>;
+
+  if (fetchError && rangliste.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-red-400 text-sm">{fetchError}</p>
+        <button onClick={loadData} className="px-4 py-2 text-sm border border-zinc-700 rounded-lg hover:border-zinc-500 transition">
+          Erneut versuchen
+        </button>
+      </div>
+    );
+  }
 
   const totalGames = games.length;
   const totalTeams = rangliste.length;
@@ -92,6 +108,12 @@ export default function GamedayDashboard() {
           Scoreboard
         </Link>
       </div>
+
+      {fetchError && (
+        <div className="px-3 py-2 bg-red-900/30 border border-red-800/50 rounded-lg text-xs text-red-300">
+          {fetchError} — Daten könnten veraltet sein. Nächster Versuch in 5s.
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4">
         {/* Stationen-Status */}

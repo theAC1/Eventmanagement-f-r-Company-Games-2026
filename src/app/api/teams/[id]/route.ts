@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserId } from "@/lib/auth-helpers";
+import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
+import { TeamUpdateSchema, zodValidationError } from "@/lib/schemas";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -23,47 +24,50 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json(team);
   } catch (error) {
     console.error(`GET /api/teams/${id} error:`, error);
-    return NextResponse.json({ error: "Fehler" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler beim Laden des Teams" }, { status: 500 });
   }
 }
 
 // PUT /api/teams/:id
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const body = await request.json();
+    const parsed = TeamUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+    }
+
     const userId = await getCurrentUserId();
 
     const team = await prisma.team.update({
       where: { id },
       data: {
-        name: body.name,
-        nummer: body.nummer,
-        captainName: body.captainName,
-        captainEmail: body.captainEmail,
-        farbe: body.farbe,
-        logoUrl: body.logoUrl,
-        motto: body.motto,
-        teilnehmerAnzahl: body.teilnehmerAnzahl,
-        teilnehmerNamen: body.teilnehmerNamen,
+        ...parsed.data,
         updatedById: userId,
       },
     });
     return NextResponse.json(team);
   } catch (error) {
     console.error(`PUT /api/teams/${id} error:`, error);
-    return NextResponse.json({ error: "Fehler" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler beim Aktualisieren des Teams" }, { status: 500 });
   }
 }
 
 // DELETE /api/teams/:id
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     await prisma.team.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(`DELETE /api/teams/${id} error:`, error);
-    return NextResponse.json({ error: "Fehler" }, { status: 500 });
+    return NextResponse.json({ error: "Fehler beim Löschen des Teams" }, { status: 500 });
   }
 }

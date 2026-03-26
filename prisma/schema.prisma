@@ -84,7 +84,7 @@ model Team {
   teilnehmerAnzahl Int?
   teilnehmerNamen  Json?    // String-Array ["Max", "Anna", ...]
   qrToken         String   @unique @default(cuid())
-  checkinCode     String   @default(cuid())  // @unique wird nach Seed hinzugefügt
+  checkinCode     String   @unique @default(cuid())
 
   createdById String?
   createdBy   Person? @relation("teamCreatedBy", fields: [createdById], references: [id])
