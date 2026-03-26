@@ -23,6 +23,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Gameday-Modus pruefen
+    const gamedayConfig = await prisma.gamedayConfig.findFirst({
+      where: { modus: { not: "INAKTIV" } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!gamedayConfig) {
+      return NextResponse.json(
+        { error: "Kein aktiver Gameday — Partien können nur während eines aktiven Gamedays gestartet werden" },
+        { status: 400 },
+      );
+    }
+
+    const istTest = gamedayConfig.modus === "TEST";
     const userId = (session as any)?.user?.id ?? null;
 
     // Fuer jedes Team ein Ergebnis mit Status LAUFEND erstellen/aktualisieren
@@ -41,6 +55,7 @@ export async function POST(request: NextRequest) {
             status: "LAUFEND",
             eingetragenVonId: userId,
             eingetragenUm: new Date(),
+            istTest,
           },
           update: {
             status: "LAUFEND",
@@ -48,6 +63,7 @@ export async function POST(request: NextRequest) {
             zeitplanSlotId: zeitplanSlotId ?? null,
             eingetragenVonId: userId,
             eingetragenUm: new Date(),
+            istTest,
           },
         }),
       ),

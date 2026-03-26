@@ -81,6 +81,9 @@ export default function RefereePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Gameday mode
+  const [gamedayModus, setGamedayModus] = useState<string | null>(null);
+
   // Zeitplan mode
   const [zeitplanName, setZeitplanName] = useState<string | null>(null);
   const [timeBlocks, setTimeBlocks] = useState<Map<string, SlotData[]>>(new Map());
@@ -90,6 +93,18 @@ export default function RefereePage() {
 
   const loadData = useCallback(async () => {
     try {
+      // 0. Fetch gameday status
+      const gdRes = await fetch("/api/gameday");
+      if (gdRes.ok) {
+        const gdData = await gdRes.json();
+        setGamedayModus(gdData.modus ?? "INAKTIV");
+
+        if (gdData.modus === "INAKTIV") {
+          setLoading(false);
+          return;
+        }
+      }
+
       // 1. Fetch all schedule configs, find the active one
       const configsRes = await fetch("/api/schedule");
       if (!configsRes.ok) throw new Error("Zeitpläne laden fehlgeschlagen");
@@ -205,6 +220,38 @@ export default function RefereePage() {
     );
   }
 
+  // ─── Gameday INAKTIV ───
+  if (gamedayModus === "INAKTIV") {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400 text-sm text-center">
+          Kein aktiver Gameday. Bitte warte bis die Orga den Gameday startet.
+        </p>
+        <button
+          onClick={() => { setLoading(true); loadData(); }}
+          className="px-4 py-2 text-sm border border-zinc-700 rounded-lg hover:border-zinc-500 transition"
+        >
+          Erneut prüfen
+        </button>
+      </div>
+    );
+  }
+
+  // ─── Gameday banner helper ───
+  const gamedayBanner =
+    gamedayModus === "TEST" ? (
+      <div className="rounded-lg border border-blue-700 bg-blue-900/40 px-4 py-2 text-sm text-blue-300 font-medium">
+        {"🔵 TEST-MODUS — Ergebnisse werden als Testdaten markiert"}
+      </div>
+    ) : gamedayModus === "HOT" ? (
+      <div className="flex items-center gap-2 px-1 py-1">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold rounded-full bg-red-900/60 text-red-300 border border-red-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+          LIVE
+        </span>
+      </div>
+    ) : null;
+
   // ─── Fallback: Game List ───
   if (fallbackGames) {
     const activeGames = fallbackGames.filter(
@@ -216,6 +263,7 @@ export default function RefereePage() {
 
     return (
       <div className="space-y-6">
+        {gamedayBanner}
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Stationen</h1>
           <p className="text-sm text-zinc-500 mt-1">
@@ -270,6 +318,7 @@ export default function RefereePage() {
 
   return (
     <div className="space-y-6 pb-12">
+      {gamedayBanner}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Zeitplan</h1>
         <p className="text-sm text-zinc-500 mt-1">

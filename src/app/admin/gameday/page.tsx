@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { GamedayControls } from "./components/gameday-controls";
 import { TabBar } from "./components/tab-bar";
 import { UebersichtTab } from "./components/uebersicht-tab";
 import { AktivitaetTab } from "./components/aktivitaet-tab";
@@ -32,6 +33,7 @@ export default function GamedayDashboard() {
   const [ergebnisse, setErgebnisse] = useState<GameErgebnis[]>([]);
   const [games, setGames] = useState<GameInfo[]>([]);
   const [teams, setTeams] = useState<TeamInfo[]>([]);
+  const [gamedayModus, setGamedayModus] = useState<string>("INAKTIV");
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -59,8 +61,12 @@ export default function GamedayDashboard() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       }),
+      fetch("/api/gameday").then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }),
     ])
-      .then(([rang, erg, g, t]) => {
+      .then(([rang, erg, g, t, gd]) => {
         setRangliste(rang.rangliste ?? []);
         setErgebnisse(Array.isArray(erg) ? erg : []);
         setGames(
@@ -69,6 +75,7 @@ export default function GamedayDashboard() {
           ),
         );
         setTeams(Array.isArray(t) ? t : []);
+        setGamedayModus(gd.modus ?? "INAKTIV");
         setLastUpdate(new Date());
         setFetchError(null);
         setLoading(false);
@@ -118,9 +125,19 @@ export default function GamedayDashboard() {
         <h1 className="text-2xl font-bold tracking-tight">Gameday Live</h1>
       </div>
 
+      <GamedayControls onStatusChange={loadData} />
+
       <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
-      {activeTab === "uebersicht" && (
+      {activeTab === "uebersicht" && gamedayModus === "INAKTIV" && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-8 text-center">
+          <p className="text-sm text-zinc-500">
+            Starte einen Gameday um Ergebnisse zu erfassen
+          </p>
+        </div>
+      )}
+
+      {activeTab === "uebersicht" && gamedayModus !== "INAKTIV" && (
         <UebersichtTab
           rangliste={rangliste}
           ergebnisse={ergebnisse}

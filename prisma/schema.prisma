@@ -118,6 +118,7 @@ model Person {
 
   // Audit-Trail Relations
   ergebnisHistories ErgebnisHistory[] @relation("history_geaendert_von")
+  gamedaysStarted  GamedayConfig[]   @relation("gameday_started_by")
   gamesCreated     Game[]           @relation("gameCreatedBy")
   gamesUpdated     Game[]           @relation("gameUpdatedBy")
   teamsCreated     Team[]           @relation("teamCreatedBy")
@@ -313,6 +314,23 @@ enum InfraTyp {
 
 // ─── Gameday ───
 
+model GamedayConfig {
+  id        String        @id @default(cuid())
+  modus     GamedayModus  @default(INAKTIV)
+  startedAt DateTime?
+  endedAt   DateTime?
+  startedById String?
+  startedBy Person?       @relation("gameday_started_by", fields: [startedById], references: [id])
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+enum GamedayModus {
+  INAKTIV
+  TEST
+  HOT
+}
+
 model Ergebnis {
   id               String         @id @default(cuid())
   zeitplanSlotId   String?
@@ -331,6 +349,7 @@ model Ergebnis {
   eingetragenUm    DateTime?
   qrVerifiziert    Boolean        @default(false)
   qrTimestamp      DateTime?
+  istTest          Boolean        @default(false)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 

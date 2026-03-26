@@ -72,6 +72,21 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
+    // Gameday-Modus pruefen
+    const gamedayConfig = await prisma.gamedayConfig.findFirst({
+      where: { modus: { not: "INAKTIV" } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!gamedayConfig) {
+      return NextResponse.json(
+        { error: "Kein aktiver Gameday — Ergebnisse können nur während eines aktiven Gamedays erfasst werden" },
+        { status: 400 },
+      );
+    }
+
+    const istTest = gamedayConfig.modus === "TEST";
+
     const body = await request.json();
     const parsed = ErgebnisCreateSchema.safeParse(body);
     if (!parsed.success) {
@@ -120,6 +135,7 @@ export async function POST(request: NextRequest) {
         status: "EINGETRAGEN",
         eingetragenVonId: userId,
         eingetragenUm: new Date(),
+        istTest,
       },
       update: {
         rohdaten,
@@ -127,6 +143,7 @@ export async function POST(request: NextRequest) {
         status: "KORRIGIERT",
         eingetragenVonId: userId,
         eingetragenUm: new Date(),
+        istTest,
       },
     });
 
