@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Game = { id: string; name: string; slug: string; modus: string; teamsProSlot: number };
@@ -10,10 +10,13 @@ type CheckedInTeam = { teamId: string; teamName: string; teamNummer: number; tea
 export default function CheckinPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
+  const slotId = searchParams.get("slotId") ?? undefined;
 
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
   const [mode, setMode] = useState<"scan" | "code">("code");
   const [codeInput, setCodeInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -153,10 +156,40 @@ export default function CheckinPage() {
     setCheckedIn(prev => prev.filter(t => t.teamId !== teamId));
   };
 
-  const proceedToEingabe = () => {
-    // Zum Eingabe-Formular mit vorausgewählten Teams
-    const teamIds = checkedIn.map(t => t.teamId).join(",");
-    router.push(`/referee/${slug}/eingabe?teams=${teamIds}`);
+  const startPartie = async () => {
+    if (!game) return;
+    setStarting(true);
+    setError(null);
+
+    try {
+      const teamIds = checkedIn.map((t) => t.teamId);
+      const res = await fetch("/api/partie/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gameId: game.id,
+          teamIds,
+          zeitplanSlotId: slotId,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Partie konnte nicht gestartet werden");
+      }
+
+      const ergebnisse: { id: string }[] = await res.json();
+      const ergebnisIds = ergebnisse.map((e) => e.id).join(",");
+
+      const params = new URLSearchParams();
+      params.set("ergebnisIds", ergebnisIds);
+      if (slotId) params.set("slotId", slotId);
+
+      router.push(`/referee/${slug}/live?${params.toString()}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler beim Starten");
+      setStarting(false);
+    }
   };
 
   if (loading || !game) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
@@ -282,11 +315,14 @@ export default function CheckinPage() {
         </div>
       )}
 
-      {/* Weiter zur Ergebnis-Eingabe */}
+      {/* Partie starten */}
       {allCheckedIn && (
-        <button onClick={proceedToEingabe}
-          className="w-full py-4 bg-emerald-600 text-white text-lg font-semibold rounded-lg hover:bg-emerald-500 transition">
-          Begegnung starten &rarr;
+        <button
+          onClick={startPartie}
+          disabled={starting}
+          className="w-full py-4 bg-emerald-600 text-white text-lg font-semibold rounded-lg hover:bg-emerald-500 transition disabled:opacity-50"
+        >
+          {starting ? "Wird gestartet..." : "Begegnung starten \u2192"}
         </button>
       )}
     </div>

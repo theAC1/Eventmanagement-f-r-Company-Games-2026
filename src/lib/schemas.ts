@@ -66,6 +66,11 @@ export const ErgebnisCreateSchema = z.object({
   zeitplanSlotId: z.string().nullable().optional(),
 });
 
+export const ErgebnisUpdateSchema = z.object({
+  rohdaten: z.record(z.string(), z.unknown()),
+  grund: z.string().max(500).optional(),
+});
+
 // ─── Users ───
 
 export const UserCreateSchema = z.object({

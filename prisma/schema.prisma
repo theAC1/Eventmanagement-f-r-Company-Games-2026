@@ -117,6 +117,7 @@ model Person {
   qrScans                QRVerifikation[]
 
   // Audit-Trail Relations
+  ergebnisHistories ErgebnisHistory[] @relation("history_geaendert_von")
   gamesCreated     Game[]           @relation("gameCreatedBy")
   gamesUpdated     Game[]           @relation("gameUpdatedBy")
   teamsCreated     Team[]           @relation("teamCreatedBy")
@@ -333,6 +334,8 @@ model Ergebnis {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
+  histories        ErgebnisHistory[]
+
   @@unique([gameId, teamId])
   @@index([gameId])
   @@index([teamId])
@@ -340,9 +343,29 @@ model Ergebnis {
 
 enum ErgebnisStatus {
   AUSSTEHEND
+  LAUFEND
   EINGETRAGEN
   VERIFIZIERT
   KORRIGIERT
+}
+
+model ErgebnisHistory {
+  id                String          @id @default(cuid())
+  ergebnisId        String
+  ergebnis          Ergebnis        @relation(fields: [ergebnisId], references: [id], onDelete: Cascade)
+  vorher            Json?
+  nachher           Json
+  gamePunkteVorher  Float?
+  gamePunkteNachher Float?
+  statusVorher      ErgebnisStatus?
+  statusNachher     ErgebnisStatus
+  geaendertVonId    String?
+  geaendertVon      Person?         @relation("history_geaendert_von", fields: [geaendertVonId], references: [id])
+  geaendertUm       DateTime        @default(now())
+  grund             String?
+
+  @@index([ergebnisId])
+  @@index([geaendertUm])
 }
 
 // ─── QR-Verifikation ───

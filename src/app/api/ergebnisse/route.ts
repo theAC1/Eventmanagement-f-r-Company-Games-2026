@@ -1,22 +1,55 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { berechneGameRang } from "@/lib/rangpunkte";
 import { requireRole } from "@/lib/auth-helpers";
 import { ErgebnisCreateSchema, zodValidationError } from "@/lib/schemas";
-import type { Prisma } from "@prisma/client";
+import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
+import { Prisma } from "@prisma/client";
 
-// GET /api/ergebnisse – Alle Ergebnisse (optional filter by gameId oder teamId)
+// GET /api/ergebnisse – Alle Ergebnisse (optional filter, optional activity-mode)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const activity = searchParams.get("activity") === "true";
     const gameId = searchParams.get("gameId");
     const teamId = searchParams.get("teamId");
+    const status = searchParams.get("status");
+    const search = searchParams.get("search");
+    const page = Math.max(1, Number(searchParams.get("page") ?? 1));
+    const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 50)));
 
     const where: Record<string, unknown> = {};
     if (gameId) where.gameId = gameId;
     if (teamId) where.teamId = teamId;
+    if (status) where.status = status;
+    if (search) {
+      where.OR = [
+        { game: { name: { contains: search, mode: "insensitive" } } },
+        { team: { name: { contains: search, mode: "insensitive" } } },
+      ];
+    }
 
+    if (activity) {
+      // Paginierter Activity-Feed, chronologisch
+      const [data, total] = await Promise.all([
+        prisma.ergebnis.findMany({
+          where: where as Prisma.ErgebnisWhereInput,
+          include: {
+            game: { select: { id: true, name: true, slug: true } },
+            team: { select: { id: true, name: true, nummer: true } },
+            eingetragenVon: { select: { id: true, name: true } },
+          },
+          orderBy: { eingetragenUm: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.ergebnis.count({ where: where as Prisma.ErgebnisWhereInput }),
+      ]);
+
+      return NextResponse.json({ data, total, page, limit });
+    }
+
+    // Standard-Modus (backward compatible)
     const ergebnisse = await prisma.ergebnis.findMany({
       where,
       include: {
@@ -35,7 +68,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/ergebnisse – Ergebnis eintragen (Schiedsrichter)
 export async function POST(request: NextRequest) {
-  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
 
   try {
@@ -58,13 +91,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Game nicht gefunden" }, { status: 404 });
     }
 
+    // Bestehenden Ergebnis laden fuer History
+    const existing = await prisma.ergebnis.findUnique({
+      where: { gameId_teamId: { gameId, teamId } },
+      select: { id: true, rohdaten: true, gamePunkte: true, status: true },
+    });
+
     // gamePunkte aus Rohdaten berechnen
     const gamePunkte = berechneGamePunkteAusRohdaten(
       rohdaten as Record<string, any>,
       game.wertungslogik as any,
     );
 
-    // Ergebnis erstellen oder aktualisieren (upsert auf gameId+teamId)
+    const userId = (session as any)?.user?.id ?? null;
+    const isUpdate = !!existing;
+
+    // Ergebnis erstellen oder aktualisieren
     const ergebnis = await prisma.ergebnis.upsert({
       where: {
         gameId_teamId: { gameId, teamId },
@@ -76,132 +118,38 @@ export async function POST(request: NextRequest) {
         rohdaten,
         gamePunkte,
         status: "EINGETRAGEN",
+        eingetragenVonId: userId,
         eingetragenUm: new Date(),
       },
       update: {
         rohdaten,
         gamePunkte,
         status: "KORRIGIERT",
+        eingetragenVonId: userId,
         eingetragenUm: new Date(),
       },
     });
 
-    // Ränge für dieses Game neu berechnen
+    // History-Eintrag erstellen
+    await prisma.ergebnisHistory.create({
+      data: {
+        ergebnisId: ergebnis.id,
+        vorher: isUpdate ? (existing.rohdaten as Prisma.InputJsonValue) : Prisma.JsonNull,
+        nachher: rohdaten,
+        gamePunkteVorher: isUpdate ? existing.gamePunkte : null,
+        gamePunkteNachher: gamePunkte,
+        statusVorher: isUpdate ? existing.status : null,
+        statusNachher: ergebnis.status,
+        geaendertVonId: userId,
+      },
+    });
+
+    // Raenge fuer dieses Game neu berechnen
     await updateGameRaenge(gameId, game.wertungslogik as any);
 
     return NextResponse.json(ergebnis, { status: 201 });
   } catch (error) {
     console.error("POST /api/ergebnisse error:", error);
     return NextResponse.json({ error: "Fehler beim Speichern" }, { status: 500 });
-  }
-}
-
-/**
- * Berechnet gamePunkte aus Rohdaten basierend auf der Wertungslogik
- */
-function berechneGamePunkteAusRohdaten(
-  rohdaten: Record<string, any>,
-  wertungslogik: any,
-): number {
-  if (!wertungslogik) return 0;
-
-  const typ = wertungslogik.typ;
-
-  switch (typ) {
-    case "max_value": {
-      const messung = wertungslogik.messung;
-      return messung ? (Number(rohdaten[messung]) || 0) : 0;
-    }
-
-    case "zeit": {
-      // Bei Zeit: Grundzeit + Strafen
-      const zeit = Number(rohdaten.zeit_sekunden ?? rohdaten.durchgang_1 ?? 0);
-      const strafen = wertungslogik.strafen;
-      let strafzeit = 0;
-      if (strafen && typeof strafen === "object") {
-        for (const [key, sekunden] of Object.entries(strafen)) {
-          const anzahl = Number(rohdaten[key] ?? 0);
-          strafzeit += anzahl * (sekunden as number);
-        }
-      }
-      // Nicht geschafft = sehr hohe Zeit
-      if (rohdaten.nicht_geschafft || rohdaten.geschafft === false) {
-        return 99999;
-      }
-      return zeit + strafzeit;
-    }
-
-    case "punkte_duell": {
-      // Bei Duell: Differenz oder einfach die eigenen Punkte
-      const felder = wertungslogik.eingabefelder;
-      if (felder && felder.length >= 1) {
-        return Number(rohdaten[felder[0].name] ?? 0);
-      }
-      return 0;
-    }
-
-    case "formel": {
-      // Einfache Summe der quadrierten Werte
-      const felder = wertungslogik.eingabefelder;
-      if (!felder) return 0;
-      let summe = 0;
-      for (const f of felder) {
-        const val = Number(rohdaten[f.name] ?? 0);
-        summe += val * val;
-      }
-      return summe;
-    }
-
-    case "multi_level": {
-      // Level-Grundpunkte - Zeitmalus
-      const levels = wertungslogik.levels;
-      const gewaehlterLevel = rohdaten.level as string;
-      const level = levels?.find((l: any) => l.name === gewaehlterLevel);
-      if (!level) return 0;
-      const zeit = Number(rohdaten.zeit_sekunden ?? 0);
-      return Math.max(0, level.grundpunkte - zeit * 0.1);
-    }
-
-    case "risiko_wahl": {
-      // Gewählte Option → Punkte bei Erfolg
-      const optionen = wertungslogik.optionen;
-      const gewaehlteOption = rohdaten.option as string;
-      const option = optionen?.find((o: any) => o.name === gewaehlteOption);
-      if (!option) return 0;
-      const erfolg = rohdaten.erfolg === true || rohdaten.erfolg === "true";
-      return erfolg ? option.punkte_erfolg : option.punkte_fail;
-    }
-
-    default:
-      return 0;
-  }
-}
-
-/**
- * Aktualisiert die Ränge für alle Ergebnisse eines Games
- */
-async function updateGameRaenge(gameId: string, wertungslogik: any) {
-  const ergebnisse = await prisma.ergebnis.findMany({
-    where: { gameId, gamePunkte: { not: null } },
-    select: { id: true, gameId: true, teamId: true, gamePunkte: true, rohdaten: true },
-  });
-
-  const raenge = berechneGameRang(
-    ergebnisse.map((e: any) => ({
-      ...e,
-      rohdaten: (e.rohdaten ?? {}) as Record<string, unknown>,
-    })),
-    wertungslogik,
-  );
-
-  // Batch-Update
-  for (const rang of raenge) {
-    await prisma.ergebnis.update({
-      where: { id: rang.ergebnisId },
-      data: {
-        rangImGame: rang.rangImGame,
-        rangPunkte: rang.rangPunkte,
-      },
-    });
   }
 }
