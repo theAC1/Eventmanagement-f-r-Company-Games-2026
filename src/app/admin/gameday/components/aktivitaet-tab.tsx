@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import { StatusBadge } from "@/components/status-badge";
 import { KorrekturModal } from "./korrektur-modal";
 
@@ -36,9 +35,8 @@ type AktivitaetTabProps = {
 };
 
 export function AktivitaetTab({ games, teams }: AktivitaetTabProps) {
-  const { data: session } = useSession();
-  const userRole = (session?.user as { role?: string } | undefined)?.role;
-  const canCorrect = userRole === "ORGA" || userRole === "ADMIN";
+  // Admin-Layout erlaubt nur ORGA+ — Korrektur ist immer erlaubt
+  const canCorrect = true;
 
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [total, setTotal] = useState(0);
