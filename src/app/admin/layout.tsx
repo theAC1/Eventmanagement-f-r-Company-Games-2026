@@ -1,10 +1,16 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { LogoutButton } from "./logout-button";
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getServerSession(authOptions);
+  const isAdmin = session?.user?.rolle === "ADMIN";
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Header */}
@@ -54,14 +60,33 @@ export default function AdminLayout({
               >
                 Gameday
               </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin/users"
+                  className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+                >
+                  Benutzer
+                </Link>
+              )}
             </nav>
           </div>
-          <Link
-            href="/"
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition"
-          >
-            Startseite
-          </Link>
+          <div className="flex items-center gap-3">
+            {session?.user && (
+              <span className="text-xs text-zinc-500">
+                {session.user.name}
+                <span className="ml-1.5 px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] uppercase tracking-wider">
+                  {session.user.rolle}
+                </span>
+              </span>
+            )}
+            <LogoutButton />
+            <Link
+              href="/"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition"
+            >
+              Startseite
+            </Link>
+          </div>
         </div>
       </header>
 

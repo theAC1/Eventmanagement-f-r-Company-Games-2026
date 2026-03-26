@@ -1,4 +1,5 @@
 import { PrismaClient, GameTyp, GameModus } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -393,14 +394,18 @@ async function main() {
 
   // Admin-User erstellen
   await prisma.person.deleteMany();
+  const passwordHash = await bcrypt.hash("changeme", 12);
   const admin = await prisma.person.create({
     data: {
       name: "Juan Hausherr",
       email: "juan.hausherr@gmail.com",
-      rolle: "LEITUNG",
+      username: "juan",
+      passwordHash,
+      rolle: "ADMIN",
     },
   });
-  console.log(`\n  👤 Admin: ${admin.name}`);
+  console.log(`\n  👤 Admin: ${admin.name} (username: juan, passwort: changeme)`);
+  console.log(`  ⚠️  Passwort nach erstem Login ändern!`);
 
   console.log(`\n✅ Seed abgeschlossen: ${games.length} Games + 1 Admin\n`);
 }

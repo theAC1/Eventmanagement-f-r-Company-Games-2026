@@ -19,7 +19,7 @@ app.prepare().then(() => {
   // Socket.io Server
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: dev ? "http://localhost:3000" : process.env.NEXTAUTH_URL,
+      origin: dev ? "http://localhost:3000" : (process.env.APP_URL || process.env.NEXTAUTH_URL),
       methods: ["GET", "POST"],
     },
     // Ping alle 25 Sek, Timeout nach 60 Sek

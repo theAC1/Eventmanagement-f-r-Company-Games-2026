@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateGameCreate, validationResponse } from "@/lib/validation";
+import { getCurrentUserId } from "@/lib/auth-helpers";
 
 // GET /api/games – Alle Games mit Varianten-Count
 export async function GET() {
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
         .replace(/[^a-z0-9-]/g, "");
     }
 
+    const userId = await getCurrentUserId();
+
     const game = await prisma.game.create({
       data: {
         name: body.name,
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
         flaecheBreiteM: body.flaecheBreiteM ?? null,
         helferAnzahl: body.helferAnzahl ?? 1,
         stromNoetig: body.stromNoetig ?? false,
+        createdById: userId,
       },
     });
 

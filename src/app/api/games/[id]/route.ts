@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserId } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -11,6 +12,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       where: { id },
       include: {
         varianten: { orderBy: { name: "asc" } },
+        createdBy: { select: { id: true, name: true } },
+        updatedBy: { select: { id: true, name: true } },
         _count: { select: { materialItems: true, ergebnisse: true } },
       },
     });
@@ -34,6 +37,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
     const body = await request.json();
+    const userId = await getCurrentUserId();
 
     const game = await prisma.game.update({
       where: { id },
@@ -55,6 +59,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         flaecheBreiteM: body.flaecheBreiteM,
         helferAnzahl: body.helferAnzahl,
         stromNoetig: body.stromNoetig,
+        updatedById: userId,
       },
       include: {
         varianten: { orderBy: { name: "asc" } },

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { AuditInfo } from "@/components/audit-info";
 
 type Team = {
   id: string; name: string; nummer: number; farbe: string;
@@ -10,6 +11,10 @@ type Team = {
   logoUrl: string | null; motto: string | null;
   teilnehmerAnzahl: number | null; teilnehmerNamen: string[] | null;
   qrToken: string;
+  createdBy?: { id: string; name: string } | null;
+  updatedBy?: { id: string; name: string } | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export default function TeamDetailPage() {
@@ -111,6 +116,12 @@ export default function TeamDetailPage() {
         <div>
           <h1 className="text-2xl font-bold">{team.name}</h1>
           {team.motto && <p className="text-zinc-400">{team.motto}</p>}
+          <AuditInfo
+            createdBy={team.createdBy}
+            updatedBy={team.updatedBy}
+            createdAt={team.createdAt}
+            updatedAt={team.updatedAt}
+          />
         </div>
       </div>
 

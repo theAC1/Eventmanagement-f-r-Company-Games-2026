@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserId } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -38,6 +39,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
     const body = await request.json();
+    const userId = await getCurrentUserId();
 
     const item = await prisma.materialItem.update({
       where: { id },
@@ -51,6 +53,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         sponsor: body.sponsor,
         kostenGeschaetzt: body.kostenGeschaetzt,
         kostenEffektiv: body.kostenEffektiv,
+        updatedById: userId,
       },
       include: {
         game: { select: { id: true, name: true, slug: true } },

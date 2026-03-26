@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserId } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -10,6 +11,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const team = await prisma.team.findUnique({
       where: { id },
       include: {
+        createdBy: { select: { id: true, name: true } },
+        updatedBy: { select: { id: true, name: true } },
         ergebnisse: {
           include: { game: { select: { name: true } } },
           orderBy: { game: { name: "asc" } },
@@ -29,6 +32,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
     const body = await request.json();
+    const userId = await getCurrentUserId();
+
     const team = await prisma.team.update({
       where: { id },
       data: {
@@ -41,6 +46,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         motto: body.motto,
         teilnehmerAnzahl: body.teilnehmerAnzahl,
         teilnehmerNamen: body.teilnehmerNamen,
+        updatedById: userId,
       },
     });
     return NextResponse.json(team);

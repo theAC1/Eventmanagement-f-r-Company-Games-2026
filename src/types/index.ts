@@ -8,9 +8,31 @@
 export type GameTyp = "RETURNEE" | "NEU";
 export type GameStatus = "ENTWURF" | "BEREIT" | "AKTIV" | "ABGESCHLOSSEN";
 export type GameModus = "SOLO" | "DUELL";
+export type PersonRolle = "ADMIN" | "ORGA" | "SCHIEDSRICHTER" | "HELFER";
 export type MaterialKategorie = "SPONSOR" | "MIETE" | "KAUF" | "EIGENBAU" | "VERBRAUCH" | "INFRASTRUKTUR";
 export type MaterialStatus = "OFFEN" | "ANGEFRAGT" | "BESTAETIGT" | "VORHANDEN" | "GELIEFERT";
 export type ErgebnisStatus = "AUSSTEHEND" | "EINGETRAGEN" | "VERIFIZIERT" | "KORRIGIERT";
+
+// ─── Auth ───
+
+export type PersonDTO = {
+  id: string;
+  name: string;
+  email: string | null;
+  username: string | null;
+  rolle: PersonRolle;
+  istAktiv: boolean;
+  createdAt: string;
+};
+
+// ─── Audit-Trail ───
+
+export type AuditInfo = {
+  createdBy?: { id: string; name: string } | null;
+  updatedBy?: { id: string; name: string } | null;
+  createdAt: string;
+  updatedAt?: string;
+};
 
 // ─── Wertungslogik (Discriminated Union) ───
 

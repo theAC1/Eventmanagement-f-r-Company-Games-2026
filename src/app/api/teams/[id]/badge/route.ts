@@ -16,7 +16,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Team nicht gefunden" }, { status: 404 });
     }
 
-    const baseUrl = process.env.NEXTAUTH_URL ?? "https://games.arvuna.ch";
+    const baseUrl = process.env.APP_URL || process.env.NEXTAUTH_URL || "https://games.arvuna.ch";
     const portalUrl = `${baseUrl}/team/${team.qrToken}`;
 
     return NextResponse.json({

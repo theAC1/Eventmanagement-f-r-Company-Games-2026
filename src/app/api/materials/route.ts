@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUserId } from "@/lib/auth-helpers";
 
 // GET /api/materials – Alle Material-Items mit Game + Verantwortlicher
 export async function GET(request: NextRequest) {
@@ -19,6 +20,8 @@ export async function GET(request: NextRequest) {
       include: {
         game: { select: { id: true, name: true, slug: true } },
         verantwortlich: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+        updatedBy: { select: { id: true, name: true } },
         _count: { select: { kommentare: true } },
       },
       orderBy: [{ game: { name: "asc" } }, { name: "asc" }],
@@ -39,6 +42,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    const userId = await getCurrentUserId();
+
     const item = await prisma.materialItem.create({
       data: {
         name: body.name,
@@ -50,6 +55,7 @@ export async function POST(request: NextRequest) {
         sponsor: body.sponsor || null,
         kostenGeschaetzt: body.kostenGeschaetzt || null,
         kostenEffektiv: body.kostenEffektiv || null,
+        createdById: userId,
       },
       include: {
         game: { select: { id: true, name: true, slug: true } },

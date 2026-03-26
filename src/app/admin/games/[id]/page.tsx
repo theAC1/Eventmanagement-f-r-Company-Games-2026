@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { AuditInfo } from "@/components/audit-info";
 
 type GameVariante = {
   id: string;
@@ -32,6 +33,10 @@ type Game = {
   stromNoetig: boolean;
   varianten: GameVariante[];
   _count: { materialItems: number; ergebnisse: number };
+  createdBy?: { id: string; name: string } | null;
+  updatedBy?: { id: string; name: string } | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 const STATUS_OPTIONS = [
@@ -146,6 +151,14 @@ export default function GameDetailPage() {
           </Link>
           <span>/</span>
           <span className="text-white">{game.name}</span>
+          <span className="mx-4">
+            <AuditInfo
+              createdBy={game.createdBy}
+              updatedBy={game.updatedBy}
+              createdAt={game.createdAt}
+              updatedAt={game.updatedAt}
+            />
+          </span>
         </div>
         <div className="flex items-center gap-3">
           {successMsg && (
