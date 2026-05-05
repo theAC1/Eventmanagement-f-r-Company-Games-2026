@@ -16,6 +16,9 @@ type DbSlot = {
 
 // GET /api/schedule/:id – Gespeicherten Zeitplan laden (mit Slots + Teams)
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const config = await prisma.zeitplanConfig.findUnique({

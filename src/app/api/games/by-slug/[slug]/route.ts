@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ slug: string }> };
 
 // GET /api/games/by-slug/:slug – Game per Slug laden (für Schiedsrichter)
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   const { slug } = await params;
   try {
     const game = await prisma.game.findUnique({

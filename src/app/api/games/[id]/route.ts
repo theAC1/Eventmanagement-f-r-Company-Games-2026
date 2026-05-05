@@ -8,6 +8,9 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // GET /api/games/:id – Einzelnes Game mit Varianten
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const game = await prisma.game.findUnique({

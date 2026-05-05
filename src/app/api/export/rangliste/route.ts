@@ -17,14 +17,17 @@ export async function GET() {
           id: true, gameId: true, teamId: true,
           gamePunkte: true, rangImGame: true, rangPunkte: true,
         },
+        take: 10000,
       }),
       prisma.team.findMany({
         select: { id: true, name: true, nummer: true },
         orderBy: { nummer: "asc" },
+        take: 1000,
       }),
       prisma.game.findMany({
         where: { status: { in: ["BEREIT", "AKTIV"] } },
         select: { id: true },
+        take: 200,
       }),
     ]);
 

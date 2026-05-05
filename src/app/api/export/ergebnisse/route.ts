@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         team: { select: { name: true, nummer: true } },
       },
       orderBy: [{ game: { name: "asc" } }, { rangImGame: "asc" }],
+      take: 10000,
     });
 
     const csv = generateErgebnisseCSV(
