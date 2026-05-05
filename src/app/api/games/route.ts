@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { GameCreateSchema, zodValidationError } from "@/lib/schemas";
 
-// GET /api/games – Alle Games mit Varianten-Count
+// GET /api/games
 export async function GET() {
   try {
     const games = await prisma.game.findMany({
@@ -22,7 +22,7 @@ export async function GET() {
   }
 }
 
-// POST /api/games – Neues Game erstellen
+// POST /api/games
 export async function POST(request: NextRequest) {
   const { error: authError } = await requireRole("ORGA");
   if (authError) return authError;
@@ -36,7 +36,6 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    // Slug generieren falls nicht vorhanden
     const slug = data.slug || data.name
       .toLowerCase()
       .replace(/[äÄ]/g, "ae")
@@ -44,6 +43,14 @@ export async function POST(request: NextRequest) {
       .replace(/[üÜ]/g, "ue")
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "");
+
+    const existingSlug = await prisma.game.findUnique({ where: { slug } });
+    if (existingSlug) {
+      return NextResponse.json(
+        { error: `Ein Game mit dem Slug "${slug}" existiert bereits.` },
+        { status: 409 }
+      );
+    }
 
     const userId = await getCurrentUserId();
 

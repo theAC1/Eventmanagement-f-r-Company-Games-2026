@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
 import { ErgebnisCreateSchema, zodValidationError } from "@/lib/schemas";
 import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
 import { Prisma } from "@prisma/client";
+import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
-// GET /api/ergebnisse – Alle Ergebnisse (optional filter, optional activity-mode)
+// GET /api/ergebnisse
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (activity) {
-      // Paginierter Activity-Feed, chronologisch
       const [data, total] = await Promise.all([
         prisma.ergebnis.findMany({
           where: where as Prisma.ErgebnisWhereInput,
@@ -49,7 +48,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data, total, page, limit });
     }
 
-    // Standard-Modus (backward compatible)
     const ergebnisse = await prisma.ergebnis.findMany({
       where,
       include: {
@@ -66,13 +64,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/ergebnisse – Ergebnis eintragen (Schiedsrichter)
+// POST /api/ergebnisse
 export async function POST(request: NextRequest) {
   const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
 
   try {
-    // Gameday-Modus pruefen
     const gamedayConfig = await prisma.gamedayConfig.findFirst({
       where: { modus: { not: "INAKTIV" } },
       orderBy: { createdAt: "desc" },
@@ -94,9 +91,8 @@ export async function POST(request: NextRequest) {
     }
 
     const { gameId, teamId, zeitplanSlotId, commitId } = parsed.data;
-    const rohdaten = parsed.data.rohdaten as Prisma.InputJsonValue & Record<string, any>;
+    const rohdaten = parsed.data.rohdaten as Prisma.InputJsonValue & Record<string, unknown>;
 
-    // Game + Wertungslogik laden
     const game = await prisma.game.findUnique({
       where: { id: gameId },
       select: { id: true, wertungslogik: true, wertungstyp: true },
@@ -106,65 +102,63 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Game nicht gefunden" }, { status: 404 });
     }
 
-    // Bestehenden Ergebnis laden fuer History
+    const wertungslogik = game.wertungslogik as Wertungslogik | null;
+    const gamePunkte = berechneGamePunkteAusRohdaten(
+      rohdaten as Record<string, unknown>,
+      wertungslogik,
+    );
+
+    const userId = session?.user?.id ?? null;
+
     const existing = await prisma.ergebnis.findUnique({
       where: { gameId_teamId: { gameId, teamId } },
       select: { id: true, rohdaten: true, gamePunkte: true, status: true },
     });
-
-    // gamePunkte aus Rohdaten berechnen
-    const gamePunkte = berechneGamePunkteAusRohdaten(
-      rohdaten as Record<string, any>,
-      game.wertungslogik as any,
-    );
-
-    const userId = (session as any)?.user?.id ?? null;
     const isUpdate = !!existing;
 
-    // Ergebnis erstellen oder aktualisieren
-    const ergebnis = await prisma.ergebnis.upsert({
-      where: {
-        gameId_teamId: { gameId, teamId },
-      },
-      create: {
-        gameId,
-        teamId,
-        zeitplanSlotId: zeitplanSlotId || null,
-        rohdaten,
-        gamePunkte,
-        status: "EINGETRAGEN",
-        eingetragenVonId: userId,
-        eingetragenUm: new Date(),
-        istTest,
-        commitId: commitId || null,
-      },
-      update: {
-        rohdaten,
-        gamePunkte,
-        status: "KORRIGIERT",
-        eingetragenVonId: userId,
-        eingetragenUm: new Date(),
-        istTest,
-        commitId: commitId || null,
-      },
-    });
+    const ergebnis = await prisma.$transaction(async (tx) => {
+      const result = await tx.ergebnis.upsert({
+        where: { gameId_teamId: { gameId, teamId } },
+        create: {
+          gameId,
+          teamId,
+          zeitplanSlotId: zeitplanSlotId || null,
+          rohdaten,
+          gamePunkte,
+          status: "EINGETRAGEN",
+          eingetragenVonId: userId,
+          eingetragenUm: new Date(),
+          istTest,
+          commitId: commitId || null,
+        },
+        update: {
+          rohdaten,
+          gamePunkte,
+          status: "KORRIGIERT",
+          eingetragenVonId: userId,
+          eingetragenUm: new Date(),
+          istTest,
+          commitId: commitId || null,
+        },
+      });
 
-    // History-Eintrag erstellen
-    await prisma.ergebnisHistory.create({
-      data: {
-        ergebnisId: ergebnis.id,
-        vorher: isUpdate ? (existing.rohdaten as Prisma.InputJsonValue) : Prisma.JsonNull,
-        nachher: rohdaten,
-        gamePunkteVorher: isUpdate ? existing.gamePunkte : null,
-        gamePunkteNachher: gamePunkte,
-        statusVorher: isUpdate ? existing.status : null,
-        statusNachher: ergebnis.status,
-        geaendertVonId: userId,
-      },
-    });
+      await tx.ergebnisHistory.create({
+        data: {
+          ergebnisId: result.id,
+          vorher: isUpdate ? (existing.rohdaten as Prisma.InputJsonValue) : Prisma.JsonNull,
+          nachher: rohdaten,
+          gamePunkteVorher: isUpdate ? existing.gamePunkte : null,
+          gamePunkteNachher: gamePunkte,
+          statusVorher: isUpdate ? existing.status : null,
+          statusNachher: result.status,
+          geaendertVonId: userId,
+        },
+      });
 
-    // Raenge fuer dieses Game neu berechnen
-    await updateGameRaenge(gameId, game.wertungslogik as any);
+      await updateGameRaenge(gameId, wertungslogik, tx);
+
+      return result;
+    });
 
     return NextResponse.json(ergebnis, { status: 201 });
   } catch (error) {

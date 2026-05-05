@@ -4,10 +4,28 @@ import { generateUniqueCheckinCode } from "@/lib/checkin-code";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { TeamCreateSchema, zodValidationError } from "@/lib/schemas";
 
+const TEAM_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  nummer: true,
+  captainName: true,
+  captainEmail: true,
+  farbe: true,
+  logoUrl: true,
+  motto: true,
+  teilnehmerAnzahl: true,
+  teilnehmerNamen: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 // GET /api/teams
 export async function GET() {
   try {
-    const teams = await prisma.team.findMany({ orderBy: { nummer: "asc" } });
+    const teams = await prisma.team.findMany({
+      select: TEAM_PUBLIC_SELECT,
+      orderBy: { nummer: "asc" },
+    });
     return NextResponse.json(teams);
   } catch (error) {
     console.error("GET /api/teams error:", error);
@@ -29,7 +47,6 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    // Existierende Codes laden für Uniqueness
     const existing = await prisma.team.findMany({ select: { checkinCode: true } });
     const existingCodes = new Set<string>(existing.map((t: { checkinCode: string }) => t.checkinCode).filter(Boolean));
     const checkinCode = generateUniqueCheckinCode(existingCodes);

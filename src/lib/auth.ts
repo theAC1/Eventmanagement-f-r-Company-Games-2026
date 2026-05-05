@@ -2,22 +2,9 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
+import { ROLE_HIERARCHY, hasMinRole } from "./roles";
 
-// Rollen-Hierarchie: ADMIN > ORGA > SCHIEDSRICHTER > HELFER
-export const ROLE_HIERARCHY: Record<string, number> = {
-  ADMIN: 100,
-  ORGA: 50,
-  SCHIEDSRICHTER: 20,
-  HELFER: 10,
-};
-
-export function hasMinRole(userRole: string, requiredRole: string): boolean {
-  const userLevel = ROLE_HIERARCHY[userRole];
-  const requiredLevel = ROLE_HIERARCHY[requiredRole];
-  // Unbekannte Rollen werden NICHT durchgelassen
-  if (userLevel === undefined || requiredLevel === undefined) return false;
-  return userLevel >= requiredLevel;
-}
+export { ROLE_HIERARCHY, hasMinRole };
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -50,22 +37,25 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 24 Stunden
+    maxAge: 24 * 60 * 60,
   },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.rolle = (user as any).rolle;
+        token.rolle = user.rolle;
       }
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).rolle = token.rolle;
-      }
-      return session;
+      return {
+        ...session,
+        user: {
+          ...session.user,
+          id: token.id,
+          rolle: token.rolle,
+        },
+      };
     },
   },
   pages: {

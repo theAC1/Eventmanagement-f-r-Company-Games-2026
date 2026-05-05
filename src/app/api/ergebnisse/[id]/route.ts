@@ -1,14 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
 import { ErgebnisUpdateSchema, zodValidationError } from "@/lib/schemas";
 import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
 import type { Prisma } from "@prisma/client";
+import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// GET /api/ergebnisse/:id – Einzelnes Ergebnis mit History
+// GET /api/ergebnisse/:id
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
@@ -41,7 +41,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PUT /api/ergebnisse/:id – Orga/Admin Korrektur
+// PUT /api/ergebnisse/:id
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { error: authError, session } = await requireRole("ORGA");
   if (authError) return authError;
@@ -56,7 +56,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { rohdaten, grund } = parsed.data;
 
-    // Bestehendes Ergebnis + Game laden
     const existing = await prisma.ergebnis.findUnique({
       where: { id },
       include: {
@@ -68,42 +67,43 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Ergebnis nicht gefunden" }, { status: 404 });
     }
 
-    // Neue gamePunkte berechnen
+    const wertungslogik = existing.game.wertungslogik as Wertungslogik | null;
     const gamePunkte = berechneGamePunkteAusRohdaten(
-      rohdaten as Record<string, any>,
-      existing.game.wertungslogik as any,
+      rohdaten as Record<string, unknown>,
+      wertungslogik,
     );
 
-    const userId = (session as any)?.user?.id ?? null;
+    const userId = session?.user?.id ?? null;
 
-    // Ergebnis aktualisieren
-    const ergebnis = await prisma.ergebnis.update({
-      where: { id },
-      data: {
-        rohdaten: rohdaten as Prisma.InputJsonValue,
-        gamePunkte,
-        status: "KORRIGIERT",
-        eingetragenUm: new Date(),
-      },
+    const ergebnis = await prisma.$transaction(async (tx) => {
+      const result = await tx.ergebnis.update({
+        where: { id },
+        data: {
+          rohdaten: rohdaten as Prisma.InputJsonValue,
+          gamePunkte,
+          status: "KORRIGIERT",
+          eingetragenUm: new Date(),
+        },
+      });
+
+      await tx.ergebnisHistory.create({
+        data: {
+          ergebnisId: result.id,
+          vorher: existing.rohdaten as Prisma.InputJsonValue,
+          nachher: rohdaten as Prisma.InputJsonValue,
+          gamePunkteVorher: existing.gamePunkte,
+          gamePunkteNachher: gamePunkte,
+          statusVorher: existing.status,
+          statusNachher: "KORRIGIERT",
+          grund: grund ?? null,
+          geaendertVonId: userId,
+        },
+      });
+
+      await updateGameRaenge(existing.game.id, wertungslogik, tx);
+
+      return result;
     });
-
-    // History-Eintrag erstellen
-    await prisma.ergebnisHistory.create({
-      data: {
-        ergebnisId: ergebnis.id,
-        vorher: existing.rohdaten as Prisma.InputJsonValue,
-        nachher: rohdaten as Prisma.InputJsonValue,
-        gamePunkteVorher: existing.gamePunkte,
-        gamePunkteNachher: gamePunkte,
-        statusVorher: existing.status,
-        statusNachher: "KORRIGIERT",
-        grund: grund ?? null,
-        geaendertVonId: userId,
-      },
-    });
-
-    // Raenge neu berechnen
-    await updateGameRaenge(existing.game.id, existing.game.wertungslogik as any);
 
     return NextResponse.json(ergebnis);
   } catch (error) {

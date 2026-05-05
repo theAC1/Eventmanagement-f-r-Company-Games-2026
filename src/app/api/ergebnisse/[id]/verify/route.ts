@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
@@ -6,14 +5,13 @@ import type { Prisma } from "@prisma/client";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
-// PUT /api/ergebnisse/:id/verify – Schiedsrichter verifiziert Ergebnis
+// PUT /api/ergebnisse/:id/verify
 export async function PUT(_request: NextRequest, { params }: RouteParams) {
   const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
 
   const { id } = await params;
   try {
-    // Ergebnis laden
     const existing = await prisma.ergebnis.findUnique({
       where: { id },
       select: {
@@ -36,34 +34,35 @@ export async function PUT(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const userId = (session as any)?.user?.id ?? null;
+    const userId = session?.user?.id ?? null;
 
-    // Status auf VERIFIZIERT setzen
-    const ergebnis = await prisma.ergebnis.update({
-      where: { id },
-      data: { status: "VERIFIZIERT" },
-    });
-
-    // ZeitplanSlot auf ABGESCHLOSSEN setzen
-    if (existing.zeitplanSlotId) {
-      await prisma.zeitplanSlot.update({
-        where: { id: existing.zeitplanSlotId },
-        data: { status: "ABGESCHLOSSEN" },
+    const ergebnis = await prisma.$transaction(async (tx) => {
+      const result = await tx.ergebnis.update({
+        where: { id },
+        data: { status: "VERIFIZIERT" },
       });
-    }
 
-    // History-Eintrag erstellen
-    await prisma.ergebnisHistory.create({
-      data: {
-        ergebnisId: ergebnis.id,
-        vorher: existing.rohdaten as Prisma.InputJsonValue,
-        nachher: existing.rohdaten as Prisma.InputJsonValue,
-        gamePunkteVorher: existing.gamePunkte,
-        gamePunkteNachher: existing.gamePunkte,
-        statusVorher: "EINGETRAGEN",
-        statusNachher: "VERIFIZIERT",
-        geaendertVonId: userId,
-      },
+      if (existing.zeitplanSlotId) {
+        await tx.zeitplanSlot.update({
+          where: { id: existing.zeitplanSlotId },
+          data: { status: "ABGESCHLOSSEN" },
+        });
+      }
+
+      await tx.ergebnisHistory.create({
+        data: {
+          ergebnisId: result.id,
+          vorher: existing.rohdaten as Prisma.InputJsonValue,
+          nachher: existing.rohdaten as Prisma.InputJsonValue,
+          gamePunkteVorher: existing.gamePunkte,
+          gamePunkteNachher: existing.gamePunkte,
+          statusVorher: "EINGETRAGEN",
+          statusNachher: "VERIFIZIERT",
+          geaendertVonId: userId,
+        },
+      });
+
+      return result;
     });
 
     return NextResponse.json(ergebnis);

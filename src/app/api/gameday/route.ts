@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
 
-// GET /api/gameday – Aktuellen Gameday-Status abfragen
+// GET /api/gameday
 export async function GET() {
   try {
     const config = await prisma.gamedayConfig.findFirst({
@@ -33,7 +32,7 @@ export async function GET() {
   }
 }
 
-// POST /api/gameday – Gameday starten / Modus setzen
+// POST /api/gameday
 export async function POST(request: NextRequest) {
   const { error: authError, session } = await requireRole("ORGA");
   if (authError) return authError;
@@ -49,7 +48,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Pruefen ob bereits ein aktiver Gameday laeuft
     const active = await prisma.gamedayConfig.findFirst({
       where: { modus: { not: "INAKTIV" } },
       orderBy: { createdAt: "desc" },
@@ -62,7 +60,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = (session as any)?.user?.id ?? null;
+    // Beim Start im HOT-Modus: sicherstellen dass keine Test-Ergebnisse existieren
+    if (modus === "HOT") {
+      const testErgebnisse = await prisma.ergebnis.count({ where: { istTest: true } });
+      if (testErgebnisse > 0) {
+        return NextResponse.json(
+          { error: `Es existieren noch ${testErgebnisse} Test-Ergebnisse. Bitte zuerst über den TEST-Modus zurücksetzen.` },
+          { status: 400 },
+        );
+      }
+    }
+
+    const userId = session?.user?.id ?? null;
 
     const config = await prisma.gamedayConfig.create({
       data: {
@@ -85,7 +94,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE /api/gameday – Gameday beenden
+// DELETE /api/gameday
 export async function DELETE() {
   const { error: authError } = await requireRole("ORGA");
   if (authError) return authError;

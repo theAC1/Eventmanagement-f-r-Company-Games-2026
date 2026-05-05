@@ -6,7 +6,13 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    // Build-Time: Next.js importiert Server-Module ohne DB-Verbindung
+    // Runtime: Prisma wirft bei der ersten Query wenn DATABASE_URL fehlt
+    console.warn("DATABASE_URL ist nicht gesetzt — DB-Zugriffe werden fehlschlagen");
+  }
+  const adapter = new PrismaPg({ connectionString: connectionString ?? "" });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],

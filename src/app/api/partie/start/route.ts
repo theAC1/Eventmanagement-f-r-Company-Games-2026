@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
 
-// POST /api/partie/start – Partie starten (Schiedsrichter nach QR-Scan)
+// POST /api/partie/start
 export async function POST(request: NextRequest) {
   const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
@@ -23,7 +22,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Gameday-Modus pruefen
     const gamedayConfig = await prisma.gamedayConfig.findFirst({
       where: { modus: { not: "INAKTIV" } },
       orderBy: { createdAt: "desc" },
@@ -37,45 +35,45 @@ export async function POST(request: NextRequest) {
     }
 
     const istTest = gamedayConfig.modus === "TEST";
-    const userId = (session as any)?.user?.id ?? null;
+    const userId = session?.user?.id ?? null;
 
-    // Fuer jedes Team ein Ergebnis mit Status LAUFEND erstellen/aktualisieren
-    const ergebnisse = await Promise.all(
-      teamIds.map((teamId) =>
-        prisma.ergebnis.upsert({
-          where: {
-            gameId_teamId: { gameId, teamId },
-          },
-          create: {
-            gameId,
-            teamId,
-            zeitplanSlotId: zeitplanSlotId ?? null,
-            rohdaten: {},
-            gamePunkte: null,
-            status: "LAUFEND",
-            eingetragenVonId: userId,
-            eingetragenUm: new Date(),
-            istTest,
-          },
-          update: {
-            status: "LAUFEND",
-            rohdaten: {},
-            zeitplanSlotId: zeitplanSlotId ?? null,
-            eingetragenVonId: userId,
-            eingetragenUm: new Date(),
-            istTest,
-          },
-        }),
-      ),
-    );
+    const ergebnisse = await prisma.$transaction(async (tx) => {
+      const results = await Promise.all(
+        teamIds.map((teamId) =>
+          tx.ergebnis.upsert({
+            where: { gameId_teamId: { gameId, teamId } },
+            create: {
+              gameId,
+              teamId,
+              zeitplanSlotId: zeitplanSlotId ?? null,
+              rohdaten: {},
+              gamePunkte: null,
+              status: "LAUFEND",
+              eingetragenVonId: userId,
+              eingetragenUm: new Date(),
+              istTest,
+            },
+            update: {
+              status: "LAUFEND",
+              rohdaten: {},
+              zeitplanSlotId: zeitplanSlotId ?? null,
+              eingetragenVonId: userId,
+              eingetragenUm: new Date(),
+              istTest,
+            },
+          }),
+        ),
+      );
 
-    // ZeitplanSlot auf AKTIV setzen
-    if (zeitplanSlotId) {
-      await prisma.zeitplanSlot.update({
-        where: { id: zeitplanSlotId },
-        data: { status: "AKTIV" },
-      });
-    }
+      if (zeitplanSlotId) {
+        await tx.zeitplanSlot.update({
+          where: { id: zeitplanSlotId },
+          data: { status: "AKTIV" },
+        });
+      }
+
+      return results;
+    });
 
     return NextResponse.json(ergebnisse, { status: 201 });
   } catch (error) {

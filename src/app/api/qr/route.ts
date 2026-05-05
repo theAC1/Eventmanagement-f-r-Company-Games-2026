@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 // POST /api/qr – QR-Token verifizieren (Schiedsrichter scannt Team-Badge)
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const { qrToken } = body;

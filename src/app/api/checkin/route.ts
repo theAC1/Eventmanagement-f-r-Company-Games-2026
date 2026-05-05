@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 // POST /api/checkin – Team per QR-Token oder Check-in-Code identifizieren
 export async function POST(request: NextRequest) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const body = await request.json();
     const { qrToken, checkinCode } = body;
@@ -13,13 +17,11 @@ export async function POST(request: NextRequest) {
 
     let team;
     if (checkinCode) {
-      // 3-Zeichen Code Lookup
       team = await prisma.team.findFirst({
         where: { checkinCode: checkinCode.toUpperCase().trim() },
         select: { id: true, name: true, nummer: true, farbe: true, logoUrl: true },
       });
     } else {
-      // QR-Token Lookup (der checkin-spezifische Teil der URL)
       team = await prisma.team.findUnique({
         where: { qrToken },
         select: { id: true, name: true, nummer: true, farbe: true, logoUrl: true },

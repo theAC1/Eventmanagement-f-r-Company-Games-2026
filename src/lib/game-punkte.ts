@@ -1,13 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
 import { berechneGameRang } from "@/lib/rangpunkte";
+import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
-/**
- * Berechnet gamePunkte aus Rohdaten basierend auf der Wertungslogik
- */
+type DbClient = Pick<typeof prisma, "ergebnis">;
+
 export function berechneGamePunkteAusRohdaten(
-  rohdaten: Record<string, any>,
-  wertungslogik: any,
+  rohdaten: Record<string, unknown>,
+  wertungslogik: Wertungslogik | null,
 ): number {
   if (!wertungslogik) return 0;
 
@@ -23,10 +22,10 @@ export function berechneGamePunkteAusRohdaten(
       const zeit = Number(rohdaten.zeit_sekunden ?? rohdaten.durchgang_1 ?? 0);
       const strafen = wertungslogik.strafen;
       let strafzeit = 0;
-      if (strafen && typeof strafen === "object") {
+      if (strafen) {
         for (const [key, sekunden] of Object.entries(strafen)) {
           const anzahl = Number(rohdaten[key] ?? 0);
-          strafzeit += anzahl * (sekunden as number);
+          strafzeit += anzahl * sekunden;
         }
       }
       if (rohdaten.nicht_geschafft || rohdaten.geschafft === false) {
@@ -57,7 +56,7 @@ export function berechneGamePunkteAusRohdaten(
     case "multi_level": {
       const levels = wertungslogik.levels;
       const gewaehlterLevel = rohdaten.level as string;
-      const level = levels?.find((l: any) => l.name === gewaehlterLevel);
+      const level = levels?.find((l) => l.name === gewaehlterLevel);
       if (!level) return 0;
       const zeit = Number(rohdaten.zeit_sekunden ?? 0);
       return Math.max(0, level.grundpunkte - zeit * 0.1);
@@ -66,7 +65,7 @@ export function berechneGamePunkteAusRohdaten(
     case "risiko_wahl": {
       const optionen = wertungslogik.optionen;
       const gewaehlteOption = rohdaten.option as string;
-      const option = optionen?.find((o: any) => o.name === gewaehlteOption);
+      const option = optionen?.find((o) => o.name === gewaehlteOption);
       if (!option) return 0;
       const erfolg = rohdaten.erfolg === true || rohdaten.erfolg === "true";
       return erfolg ? option.punkte_erfolg : option.punkte_fail;
@@ -77,30 +76,30 @@ export function berechneGamePunkteAusRohdaten(
   }
 }
 
-/**
- * Aktualisiert die Raenge fuer alle Ergebnisse eines Games
- */
-export async function updateGameRaenge(gameId: string, wertungslogik: any) {
-  const ergebnisse = await prisma.ergebnis.findMany({
+export async function updateGameRaenge(
+  gameId: string,
+  wertungslogik: Wertungslogik | null,
+  db: DbClient = prisma,
+) {
+  const ergebnisse = await db.ergebnis.findMany({
     where: { gameId, gamePunkte: { not: null } },
     select: { id: true, gameId: true, teamId: true, gamePunkte: true, rohdaten: true },
   });
 
   const raenge = berechneGameRang(
-    ergebnisse.map((e: any) => ({
+    ergebnisse.map((e) => ({
       ...e,
       rohdaten: (e.rohdaten ?? {}) as Record<string, unknown>,
     })),
     wertungslogik,
   );
 
-  for (const rang of raenge) {
-    await prisma.ergebnis.update({
-      where: { id: rang.ergebnisId },
-      data: {
-        rangImGame: rang.rangImGame,
-        rangPunkte: rang.rangPunkte,
-      },
-    });
-  }
+  await Promise.all(
+    raenge.map((rang) =>
+      db.ergebnis.update({
+        where: { id: rang.ergebnisId },
+        data: { rangImGame: rang.rangImGame, rangPunkte: rang.rangPunkte },
+      })
+    )
+  );
 }
