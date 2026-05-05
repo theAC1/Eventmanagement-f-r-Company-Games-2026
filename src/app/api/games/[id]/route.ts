@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { GameUpdateSchema, zodValidationError } from "@/lib/schemas";
 
@@ -48,10 +49,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const userId = await getCurrentUserId();
 
+    const { wertungslogik, ...restData } = parsed.data;
     const game = await prisma.game.update({
       where: { id },
       data: {
-        ...parsed.data,
+        ...restData,
+        ...(wertungslogik !== undefined
+          ? { wertungslogik: wertungslogik === null ? Prisma.JsonNull : wertungslogik }
+          : {}),
         updatedById: userId,
       },
       include: {

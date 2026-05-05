@@ -1,5 +1,23 @@
 import { z } from "zod/v4";
 
+// ─── Wertungslogik ───
+
+const EingabefeldSchema = z.object({
+  name: z.string(),
+  label: z.string().optional(),
+});
+
+const RichtungSchema = z.enum(["hoechster_gewinnt", "niedrigster_gewinnt"]).optional();
+
+export const WertungslogikSchema = z.union([
+  z.object({ typ: z.literal("max_value"), richtung: RichtungSchema, messung: z.string().optional() }),
+  z.object({ typ: z.literal("zeit"), richtung: RichtungSchema, strafen: z.record(z.string(), z.number()).optional(), eingabefelder: z.array(EingabefeldSchema).optional() }),
+  z.object({ typ: z.literal("punkte_duell"), richtung: RichtungSchema, eingabefelder: z.array(EingabefeldSchema).optional() }),
+  z.object({ typ: z.literal("formel"), richtung: RichtungSchema, eingabefelder: z.array(EingabefeldSchema).optional() }),
+  z.object({ typ: z.literal("multi_level"), richtung: RichtungSchema, levels: z.array(z.object({ name: z.string(), grundpunkte: z.number() })).optional() }),
+  z.object({ typ: z.literal("risiko_wahl"), richtung: RichtungSchema, optionen: z.array(z.object({ name: z.string(), punkte_erfolg: z.number(), punkte_fail: z.number() })).optional() }),
+]).nullable().optional();
+
 // ─── Games ───
 
 export const GameCreateSchema = z.object({
@@ -14,7 +32,7 @@ export const GameCreateSchema = z.object({
   reserveMin: z.number().int().min(0).optional(),
   regeln: z.string().nullable().optional(),
   wertungstyp: z.string().nullable().optional(),
-  wertungslogik: z.any().optional(),
+  wertungslogik: WertungslogikSchema,
   flaecheLaengeM: z.number().nullable().optional(),
   flaecheBreiteM: z.number().nullable().optional(),
   helferAnzahl: z.number().int().min(0).optional(),

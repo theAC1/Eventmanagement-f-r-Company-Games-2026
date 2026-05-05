@@ -10,6 +10,9 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // GET /api/ergebnisse/:id
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const ergebnis = await prisma.ergebnis.findUnique({

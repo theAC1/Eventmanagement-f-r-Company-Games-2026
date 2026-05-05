@@ -89,16 +89,42 @@ export default function EingabePage() {
     }
   };
 
+  const handleSaveDuell = async (): Promise<boolean> => {
+    if (!selectedTeamId || !selectedTeamId2) {
+      setError("Beide Teams auswählen");
+      return false;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ergebnisse/duell", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gameId: game!.id,
+          teamAId: selectedTeamId,
+          rohdatenA: rohdaten,
+          teamBId: selectedTeamId2,
+          rohdatenB: rohdaten2,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Fehler");
+      }
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fehler");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (game?.modus === "DUELL" && game.teamsProSlot >= 2) {
-      // Duell: Beide Teams speichern
-      if (!selectedTeamId || !selectedTeamId2) {
-        setError("Beide Teams auswählen");
-        return;
-      }
-      const ok1 = await handleSubmit(selectedTeamId, rohdaten);
-      const ok2 = await handleSubmit(selectedTeamId2, rohdaten2);
-      if (ok1 && ok2) {
+      const ok = await handleSaveDuell();
+      if (ok) {
         setSuccess("Beide Ergebnisse gespeichert");
         setTimeout(() => {
           setSuccess(null);

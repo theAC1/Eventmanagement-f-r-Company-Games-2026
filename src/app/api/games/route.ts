@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { GameCreateSchema, zodValidationError } from "@/lib/schemas";
 
 // GET /api/games
 export async function GET() {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const games = await prisma.game.findMany({
       include: {
@@ -67,7 +71,7 @@ export async function POST(request: NextRequest) {
         reserveMin: data.reserveMin ?? 2,
         regeln: data.regeln ?? null,
         wertungstyp: data.wertungstyp ?? null,
-        wertungslogik: data.wertungslogik ?? null,
+        wertungslogik: data.wertungslogik === null ? Prisma.JsonNull : (data.wertungslogik ?? Prisma.JsonNull),
         flaecheLaengeM: data.flaecheLaengeM ?? null,
         flaecheBreiteM: data.flaecheBreiteM ?? null,
         helferAnzahl: data.helferAnzahl ?? 1,
