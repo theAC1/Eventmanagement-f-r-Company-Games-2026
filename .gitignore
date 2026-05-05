@@ -38,8 +38,8 @@ yarn-error.log*
 # docker
 certs/
 
-# prisma
-prisma/migrations/*.sql
+# prisma — Migrations müssen versioniert werden
+# prisma/migrations/*.sql  ← bewusst nicht ignoriert
 
 # typescript
 *.tsbuildinfo

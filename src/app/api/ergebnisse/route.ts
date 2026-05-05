@@ -8,8 +8,16 @@ import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
 // GET /api/ergebnisse
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const teamIdParam = searchParams.get("teamId");
+
+  // Require auth for general listing; per-team results remain public (used by team portal)
+  if (!teamIdParam) {
+    const { error: authError } = await requireRole("SCHIEDSRICHTER");
+    if (authError) return authError;
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
     const activity = searchParams.get("activity") === "true";
     const gameId = searchParams.get("gameId");
     const teamId = searchParams.get("teamId");

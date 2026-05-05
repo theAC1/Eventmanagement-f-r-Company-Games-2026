@@ -39,12 +39,7 @@ export default function TeamPortalPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // QR-Token verifizieren und Team laden
-    fetch("/api/qr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ qrToken: token }),
-    })
+    fetch(`/api/team/${token}`)
       .then((r) => {
         if (!r.ok) throw new Error("Ungültiger QR-Code");
         return r.json();

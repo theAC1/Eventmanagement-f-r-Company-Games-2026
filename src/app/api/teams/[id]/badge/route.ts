@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/auth-helpers";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // GET /api/teams/:id/badge – QR-Code-Daten für Badge-Generierung
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
   const { id } = await params;
   try {
     const team = await prisma.team.findUnique({

@@ -21,6 +21,9 @@ const TEAM_PUBLIC_SELECT = {
 
 // GET /api/teams
 export async function GET() {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const teams = await prisma.team.findMany({
       select: TEAM_PUBLIC_SELECT,

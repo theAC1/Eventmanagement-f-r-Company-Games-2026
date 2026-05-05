@@ -36,8 +36,13 @@ export function berechneGamePunkteAusRohdaten(
 
     case "punkte_duell": {
       const felder = wertungslogik.eingabefelder;
-      if (felder && felder.length >= 1) {
-        return Number(rohdaten[felder[0].name] ?? 0);
+      if (!felder) return 0;
+      // Erstes Feld mit gesetztem Wert zurückgeben — Team A nutzt felder[0], Team B felder[1]
+      for (const f of felder) {
+        const val = rohdaten[f.name];
+        if (val !== undefined && val !== null) {
+          return Number(val);
+        }
       }
       return 0;
     }
