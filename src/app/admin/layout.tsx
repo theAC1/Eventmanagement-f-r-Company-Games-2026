@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { LogoutButton } from "./logout-button";
+import { KvpFloatingButton } from "./kvp-button";
 
 export default async function AdminLayout({
   children,
@@ -69,6 +70,14 @@ export default async function AdminLayout({
                   Benutzer
                 </Link>
               )}
+              {isAdmin && (
+                <Link
+                  href="/admin/kvp"
+                  className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+                >
+                  KVP
+                </Link>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -93,6 +102,9 @@ export default async function AdminLayout({
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">{children}</main>
+
+      {/* KVP Floating Button — auf allen Admin-Seiten */}
+      <KvpFloatingButton />
     </div>
   );
 }
