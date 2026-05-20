@@ -119,6 +119,19 @@ export const UserUpdateSchema = z.object({
   istAktiv: z.boolean().optional(),
 });
 
+// ─── KVP ───
+
+export const KvpCreateSchema = z.object({
+  typ: z.enum(["BUG", "WUNSCHFUNKTION", "IDEE"]),
+  titel: z.string().min(1, "Titel ist erforderlich").max(100),
+  beschreibung: z.string().min(1, "Beschreibung ist erforderlich").max(500),
+  seite: z.string().max(200).optional(),
+});
+
+export const KvpStatusUpdateSchema = z.object({
+  status: z.enum(["OFFEN", "IN_BEARBEITUNG", "ERLEDIGT"]),
+});
+
 // ─── Helper ───
 
 export function zodValidationError(error: z.ZodError) {

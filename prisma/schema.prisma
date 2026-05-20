@@ -112,6 +112,7 @@ model Person {
 
   materialVerantwortlich MaterialItem[]     @relation("verantwortlich")
   materialKommentare     MaterialKommentar[]
+  kvpEintraege           KvpEintrag[]
   zeitplanSlots          ZeitplanSlot[]
   ergebnisseEingetragen  Ergebnis[]         @relation("eingetragen_von")
   qrScans                QRVerifikation[]
@@ -405,4 +406,36 @@ model QRVerifikation {
 enum VerifikationsMethode {
   QR_SCAN
   MANUELL
+}
+
+// ─── KVP (Kontinuierliche Verbesserung) ───
+
+model KvpEintrag {
+  id           String    @id @default(cuid())
+  typ          KvpTyp
+  titel        String    @db.VarChar(100)
+  beschreibung String    @db.Text
+  seite        String?   // automatisch erfasster URL-Pfad
+  status       KvpStatus @default(OFFEN)
+
+  eingetragenVonId String?
+  eingetragenVon   Person? @relation(fields: [eingetragenVonId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([typ])
+}
+
+enum KvpTyp {
+  BUG
+  WUNSCHFUNKTION
+  IDEE
+}
+
+enum KvpStatus {
+  OFFEN
+  IN_BEARBEITUNG
+  ERLEDIGT
 }
