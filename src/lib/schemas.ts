@@ -69,11 +69,21 @@ export const MaterialCreateSchema = z.object({
   beschreibung: z.string().nullable().optional(),
   status: z.enum(["OFFEN", "ANGEFRAGT", "BESTAETIGT", "VORHANDEN", "GELIEFERT"]).optional(),
   sponsor: z.string().nullable().optional(),
+  verantwortlichId: z.string().nullable().optional(),
   kostenGeschaetzt: z.number().nullable().optional(),
   kostenEffektiv: z.number().nullable().optional(),
 });
 
 export const MaterialUpdateSchema = MaterialCreateSchema.partial();
+
+export const MaterialBulkUpdateSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1, "Mindestens eine ID erforderlich"),
+  patch: MaterialCreateSchema.partial(),
+});
+
+export const MaterialBulkDeleteSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1, "Mindestens eine ID erforderlich"),
+});
 
 // ─── Ergebnisse ───
 
