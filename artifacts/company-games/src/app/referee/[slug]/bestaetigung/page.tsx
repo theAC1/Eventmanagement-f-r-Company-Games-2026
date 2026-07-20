@@ -412,8 +412,15 @@ export default function BestaetigungPage() {
                     <span className="text-zinc-400"> zum Korrigieren</span>
                   </p>
                   <button
-                    onClick={() => navigate(`/referee/${slug}/live`)}
-                    className="w-full py-2.5 border border-amber-700/60 text-amber-300 text-sm font-medium rounded-lg hover:bg-amber-900/30 transition"
+                    onClick={() => {
+                      const qs = new URLSearchParams();
+                      if (savedIds.length) qs.set("ergebnisIds", savedIds.join(","));
+                      if (payload.slotId) qs.set("slotId", payload.slotId);
+                      const query = qs.toString();
+                      navigate(`/referee/${slug}/live${query ? `?${query}` : ""}`);
+                    }}
+                    disabled={savedIds.length === 0}
+                    className="w-full py-2.5 border border-amber-700/60 text-amber-300 text-sm font-medium rounded-lg hover:bg-amber-900/30 transition disabled:opacity-40"
                   >
                     Korrigieren
                   </button>
