@@ -1,0 +1,90 @@
+[
+  {
+    "id": "a1f2c3d4-0001-4a11-9b01-000000000001",
+    "position": 1,
+    "filepath": "src/pages/slides/Title.tsx",
+    "title": "Company Games 2026",
+    "description": "Titelfolie mit Logo und Hero-Bild",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0002-4a11-9b01-000000000002",
+    "position": 2,
+    "filepath": "src/pages/slides/Overview.tsx",
+    "title": "Das Event",
+    "description": "Event-Uberblick",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0003-4a11-9b01-000000000003",
+    "position": 3,
+    "filepath": "src/pages/slides/Format.tsx",
+    "title": "Spielformat",
+    "description": "Solo- und Duell-Disziplinen",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0004-4a11-9b01-000000000004",
+    "position": 4,
+    "filepath": "src/pages/slides/Teams.tsx",
+    "title": "Teamstruktur",
+    "description": "Teams, Farben und Check-in",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0005-4a11-9b01-000000000005",
+    "position": 5,
+    "filepath": "src/pages/slides/Scoring.tsx",
+    "title": "Wertungssystem",
+    "description": "Game- und Rang-Punkte",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0006-4a11-9b01-000000000006",
+    "position": 6,
+    "filepath": "src/pages/slides/Schedule.tsx",
+    "title": "Tagesablauf",
+    "description": "Zeitplan des Event-Tags",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0007-4a11-9b01-000000000007",
+    "position": 7,
+    "filepath": "src/pages/slides/Technology.tsx",
+    "title": "Die Technologie",
+    "description": "Die Event-App",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0008-4a11-9b01-000000000008",
+    "position": 8,
+    "filepath": "src/pages/slides/Roles.tsx",
+    "title": "Rollen & Zugriff",
+    "description": "Admin, Orga, Schiedsrichter, Helfer",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0009-4a11-9b01-000000000009",
+    "position": 9,
+    "filepath": "src/pages/slides/Scoreboard.tsx",
+    "title": "Live-Scoreboard",
+    "description": "Live-Rangliste",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0010-4a11-9b01-000000000010",
+    "position": 10,
+    "filepath": "src/pages/slides/Sponsors.tsx",
+    "title": "Fur Sponsoren",
+    "description": "Sponsoring-Nutzen",
+    "speakerNotes": ""
+  },
+  {
+    "id": "a1f2c3d4-0011-4a11-9b01-000000000011",
+    "position": 11,
+    "filepath": "src/pages/slides/Closing.tsx",
+    "title": "Call to Action",
+    "description": "Abschluss und Aufruf",
+    "speakerNotes": ""
+  }
+]
