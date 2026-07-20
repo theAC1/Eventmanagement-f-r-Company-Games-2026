@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from 'wouter';
 import { useLocation } from 'wouter';
 import { Link } from 'wouter';
+import jsQR from "jsqr";
 import { ErgebnisFormular } from "@/components/ergebnis-formular";
 
 type Wertungslogik = {
@@ -58,6 +59,17 @@ export default function EingabePage() {
   const [rohdaten, setRohdaten] = useState<Record<string, unknown>>({});
   const [rohdaten2, setRohdaten2] = useState<Record<string, unknown>>({}); // Für Duell Team B
 
+  // QR-Scanner-State
+  const [scanTarget, setScanTarget] = useState<"A" | "B" | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const scanningRef = useRef(false);
+  const scanTargetRef = useRef<"A" | "B" | null>(null);
+  const resolvingRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     Promise.all([
       fetch(`/api/games/by-slug/${slug}`).then((r) => {
@@ -77,6 +89,147 @@ export default function EingabePage() {
       setLoading(false);
     });
   }, [slug]);
+
+  // Cleanup: Kamera stoppen bei Unmount
+  useEffect(() => {
+    return () => {
+      scanningRef.current = false;
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      if (videoRef.current?.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
+
+  const stopScanner = () => {
+    scanningRef.current = false;
+    scanTargetRef.current = null;
+    setScanning(false);
+    setScanTarget(null);
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (videoRef.current?.srcObject) {
+      (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  // Decodierten QR-Wert verarbeiten: Token extrahieren und Team auflösen
+  const handleDecoded = async (raw: string) => {
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
+    try {
+      // Token kann als Portal-URL (…/team/<token>), `token`-Query-Param oder Rohwert kommen
+      let token = raw.trim();
+      const tokenMatch = raw.match(/team\/([a-z0-9]+)/i);
+      if (tokenMatch) {
+        token = tokenMatch[1];
+      } else {
+        try {
+          const url = new URL(raw);
+          token = url.searchParams.get("token") ?? url.pathname.split("/").filter(Boolean).pop() ?? token;
+        } catch { /* kein URL — Rohwert verwenden */ }
+      }
+
+      const res = await fetch("/api/qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qrToken: token }),
+      });
+      if (!res.ok) {
+        setScanError("Unbekannter QR-Code – Team nicht gefunden");
+        return;
+      }
+      const data = await res.json();
+      if (!data.verified || !data.teamId) {
+        setScanError("Unbekannter QR-Code – Team nicht gefunden");
+        return;
+      }
+      const target = scanTargetRef.current;
+      if (target === "B") {
+        setSelectedTeamId2(data.teamId);
+      } else {
+        setSelectedTeamId(data.teamId);
+      }
+      setScanError(null);
+      stopScanner();
+    } finally {
+      resolvingRef.current = false;
+    }
+  };
+
+  // QR-Scanner via Kamera – BarcodeDetector wenn verfügbar, sonst jsQR-Fallback (iOS Safari)
+  const startScanner = async (target: "A" | "B") => {
+    setScanError(null);
+    setScanTarget(target);
+    scanTargetRef.current = target;
+    scanningRef.current = true;
+    setScanning(true);
+    // Warten bis das <video>-Element gerendert ist
+    await new Promise((r) => setTimeout(r, 0));
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+
+      const hasBarcodeDetector = "BarcodeDetector" in window;
+      const detector = hasBarcodeDetector
+        ? new (window as any).BarcodeDetector({ formats: ["qr_code"] })
+        : null;
+
+      const scanOnce = async () => {
+        if (!scanningRef.current || !videoRef.current) return;
+        const video = videoRef.current;
+        try {
+          if (detector) {
+            const barcodes = await detector.detect(video);
+            if (barcodes.length > 0) {
+              await handleDecoded(barcodes[0].rawValue);
+            }
+          } else if (video.videoWidth > 0) {
+            let canvas = canvasRef.current;
+            if (!canvas) {
+              canvas = document.createElement("canvas");
+              canvasRef.current = canvas;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const result = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+              });
+              if (result?.data) {
+                await handleDecoded(result.data);
+              }
+            }
+          }
+        } catch { /* Scan-Fehler ignorieren */ }
+      };
+
+      const rafLoop = async () => {
+        if (!scanningRef.current) return;
+        await scanOnce();
+        if (scanningRef.current) requestAnimationFrame(rafLoop);
+      };
+      requestAnimationFrame(rafLoop);
+
+      // Fallback-Loop: requestAnimationFrame kann auf Safari stillschweigend anhalten
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = setInterval(() => { void scanOnce(); }, 500);
+    } catch {
+      setScanError("Kamera-Zugriff verweigert");
+      stopScanner();
+    }
+  };
 
   const handleSubmit = async (teamId: string, daten: Record<string, unknown>) => {
     if (!game || !teamId) return;
@@ -203,43 +356,87 @@ export default function EingabePage() {
             <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
               {isDuell ? "Team A" : "Team"}
             </label>
-            <select
-              value={selectedTeamId}
-              onChange={(e) => setSelectedTeamId(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-500"
-            >
-              <option value="">Team wählen...</option>
-              {teams
-                .filter((t) => t.id !== selectedTeamId2)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    #{t.nummer} {t.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-          {isDuell && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                Team B
-              </label>
+            <div className="flex gap-2">
               <select
-                value={selectedTeamId2}
-                onChange={(e) => setSelectedTeamId2(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-500"
+                value={selectedTeamId}
+                onChange={(e) => setSelectedTeamId(e.target.value)}
+                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-500"
               >
                 <option value="">Team wählen...</option>
                 {teams
-                  .filter((t) => t.id !== selectedTeamId)
+                  .filter((t) => t.id !== selectedTeamId2)
                   .map((t) => (
                     <option key={t.id} value={t.id}>
                       #{t.nummer} {t.name}
                     </option>
                   ))}
               </select>
+              <button
+                type="button"
+                onClick={() => (scanTarget === "A" ? stopScanner() : startScanner("A"))}
+                className={`shrink-0 px-3 py-2.5 text-xs font-medium border rounded-lg transition ${
+                  scanTarget === "A"
+                    ? "bg-zinc-800 border-zinc-600 text-white"
+                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
+                }`}
+              >
+                {scanTarget === "A" ? "Abbrechen" : "QR scannen"}
+              </button>
+            </div>
+          </div>
+          {isDuell && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                Team B
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedTeamId2}
+                  onChange={(e) => setSelectedTeamId2(e.target.value)}
+                  className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-500"
+                >
+                  <option value="">Team wählen...</option>
+                  {teams
+                    .filter((t) => t.id !== selectedTeamId)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        #{t.nummer} {t.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => (scanTarget === "B" ? stopScanner() : startScanner("B"))}
+                  className={`shrink-0 px-3 py-2.5 text-xs font-medium border rounded-lg transition ${
+                    scanTarget === "B"
+                      ? "bg-zinc-800 border-zinc-600 text-white"
+                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
+                  }`}
+                >
+                  {scanTarget === "B" ? "Abbrechen" : "QR scannen"}
+                </button>
+              </div>
             </div>
           )}
         </div>
+
+        {/* QR-Scanner */}
+        {scanTarget && (
+          <div className="space-y-2">
+            <div className="relative rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "4/3" }}>
+              <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+              {scanning && (
+                <div className="absolute inset-0 border-2 border-amber-500/30 rounded-lg pointer-events-none">
+                  <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-amber-500/50 animate-pulse" />
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-zinc-600 text-center">
+              Team-QR-Code auf dem Badge scannen{isDuell ? ` (Team ${scanTarget})` : ""}
+            </p>
+          </div>
+        )}
+        {scanError && <p className="text-sm text-red-400 text-center">{scanError}</p>}
       </section>
 
       {/* Ergebnis-Formular */}

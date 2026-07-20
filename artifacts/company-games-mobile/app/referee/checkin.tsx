@@ -9,6 +9,7 @@ import { useColors } from '@/hooks/useColors';
 import { QRScanner } from '@/components/QRScanner';
 import { Button, Card, TextField } from '@/components/ui';
 import { useCheckinTeam } from '@workspace/api-client-react';
+import { parseQrToken } from '@/utils/parseQrToken';
 
 export default function CheckinScreen() {
   const c = useColors();
@@ -53,16 +54,7 @@ export default function CheckinScreen() {
   };
 
   const onScan = (value: string) => {
-    // QR payload may be a raw token or a URL containing the token as the
-    // last path segment / a `token` query param.
-    let token = value.trim();
-    try {
-      const url = new URL(value);
-      token = url.searchParams.get('token') ?? url.pathname.split('/').filter(Boolean).pop() ?? token;
-    } catch {
-      // Not a URL — use the raw value.
-    }
-    verify({ qrToken: token });
+    verify({ qrToken: parseQrToken(value) });
   };
 
   return (
