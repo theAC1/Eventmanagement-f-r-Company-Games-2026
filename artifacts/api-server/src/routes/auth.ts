@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { signToken, getAuthUser } from "../middlewares/auth";
@@ -8,12 +9,22 @@ const router = Router();
 
 const COOKIE_OPTS = {
   httpOnly: true,
-  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict" as const,
   maxAge: 24 * 60 * 60 * 1000,
 };
 
+// Per-IP rate limiting against credential brute-force
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Zu viele Anmeldeversuche. Bitte später erneut versuchen." },
+});
+
 // POST /api/auth/login
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -59,7 +70,7 @@ router.post("/login", async (req, res) => {
 });
 
 // POST /api/auth/activate — Erstanmeldung mit Aktivierungscode + neues Passwort setzen
-router.post("/activate", async (req, res) => {
+router.post("/activate", loginLimiter, async (req, res) => {
   try {
     const { username, aktivierungsCode, neuesPasswort } = req.body;
     if (!username || !aktivierungsCode || !neuesPasswort) {
