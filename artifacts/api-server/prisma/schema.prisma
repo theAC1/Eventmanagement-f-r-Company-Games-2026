@@ -28,8 +28,9 @@ model Game {
 
   flaecheLaengeM Float?
   flaecheBreiteM Float?
-  helferAnzahl   Int     @default(1)
-  stromNoetig    Boolean @default(false)
+  helferAnzahl         Int     @default(1)
+  schiedsrichterAnzahl Int     @default(1)
+  stromNoetig          Boolean @default(false)
 
   createdById String?
   createdBy   Person? @relation("gameCreatedBy", fields: [createdById], references: [id])
@@ -114,6 +115,7 @@ model Person {
   materialKommentare     MaterialKommentar[]
   kvpEintraege           KvpEintrag[]
   zeitplanSlots          ZeitplanSlot[]
+  slotEinsaetze          ZeitplanSlotPerson[]
   ergebnisseEingetragen  Ergebnis[]         @relation("eingetragen_von")
   qrScans                QRVerifikation[]
 
@@ -270,6 +272,18 @@ model ZeitplanSlot {
   teams      ZeitplanSlotTeam[]
   ergebnisse Ergebnis[]
   qrScans    QRVerifikation[]
+  personen   ZeitplanSlotPerson[]
+}
+
+model ZeitplanSlotPerson {
+  id       String       @id @default(cuid())
+  slotId   String
+  slot     ZeitplanSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  rolle    PersonRolle
+
+  @@unique([slotId, personId])
 }
 
 enum SlotStatus {

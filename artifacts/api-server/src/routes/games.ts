@@ -100,6 +100,7 @@ router.post("/", async (req, res) => {
         flaecheLaengeM: data.flaecheLaengeM ?? null,
         flaecheBreiteM: data.flaecheBreiteM ?? null,
         helferAnzahl: data.helferAnzahl ?? 1,
+        schiedsrichterAnzahl: data.schiedsrichterAnzahl ?? 1,
         stromNoetig: data.stromNoetig ?? false,
         createdById: user.id,
       },

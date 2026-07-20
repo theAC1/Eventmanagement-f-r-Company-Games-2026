@@ -11,8 +11,9 @@ type DbSlot = {
   startZeit: string;
   endZeit: string;
   status: string;
-  game: { id: string; name: string; slug: string } | null;
+  game: { id: string; name: string; slug: string; schiedsrichterAnzahl: number } | null;
   teams: Array<{ team: { id: string; name: string; nummer: number } }>;
+  personen: Array<{ person: { id: string; name: string; rolle: string } }>;
 };
 
 // GET /api/schedule
@@ -104,8 +105,9 @@ router.get("/:id", async (req, res) => {
       include: {
         slots: {
           include: {
-            game: { select: { id: true, name: true, slug: true } },
+            game: { select: { id: true, name: true, slug: true, schiedsrichterAnzahl: true } },
             teams: { include: { team: { select: { id: true, name: true, nummer: true } } } },
+            personen: { include: { person: { select: { id: true, name: true, rolle: true } } } },
           },
           orderBy: [{ runde: "asc" }, { startZeit: "asc" }],
         },
@@ -124,6 +126,8 @@ router.get("/:id", async (req, res) => {
       gameSlug: s.game?.slug ?? "",
       teamIds: s.teams.map((t) => t.team.id),
       teamNames: s.teams.map((t) => t.team.name),
+      schiedsrichterAnzahl: s.game?.schiedsrichterAnzahl ?? 1,
+      personen: s.personen.map((p) => ({ id: p.person.id, name: p.person.name, rolle: p.person.rolle })),
     }));
 
     return res.json({ ...config, slots });

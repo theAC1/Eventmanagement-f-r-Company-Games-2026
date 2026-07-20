@@ -26,6 +26,7 @@ const AdminMaterialNewPage = lazy(() => import("@/app/admin/materials/new/page")
 const AdminMaterialDetailPage = lazy(() => import("@/app/admin/materials/[id]/page"));
 const AdminSchedulePage = lazy(() => import("@/app/admin/schedule/page"));
 const AdminSituationsplanPage = lazy(() => import("@/app/admin/situationsplan/page"));
+const AdminEinsatzplanPage = lazy(() => import("@/app/admin/einsatzplan/page"));
 const AdminGamedayPage = lazy(() => import("@/app/admin/gameday/page"));
 const AdminGamedayPrintPage = lazy(() => import("@/app/admin/gameday/print/page"));
 const AdminUsersPage = lazy(() => import("@/app/admin/users/page"));
@@ -154,6 +155,15 @@ function Router() {
           <RequireAuth minRole="SCHIEDSRICHTER">
             <AdminLayout>
               <Suspense fallback={<PageLoader />}><AdminSchedulePage /></Suspense>
+            </AdminLayout>
+          </RequireAuth>
+        )}
+      </Route>
+      <Route path="/admin/einsatzplan">
+        {() => (
+          <RequireAuth minRole="ORGA">
+            <AdminLayout>
+              <Suspense fallback={<PageLoader />}><AdminEinsatzplanPage /></Suspense>
             </AdminLayout>
           </RequireAuth>
         )}

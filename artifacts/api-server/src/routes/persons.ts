@@ -8,8 +8,12 @@ const router = Router();
 router.get("/", async (req, res) => {
   const user = requireRole(req, res, "ORGA");
   if (!user) return;
+  const rolleParam = req.query.rolle as string | undefined;
+  const rollen = rolleParam
+    ? rolleParam.split(",").map((r) => r.trim()).filter((r) => ["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"].includes(r))
+    : null;
   const persons = await prisma.person.findMany({
-    where: { istAktiv: true },
+    where: { istAktiv: true, ...(rollen && rollen.length > 0 ? { rolle: { in: rollen as any } } : {}) },
     select: { id: true, name: true, rolle: true },
     orderBy: { name: "asc" },
   });
