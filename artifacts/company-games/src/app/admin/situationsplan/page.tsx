@@ -510,6 +510,15 @@ export default function SituationsplanPage() {
         .grid-stack > .grid-stack-item > .ui-resizable-ne { top: -4px; right: -4px; cursor: nesw-resize; }
         .grid-stack > .grid-stack-item > .ui-resizable-sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
         .grid-stack > .grid-stack-item > .ui-resizable-se { bottom: -4px; right: -4px; cursor: nwse-resize; }
+        /* Touch (Tablet): kein Hover → Griffe immer sichtbar + grössere Tap-Fläche */
+        @media (pointer: coarse) {
+          .grid-stack > .grid-stack-item > .ui-resizable-handle { opacity: 1; width: 28px; height: 28px; }
+          .grid-stack > .grid-stack-item > .ui-resizable-handle::before { width: 12px; height: 12px; }
+          .grid-stack > .grid-stack-item > .ui-resizable-nw { top: -14px; left: -14px; }
+          .grid-stack > .grid-stack-item > .ui-resizable-ne { top: -14px; right: -14px; }
+          .grid-stack > .grid-stack-item > .ui-resizable-sw { bottom: -14px; left: -14px; }
+          .grid-stack > .grid-stack-item > .ui-resizable-se { bottom: -14px; right: -14px; }
+        }
       `}</style>
 
       <div className="flex items-center justify-between">
