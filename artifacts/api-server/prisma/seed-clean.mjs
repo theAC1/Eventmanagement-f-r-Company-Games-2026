@@ -3,7 +3,7 @@
  *
  * Deletes (idempotently, only demo-* entities and their dependent records):
  *  - the demo users   (username: demo-schiri, demo-admin)
- *  - the demo teams    (nummer 101, 102)
+ *  - the demo teams    (qrToken demo-qr-team-alpha, demo-qr-team-bravo)
  *  - the demo games    (slug demo-praezisionswurf, demo-zeitparcours)
  *  - all records that depend on the above (results, QR scans, positions, …)
  *
@@ -26,7 +26,9 @@ const pool = new Pool({ connectionString });
 const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const DEMO_USERNAMES = ["demo-schiri", "demo-admin"];
-const DEMO_TEAM_NUMMERN = [101, 102];
+// Match teams by their demo-unique qrToken (set by seed.mjs), NOT by team
+// number – real teams could legitimately use numbers 101/102.
+const DEMO_TEAM_QR_TOKENS = ["demo-qr-team-alpha", "demo-qr-team-bravo"];
 const DEMO_GAME_SLUGS = ["demo-praezisionswurf", "demo-zeitparcours"];
 
 async function main() {
@@ -36,7 +38,7 @@ async function main() {
       select: { id: true },
     }),
     prisma.team.findMany({
-      where: { nummer: { in: DEMO_TEAM_NUMMERN } },
+      where: { qrToken: { in: DEMO_TEAM_QR_TOKENS } },
       select: { id: true },
     }),
     prisma.game.findMany({
