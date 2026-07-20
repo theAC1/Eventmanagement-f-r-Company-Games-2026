@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 
 type User = {
   id: string;
@@ -9,12 +10,15 @@ type User = {
   username: string | null;
   rolle: string;
   istAktiv: boolean;
+  mussPasswortAendern?: boolean;
   createdAt: string;
 };
 
-const ROLLEN = ["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"] as const;
+// Im UI neu vergebbare Rollen (ORGA/HELFER bleiben im Schema, werden nicht neu exponiert)
+const ROLLEN = ["ADMIN", "SCHIEDSRICHTER"] as const;
 
 const ROLE_LABELS: Record<string, string> = {
+  OWNER: "Owner",
   ADMIN: "Admin",
   ORGA: "Orga",
   SCHIEDSRICHTER: "Schiedsrichter",
@@ -22,18 +26,24 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function UsersPage() {
+  const { user: currentUser } = useAuth();
+  const isOwner = currentUser?.rolle === "OWNER";
+
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
+  // Aktivierungscode-Modal
+  const [activationCode, setActivationCode] = useState<{ code: string; username: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
   // Form state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [rolle, setRolle] = useState<string>("ORGA");
+  const [rolle, setRolle] = useState<string>("SCHIEDSRICHTER");
 
   useEffect(() => {
     loadUsers();
@@ -51,8 +61,7 @@ export default function UsersPage() {
     setName("");
     setEmail("");
     setUsername("");
-    setPassword("");
-    setRolle("ORGA");
+    setRolle("SCHIEDSRICHTER");
     setEditingId(null);
     setShowForm(false);
     setError("");
@@ -62,8 +71,7 @@ export default function UsersPage() {
     setName(user.name);
     setEmail(user.email || "");
     setUsername(user.username || "");
-    setPassword("");
-    setRolle(user.rolle);
+    setRolle(ROLLEN.includes(user.rolle as (typeof ROLLEN)[number]) ? user.rolle : "SCHIEDSRICHTER");
     setEditingId(user.id);
     setShowForm(true);
     setError("");
@@ -73,31 +81,55 @@ export default function UsersPage() {
     e.preventDefault();
     setError("");
 
-    const payload: Record<string, unknown> = { name, email, username, rolle };
-    if (password) payload.password = password;
-
-    const url = editingId ? `/api/users/${editingId}` : "/api/users";
-    const method = editingId ? "PUT" : "POST";
-
-    if (!editingId && !password) {
-      setError("Passwort ist Pflicht beim Erstellen.");
+    if (editingId) {
+      const payload: Record<string, unknown> = { name, email, username, rolle };
+      const res = await fetch(`/api/users/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Fehler beim Speichern.");
+        return;
+      }
+      resetForm();
+      loadUsers();
       return;
     }
 
-    const res = await fetch(url, {
-      method,
+    // Neuer Account: Owner erhält einmalig einen Aktivierungscode
+    const res = await fetch("/api/users", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ name, email, username, rolle }),
     });
-
     if (!res.ok) {
       const data = await res.json();
       setError(data.error || "Fehler beim Speichern.");
       return;
     }
-
+    const created = await res.json();
     resetForm();
     loadUsers();
+    if (created.aktivierungsCode) {
+      setActivationCode({ code: created.aktivierungsCode, username: created.username });
+      setCopied(false);
+    }
+  }
+
+  async function resetActivation(user: User) {
+    if (!confirm(`Neuen Aktivierungscode für ${user.name} erzeugen? Das bisherige Passwort wird ungültig.`)) return;
+    const res = await fetch(`/api/users/${user.id}/reset-activation`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "Fehler beim Zurücksetzen.");
+      return;
+    }
+    const updated = await res.json();
+    loadUsers();
+    setActivationCode({ code: updated.aktivierungsCode, username: updated.username });
+    setCopied(false);
   }
 
   async function toggleActive(user: User) {
@@ -120,6 +152,16 @@ export default function UsersPage() {
     loadUsers();
   }
 
+  async function copyCode() {
+    if (!activationCode) return;
+    try {
+      await navigator.clipboard.writeText(activationCode.code);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   if (loading) {
     return <div className="text-zinc-500">Laden...</div>;
   }
@@ -133,23 +175,37 @@ export default function UsersPage() {
             {users.length} Benutzer registriert
           </p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-          className="px-4 py-2 bg-white text-zinc-950 text-sm font-medium rounded-md hover:bg-zinc-200 transition"
-        >
-          + Neuer Benutzer
-        </button>
+        {isOwner && (
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="px-4 py-2 bg-white text-zinc-950 text-sm font-medium rounded-md hover:bg-zinc-200 transition"
+          >
+            + Neuer Benutzer
+          </button>
+        )}
       </div>
 
+      {!isOwner && (
+        <p className="mb-6 text-sm text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2">
+          Nur der Owner kann Accounts anlegen oder Aktivierungscodes zurücksetzen.
+        </p>
+      )}
+
       {/* Formular */}
-      {showForm && (
+      {showForm && isOwner && (
         <div className="mb-6 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
           <h2 className="text-sm font-medium mb-4">
             {editingId ? "Benutzer bearbeiten" : "Neuer Benutzer"}
           </h2>
+          {!editingId && (
+            <p className="text-xs text-zinc-500 mb-4">
+              Beim Erstellen wird ein einmaliger Aktivierungscode erzeugt. Der neue Benutzer meldet sich
+              damit an und setzt anschließend sein eigenes Passwort.
+            </p>
+          )}
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Name *</label>
@@ -179,19 +235,6 @@ export default function UsersPage() {
                 required
                 className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded text-sm text-white focus:border-zinc-500 focus:outline-none font-mono"
                 placeholder="z.B. max.muster"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">
-                Passwort {editingId ? "(leer = unverändert)" : "*"}
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required={!editingId}
-                minLength={6}
-                className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded text-sm text-white focus:border-zinc-500 focus:outline-none"
               />
             </div>
             <div>
@@ -259,7 +302,9 @@ export default function UsersPage() {
                 <td className="px-4 py-2.5">
                   <span
                     className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                      user.rolle === "ADMIN"
+                      user.rolle === "OWNER"
+                        ? "bg-purple-400/10 text-purple-400"
+                        : user.rolle === "ADMIN"
                         ? "bg-amber-400/10 text-amber-400"
                         : user.rolle === "ORGA"
                         ? "bg-blue-400/10 text-blue-400"
@@ -270,11 +315,17 @@ export default function UsersPage() {
                   >
                     {ROLE_LABELS[user.rolle] || user.rolle}
                   </span>
+                  {user.mussPasswortAendern && (
+                    <span className="ml-2 inline-block px-2 py-0.5 rounded text-xs bg-yellow-400/10 text-yellow-400">
+                      Nicht aktiviert
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5">
                   <button
                     onClick={() => toggleActive(user)}
-                    className={`text-xs px-2 py-0.5 rounded ${
+                    disabled={!isOwner}
+                    className={`text-xs px-2 py-0.5 rounded disabled:cursor-not-allowed ${
                       user.istAktiv
                         ? "bg-emerald-400/10 text-emerald-400"
                         : "bg-red-400/10 text-red-400"
@@ -284,24 +335,72 @@ export default function UsersPage() {
                   </button>
                 </td>
                 <td className="px-4 py-2.5 text-right">
-                  <button
-                    onClick={() => startEdit(user)}
-                    className="text-xs text-zinc-400 hover:text-white transition mr-3"
-                  >
-                    Bearbeiten
-                  </button>
-                  <button
-                    onClick={() => handleDelete(user)}
-                    className="text-xs text-zinc-500 hover:text-red-400 transition"
-                  >
-                    Löschen
-                  </button>
+                  {isOwner && (
+                    <>
+                      {user.rolle !== "OWNER" && (
+                        <button
+                          onClick={() => resetActivation(user)}
+                          className="text-xs text-zinc-400 hover:text-amber-400 transition mr-3"
+                        >
+                          Code neu
+                        </button>
+                      )}
+                      <button
+                        onClick={() => startEdit(user)}
+                        className="text-xs text-zinc-400 hover:text-white transition mr-3"
+                      >
+                        Bearbeiten
+                      </button>
+                      {user.rolle !== "OWNER" && (
+                        <button
+                          onClick={() => handleDelete(user)}
+                          className="text-xs text-zinc-500 hover:text-red-400 transition"
+                        >
+                          Löschen
+                        </button>
+                      )}
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Aktivierungscode-Modal */}
+      {activationCode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-xl p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold text-white">Aktivierungscode</h2>
+            <p className="text-sm text-zinc-400 mt-1">
+              Für Benutzer <span className="font-mono text-zinc-200">{activationCode.username}</span>
+            </p>
+            <div className="mt-4 flex items-center gap-2">
+              <code className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded text-lg font-mono tracking-wider text-amber-400 select-all">
+                {activationCode.code}
+              </code>
+              <button
+                onClick={copyCode}
+                className="px-3 py-2 bg-white text-zinc-950 text-sm font-medium rounded hover:bg-zinc-200 transition"
+              >
+                {copied ? "Kopiert" : "Kopieren"}
+              </button>
+            </div>
+            <p className="text-xs text-red-400/90 mt-3">
+              ⚠ Dieser Code wird nur einmal angezeigt. Gib ihn dem Benutzer direkt weiter.
+            </p>
+            <div className="mt-5 text-right">
+              <button
+                onClick={() => setActivationCode(null)}
+                className="px-4 py-2 text-sm text-zinc-300 hover:text-white transition"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

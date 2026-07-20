@@ -3,5 +3,5 @@
 - [QR scanner jsQR fallback testing](qr-scanner-fallback-testing.md) — to hit the fallback, `delete window.BarcodeDetector` (not `= undefined`) and stub getUserMedia with a canvas captureStream of the QR.
 - [Offline mutations & networkMode](offline-mutations-networkmode.md) — custom offline queue must set react-query `networkMode:'always'` or offline mutations pause forever; idempotency via client `commitId`.
 - [Situationsplan GridStack](situationsplan-gridstack.md) — GridStack owns item DOM; React remounts via key only on structural/rotation/scale change, never on drag/resize.
-- [CG26 auth pattern](cg26-auth.md) — cookie name is `cg26-auth`, JWT signed with SESSION_SECRET env var; all routes use requireRole(req, res, "ROLE") helper, not middleware.
+- [CG26 auth pattern](cg26-auth.md) — cookie `cg26-auth`, JWT signed with SESSION_SECRET; routes use requireRole() helper, not middleware. OWNER sits above ADMIN; user-management mutations are OWNER-only; unactivated accounts log in via one-time activation code.
 - [api-server seed shares TS](api-server-seed-ts-import.md) — Node 24 runs .ts directly, so prisma/seed.mjs imports src/lib/seed-demo.ts; keep seed logic there, not duplicated.

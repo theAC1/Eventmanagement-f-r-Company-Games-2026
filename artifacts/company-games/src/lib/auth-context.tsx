@@ -5,17 +5,27 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string | null;
-  rolle: "ADMIN" | "ORGA" | "SCHIEDSRICHTER" | "HELFER";
+  rolle: "OWNER" | "ADMIN" | "ORGA" | "SCHIEDSRICHTER" | "HELFER";
 };
+
+export type LoginResult =
+  | { requiresActivation: true; username: string }
+  | { requiresActivation: false; user: AuthUser };
 
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginResult>;
+  activate: (username: string, aktivierungsCode: string, neuesPasswort: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+// Zielroute nach Login/Aktivierung anhand der Rolle
+export function homeForRole(rolle: string): string {
+  return rolle === "SCHIEDSRICHTER" ? "/referee" : "/admin";
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -29,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  async function login(username: string, password: string) {
+  async function login(username: string, password: string): Promise<LoginResult> {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -41,7 +51,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(data.error || "Login fehlgeschlagen");
     }
     const data = await res.json();
+    if (data.requiresActivation) {
+      return { requiresActivation: true, username: data.username };
+    }
     setUser(data.user);
+    return { requiresActivation: false, user: data.user };
+  }
+
+  async function activate(username: string, aktivierungsCode: string, neuesPasswort: string): Promise<AuthUser> {
+    const res = await fetch("/api/auth/activate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username, aktivierungsCode, neuesPasswort }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Aktivierung fehlgeschlagen");
+    }
+    const data = await res.json();
+    setUser(data.user);
+    return data.user;
   }
 
   async function logout() {
@@ -50,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, activate, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -63,7 +93,7 @@ export function useAuth() {
 }
 
 export function ROLE_HIERARCHY(): Record<string, number> {
-  return { ADMIN: 100, ORGA: 50, SCHIEDSRICHTER: 20, HELFER: 10 };
+  return { OWNER: 200, ADMIN: 100, ORGA: 50, SCHIEDSRICHTER: 20, HELFER: 10 };
 }
 
 export function hasMinRole(userRole: string, requiredRole: string): boolean {

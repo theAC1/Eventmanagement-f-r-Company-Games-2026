@@ -8,6 +8,7 @@ import { lazy, Suspense } from "react";
 // Pages
 import HomePage from "@/app/page";
 import LoginPage from "@/app/login/page";
+import ActivatePage from "@/app/activate/page";
 import ScoreboardPage from "@/app/scoreboard/page";
 
 // Layouts
@@ -58,6 +59,7 @@ function Router() {
       {/* Public routes */}
       <Route path="/" component={HomePage} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/activate" component={ActivatePage} />
       <Route path="/scoreboard" component={ScoreboardPage} />
 
       {/* Team portal - no auth */}
