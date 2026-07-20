@@ -28,6 +28,16 @@ type Game = {
 
 type Team = { id: string; name: string; nummer: number };
 
+type ConflictEntry = {
+  id: string;
+  gamePunkte: number;
+  status: string;
+  eingetragenUm: string;
+  rohdaten: Record<string, unknown>;
+  team?: { id: string; name: string; nummer: number };
+  eingetragenVon?: { id: string; name: string } | null;
+};
+
 export default function EingabePage() {
   const params = useParams();
   const [, navigate] = useLocation();
@@ -39,6 +49,8 @@ export default function EingabePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<ConflictEntry[] | null>(null);
+  const [showConflict, setShowConflict] = useState(false);
 
   // Formular-State
   const [selectedTeamId, setSelectedTeamId] = useState("");
@@ -97,6 +109,8 @@ export default function EingabePage() {
     }
     setSaving(true);
     setError(null);
+    setConflict(null);
+    setShowConflict(false);
     try {
       const res = await fetch("/api/ergebnisse/duell", {
         method: "POST",
@@ -111,6 +125,9 @@ export default function EingabePage() {
       });
       if (!res.ok) {
         const data = await res.json();
+        if (res.status === 409 && data.conflict) {
+          setConflict(Array.isArray(data.existing) ? data.existing : []);
+        }
         throw new Error(data.error || "Fehler");
       }
       return true;
@@ -262,8 +279,58 @@ export default function EingabePage() {
           {saving ? "Speichert..." : "Ergebnis speichern"}
         </button>
         {success && <span className="text-sm text-emerald-400">{success}</span>}
-        {error && <span className="text-sm text-red-400">{error}</span>}
+        {error && !conflict && <span className="text-sm text-red-400">{error}</span>}
       </div>
+
+      {conflict && (
+        <section className="border border-amber-600/50 bg-amber-950/20 rounded-lg p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <span className="text-amber-400 text-lg leading-none">⚠</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">{error}</p>
+              <p className="text-xs text-amber-400/80 mt-1">
+                Deine Eingabe wurde nicht gespeichert. Es besteht bereits ein Ergebnis für dieses Match.
+              </p>
+            </div>
+          </div>
+
+          {conflict.length > 0 && showConflict && (
+            <div className="space-y-2 border-t border-amber-600/30 pt-3">
+              {conflict.map((c) => (
+                <div key={c.id} className="text-xs text-zinc-300 bg-zinc-900/60 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">
+                      {c.team ? `#${c.team.nummer} ${c.team.name}` : "Team"}
+                    </span>
+                    <span className="text-zinc-500">{c.gamePunkte} Punkte · {c.status}</span>
+                  </div>
+                  <p className="text-zinc-500 mt-1">
+                    Eingetragen von {c.eingetragenVon?.name ?? "unbekannt"}
+                    {c.eingetragenUm ? ` am ${new Date(c.eingetragenUm).toLocaleString("de-DE")}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            {conflict.length > 0 && (
+              <button
+                onClick={() => setShowConflict((v) => !v)}
+                className="px-4 py-2 text-xs border border-amber-600/50 rounded-lg text-amber-300 hover:bg-amber-950/40 transition"
+              >
+                {showConflict ? "Ausblenden" : "Vorhandenes Ergebnis anzeigen"}
+              </button>
+            )}
+            <Link
+              to={`/referee/${slug}/live`}
+              className="px-4 py-2 text-xs border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-500 transition"
+            >
+              Zu den Ergebnissen
+            </Link>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
