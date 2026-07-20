@@ -34,8 +34,9 @@ type Plan = {
 };
 
 const INFRA_ICONS: Record<string, string> = {
-  STROM: "⚡", WASSER: "💧", WEG: "🚶", PARKPLATZ: "🅿️",
-  ZUSCHAUER: "👥", SANITAER: "🚻", SONSTIGES: "📍",
+  EINGANG: "🚪", AUSGANG: "🏃", TOILETTE: "🚻", ERSTE_HILFE: "⛑️",
+  KASSE: "💶", INFO: "ℹ️", PARKING: "🅿️", BÜHNE: "🎤",
+  ZELT: "⛺", SONSTIGES: "📍",
 };
 
 const MODUS_BG: Record<string, string> = {

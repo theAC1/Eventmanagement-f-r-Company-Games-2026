@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { InfraTyp } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../middlewares/auth";
 
@@ -73,8 +74,14 @@ router.post("/", async (req, res) => {
       });
       return res.status(201).json(feld);
     }
+    const validInfraTypen = Object.values(InfraTyp) as string[];
+    if (typeof body.typ !== "string" || !validInfraTypen.includes(body.typ)) {
+      return res.status(400).json({
+        error: `Ungültiger Infrastruktur-Typ. Erlaubt: ${validInfraTypen.join(", ")}`,
+      });
+    }
     const element = await prisma.infrastrukturElement.create({
-      data: { planId: body.planId, typ: body.typ, label: body.label ?? null, x: body.x, y: body.y },
+      data: { planId: body.planId, typ: body.typ as InfraTyp, label: body.label ?? null, x: body.x, y: body.y },
     });
     return res.status(201).json(element);
   } catch (error) {
