@@ -143,8 +143,16 @@ router.put("/:id", async (req, res) => {
   if (!user) return;
   const { id } = req.params;
   try {
-    const { name } = req.body;
-    const config = await prisma.zeitplanConfig.update({ where: { id }, data: { name } });
+    const { name, istAktiv } = req.body;
+    const config = await prisma.$transaction(async (tx) => {
+      if (istAktiv === true) {
+        await tx.zeitplanConfig.updateMany({ where: { id: { not: id } }, data: { istAktiv: false } });
+      }
+      return tx.zeitplanConfig.update({
+        where: { id },
+        data: { ...(name !== undefined ? { name } : {}), ...(typeof istAktiv === "boolean" ? { istAktiv } : {}) },
+      });
+    });
     return res.json(config);
   } catch (error) {
     console.error(`PUT /api/schedule/${id} error:`, error);

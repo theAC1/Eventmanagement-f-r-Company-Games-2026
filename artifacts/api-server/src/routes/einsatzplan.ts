@@ -4,13 +4,22 @@ import { requireRole } from "../middlewares/auth";
 
 const router = Router();
 
+// Aktiver Zeitplan; Fallback: zuletzt erstellter
+async function getCurrentConfig() {
+  const aktiv = await prisma.zeitplanConfig.findFirst({ where: { istAktiv: true }, select: { id: true, name: true, istAktiv: true, createdAt: true } });
+  if (aktiv) return aktiv;
+  return prisma.zeitplanConfig.findFirst({ orderBy: { createdAt: "desc" }, select: { id: true, name: true, istAktiv: true, createdAt: true } });
+}
+
 // GET /api/einsatzplan — alle Slots des aktiven Zeitplans mit zugewiesenen Personen
 router.get("/", async (req, res) => {
   const user = requireRole(req, res, "ORGA");
   if (!user) return;
   try {
+    const config = await getCurrentConfig();
+    if (!config) return res.json({ config: null, slots: [] });
     const slots = await prisma.zeitplanSlot.findMany({
-      where: { gameId: { not: null } },
+      where: { gameId: { not: null }, configId: config.id },
       include: {
         game: { select: { id: true, name: true, slug: true, schiedsrichterAnzahl: true, helferAnzahl: true } },
         teams: { include: { team: { select: { id: true, name: true, nummer: true } } } },
@@ -19,7 +28,7 @@ router.get("/", async (req, res) => {
       },
       orderBy: [{ runde: "asc" }, { startZeit: "asc" }],
     });
-    return res.json(slots);
+    return res.json({ config, slots });
   } catch (error) {
     console.error("GET /api/einsatzplan error:", error);
     return res.status(500).json({ error: "Fehler beim Laden des Einsatzplans" });
@@ -38,8 +47,13 @@ router.put("/:slotId/personen", async (req, res) => {
     }
     const uniqueIds = [...new Set(personIds as string[])];
 
-    const slot = await prisma.zeitplanSlot.findUnique({ where: { id: slotId }, select: { id: true } });
+    const slot = await prisma.zeitplanSlot.findUnique({ where: { id: slotId }, select: { id: true, configId: true } });
     if (!slot) return res.status(404).json({ error: "Slot nicht gefunden" });
+
+    const config = await getCurrentConfig();
+    if (!config || slot.configId !== config.id) {
+      return res.status(400).json({ error: "Slot gehört nicht zum aktuellen Zeitplan — Zuweisung nicht möglich" });
+    }
 
     const personen = await prisma.person.findMany({
       where: { id: { in: uniqueIds }, istAktiv: true },

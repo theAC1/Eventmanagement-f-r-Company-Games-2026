@@ -16,8 +16,11 @@ type Slot = {
   config: { id: string; name: string; createdAt: string };
 };
 
+type PlanConfig = { id: string; name: string; istAktiv: boolean; createdAt: string };
+
 export default function EinsatzplanPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [planConfig, setPlanConfig] = useState<PlanConfig | null>(null);
   const [personen, setPersonen] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +38,8 @@ export default function EinsatzplanPage() {
       }),
     ])
       .then(([s, p]) => {
-        setSlots(s);
+        setSlots(s.slots ?? []);
+        setPlanConfig(s.config ?? null);
         setPersonen(p);
         setError(null);
       })
@@ -108,13 +112,33 @@ export default function EinsatzplanPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Einsatzplan</h1>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Einsatzplan</h1>
+          {planConfig && (
+            <p className="text-sm text-zinc-500 mt-1">
+              Zeitplan: <span className="text-zinc-300">{planConfig.name}</span>
+              {planConfig.istAktiv ? (
+                <span className="ml-2 text-xs px-2 py-0.5 rounded-full border border-emerald-800 bg-emerald-950/40 text-emerald-400">Aktiv</span>
+              ) : (
+                <span className="ml-2 text-xs px-2 py-0.5 rounded-full border border-amber-800 bg-amber-950/40 text-amber-400">
+                  Kein aktiver Zeitplan — zeigt zuletzt erstellten
+                </span>
+              )}
+            </p>
+          )}
+        </div>
         {error && <span className="text-sm text-red-400">{error}</span>}
       </div>
 
-      {groups.length === 0 && (
+      {!planConfig && (
         <div className="border border-zinc-800 rounded-lg p-8 text-center text-zinc-500 text-sm">
-          Keine Zeitplan-Slots mit Games gefunden. Erstelle zuerst einen Zeitplan unter „Zeitplan“.
+          Kein Zeitplan vorhanden. Erstelle zuerst einen Zeitplan unter „Zeitplan“.
+        </div>
+      )}
+
+      {planConfig && groups.length === 0 && (
+        <div className="border border-zinc-800 rounded-lg p-8 text-center text-zinc-500 text-sm">
+          Keine Zeitplan-Slots mit Games in diesem Zeitplan gefunden.
         </div>
       )}
 

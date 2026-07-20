@@ -251,6 +251,7 @@ model ZeitplanConfig {
   endZeit        String?
   pausen         Json     @default("[]")
   mittagspause   Json?
+  istAktiv       Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   slots ZeitplanSlot[]
