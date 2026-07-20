@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { InfraTyp } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../middlewares/auth";
 
@@ -73,8 +74,14 @@ router.post("/", async (req, res) => {
       });
       return res.status(201).json(feld);
     }
+    const validInfraTypen = Object.values(InfraTyp) as string[];
+    if (typeof body.typ !== "string" || !validInfraTypen.includes(body.typ)) {
+      return res.status(400).json({
+        error: `Ungültiger Infrastruktur-Typ. Erlaubt: ${validInfraTypen.join(", ")}`,
+      });
+    }
     const element = await prisma.infrastrukturElement.create({
-      data: { planId: body.planId, typ: body.typ, label: body.label ?? null, x: body.x, y: body.y },
+      data: { planId: body.planId, typ: body.typ as InfraTyp, label: body.label ?? null, x: body.x, y: body.y },
     });
     return res.status(201).json(element);
   } catch (error) {
@@ -117,9 +124,16 @@ router.put("/position/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const body = req.body;
+    // Partial-update semantics: only touch fields the client actually sent, so a
+    // drag (x/y only) never resets rotation, and a metadata edit (nummer/
+    // oeffentlich) never resets position or rotation.
+    const data: Record<string, unknown> = {};
+    for (const key of ["x", "y", "rotation", "nummer", "oeffentlich"]) {
+      if (body[key] !== undefined) data[key] = body[key];
+    }
     const position = await prisma.gamePosition.update({
       where: { id },
-      data: { x: body.x, y: body.y, rotation: body.rotation ?? 0 },
+      data,
     });
     return res.json(position);
   } catch (error) {
@@ -163,13 +177,16 @@ router.put("/custom/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const body = req.body;
+    // Partial-update semantics: only touch fields the client actually sent, so a
+    // drag/resize never wipes label/nummer/farbe/rotation and a metadata edit
+    // never resets rotation or position.
+    const data: Record<string, unknown> = {};
+    for (const key of ["label", "nummer", "farbe", "breiteM", "laengeM", "x", "y", "rotation", "oeffentlich"]) {
+      if (body[key] !== undefined) data[key] = body[key];
+    }
     const feld = await prisma.customFeld.update({
       where: { id },
-      data: {
-        label: body.label, nummer: body.nummer, farbe: body.farbe,
-        breiteM: body.breiteM, laengeM: body.laengeM, x: body.x, y: body.y,
-        rotation: body.rotation ?? 0, oeffentlich: body.oeffentlich,
-      },
+      data,
     });
     return res.json(feld);
   } catch (error) {
