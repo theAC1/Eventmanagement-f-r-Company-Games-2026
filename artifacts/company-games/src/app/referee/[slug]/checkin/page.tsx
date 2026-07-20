@@ -17,6 +17,7 @@ export default function CheckinPage() {
   const searchParams = new URLSearchParams(searchString);
   const slug = params.slug as string;
   const slotId = searchParams.get("slotId") ?? undefined;
+  const slotTeamIds = (searchParams.get("teams") ?? "").split(",").filter(Boolean);
 
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,7 +33,9 @@ export default function CheckinPage() {
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
-  const isDuell = game?.modus === "DUELL" && (game?.teamsProSlot ?? 1) >= 2;
+  const isDuell =
+    slotTeamIds.length >= 2 ||
+    (game?.modus === "DUELL" && (game?.teamsProSlot ?? 1) >= 2);
   const maxTeams = isDuell ? 2 : 1;
   const allCheckedIn = checkedIn.length >= maxTeams;
 
@@ -70,11 +73,12 @@ export default function CheckinPage() {
     const res = await fetch("/api/checkin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkinCode: trimmed }),
+      body: JSON.stringify({ checkinCode: trimmed, ...(slotId ? { slotId } : {}) }),
     });
 
     if (!res.ok) {
-      setError("Ungültiger Code");
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Ungültiger Code");
       return;
     }
 
@@ -99,10 +103,14 @@ export default function CheckinPage() {
     const res = await fetch("/api/checkin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ qrToken: token }),
+      body: JSON.stringify({ qrToken: token, ...(slotId ? { slotId } : {}) }),
     });
 
-    if (!res.ok) { setError("Ungültiger QR-Code"); return; }
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Ungültiger QR-Code");
+      return;
+    }
     const data = await res.json();
 
     if (checkedIn.find(t => t.teamId === data.teamId)) { return; } // Already checked in
@@ -257,6 +265,22 @@ export default function CheckinPage() {
           {isDuell ? "2 Teams einchecken" : "Team einchecken"} &middot; {game.name}
         </p>
       </div>
+
+      {/* Fortschritt bei Duell-Slots */}
+      {isDuell && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className={checkedIn.length >= 1 ? "text-emerald-400" : "text-zinc-500"}>
+            {checkedIn[0] ? `${checkedIn[0].teamName} ✓` : "Team A ausstehend"}
+          </span>
+          <span className="text-zinc-700">—</span>
+          <span className={checkedIn.length >= 2 ? "text-emerald-400" : "text-zinc-500"}>
+            {checkedIn[1] ? `${checkedIn[1].teamName} ✓` : "Team B ausstehend"}
+          </span>
+          <span className="ml-auto text-xs text-zinc-500">
+            {checkedIn.length} von 2 Teams verifiziert
+          </span>
+        </div>
+      )}
 
       {/* Eingecheckte Teams */}
       <div className="space-y-2">

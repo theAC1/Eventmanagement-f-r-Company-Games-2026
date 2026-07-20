@@ -1,19 +1,19 @@
 import React, { useLayoutEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { FlatList } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { useListGames, type Game } from '@workspace/api-client-react';
+import { useGetMeineSlots, getGetMeineSlotsQueryKey, type MeinSlot } from '@workspace/api-client-react';
 import { Button, Card, EmptyState, ErrorState, Loading, TextField } from '@/components/ui';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 
 export default function RefereeHome() {
   const { isReferee, isLoading } = useAuth();
   if (isLoading) return <Loading />;
-  return isReferee ? <GamesList /> : <LoginForm />;
+  return isReferee ? <MySlotsList /> : <LoginForm />;
 }
 
 function LoginForm() {
@@ -83,12 +83,14 @@ function LoginForm() {
   );
 }
 
-function GamesList() {
+function MySlotsList() {
   const c = useColors();
   const router = useRouter();
   const navigation = useNavigation();
   const { user, signOut } = useAuth();
-  const { data, isLoading, isError, error, refetch } = useListGames();
+  const { data, isLoading, isError, error, refetch } = useGetMeineSlots({
+    query: { queryKey: getGetMeineSlotsQueryKey(), refetchInterval: 10_000 },
+  });
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -100,36 +102,45 @@ function GamesList() {
     });
   }, [navigation, signOut, c.mutedForeground]);
 
-  if (isLoading) return <Loading label="Lade Games…" />;
+  if (isLoading) return <Loading label="Lade Einsätze…" />;
   if (isError) {
     return (
       <ErrorState
-        message={error instanceof Error ? error.message : 'Games konnten nicht geladen werden'}
+        message={error instanceof Error ? error.message : 'Einsätze konnten nicht geladen werden'}
         onRetry={() => refetch()}
       />
     );
   }
 
-  const games = data ?? [];
+  const slots = data?.slots ?? [];
+  // Offene Slots chronologisch, abgeschlossene ausgegraut ans Ende
+  const ordered = [
+    ...slots.filter((s) => s.status !== 'ABGESCHLOSSEN'),
+    ...slots.filter((s) => s.status === 'ABGESCHLOSSEN'),
+  ];
 
   return (
     <FlatList
-      data={games}
-      keyExtractor={(g) => g.id}
-      scrollEnabled={games.length > 0}
+      data={ordered}
+      keyExtractor={(s) => s.slotId}
+      scrollEnabled={ordered.length > 0}
       style={{ backgroundColor: c.background }}
       contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 32 }}
       ListHeaderComponent={
         <View style={{ gap: 10 }}>
           <PendingQueueCard />
           <Text style={[styles.hello, { color: c.mutedForeground }]}>
-            Hallo {user?.name} · Wähle ein Game
+            Hallo {user?.name} · Dein Tagesplan
           </Text>
         </View>
       }
-      renderItem={({ item }) => <GameRow game={item} onPress={() => openGame(router, item)} />}
+      renderItem={({ item }) => <SlotRow slot={item} onPress={() => openSlot(router, item)} />}
       ListEmptyComponent={
-        <EmptyState icon="clipboard" title="Keine Games" subtitle="Es sind noch keine Games angelegt." />
+        <EmptyState
+          icon="calendar"
+          title="Noch keine Einsätze zugeteilt"
+          subtitle="Sobald dir die Orga Begegnungen zuweist, erscheinen sie hier."
+        />
       }
     />
   );
@@ -178,31 +189,73 @@ function PendingQueueCard() {
   );
 }
 
-function openGame(router: ReturnType<typeof useRouter>, game: Game) {
+function openSlot(router: ReturnType<typeof useRouter>, slot: MeinSlot) {
+  if (slot.status === 'ABGESCHLOSSEN') return;
   router.push({
     pathname: '/referee/checkin',
-    params: { gameId: game.id, slug: game.slug, gameName: game.name },
+    params: {
+      gameId: slot.gameId,
+      slug: slot.gameSlug,
+      gameName: slot.gameName,
+      slotId: slot.slotId,
+      teamCount: String(slot.teamIds.length >= 2 ? 2 : 1),
+      teamNames: slot.teamNames.join(' vs. '),
+    },
   });
 }
 
-function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
+function formatTime(z: string) {
+  return z.slice(0, 5);
+}
+
+function StatusBadge({ status }: { status: string }) {
   const c = useColors();
+  const cfg =
+    status === 'AKTIV'
+      ? { label: 'Läuft', color: '#f59e0b' }
+      : status === 'ABGESCHLOSSEN'
+        ? { label: 'Fertig', color: '#10b981' }
+        : { label: 'Geplant', color: c.mutedForeground };
+  return (
+    <View style={[styles.badge, { borderColor: cfg.color }]}>
+      <Text style={{ color: cfg.color, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>
+        {cfg.label}
+      </Text>
+    </View>
+  );
+}
+
+function SlotRow({ slot, onPress }: { slot: MeinSlot; onPress: () => void }) {
+  const c = useColors();
+  const done = slot.status === 'ABGESCHLOSSEN';
   return (
     <Pressable
       onPress={onPress}
-      testID={`game-${game.slug}`}
+      disabled={done}
+      testID={`slot-${slot.slotId}`}
       style={({ pressed }) => [
         styles.gameRow,
-        { backgroundColor: c.card, borderColor: c.border, borderRadius: c.radius, opacity: pressed ? 0.85 : 1 },
+        {
+          backgroundColor: c.card,
+          borderColor: c.border,
+          borderRadius: c.radius,
+          opacity: done ? 0.5 : pressed ? 0.85 : 1,
+        },
       ]}
     >
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.gameName, { color: c.foreground }]}>{game.name}</Text>
-        {!!game.status && (
-          <Text style={[styles.gameMeta, { color: c.mutedForeground }]}>{game.status}</Text>
-        )}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[styles.slotTime, { color: c.mutedForeground }]}>
+          {formatTime(slot.startZeit)} – {formatTime(slot.endZeit)}
+        </Text>
+        <Text style={[styles.gameName, { color: c.foreground }]}>{slot.gameName}</Text>
+        <Text style={[styles.gameMeta, { color: c.mutedForeground }]}>
+          {slot.teamNames.length > 0 ? slot.teamNames.join(' vs. ') : 'Keine Teams zugewiesen'}
+        </Text>
       </View>
-      <Feather name="chevron-right" size={22} color={c.mutedForeground} />
+      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+        <StatusBadge status={slot.status} />
+        {!done && <Feather name="chevron-right" size={20} color={c.mutedForeground} />}
+      </View>
     </Pressable>
   );
 }
@@ -223,6 +276,8 @@ const styles = StyleSheet.create({
   pendingTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold', flex: 1 },
   pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   gameRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 1 },
+  slotTime: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   gameName: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   gameMeta: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
 });

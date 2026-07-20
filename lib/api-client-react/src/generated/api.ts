@@ -30,6 +30,7 @@ import type {
   LoginRequest,
   LoginResult,
   MeResponse,
+  MeineSlotsResponse,
   RanglisteResponse,
   Team,
   TeamPortal
@@ -666,6 +667,83 @@ export const useCheckinTeam = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCheckinTeamMutationOptions(options));
     }
+
+export const getGetMeineSlotsUrl = () => {
+
+
+
+
+  return `/api/schiedsrichter/meine-slots`
+}
+
+/**
+ * @summary Get the personal schedule slots of the logged-in referee
+ */
+export const getMeineSlots = async ( options?: RequestInit): Promise<MeineSlotsResponse> => {
+
+  return customFetch<MeineSlotsResponse>(getGetMeineSlotsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMeineSlotsQueryKey = () => {
+    return [
+    `/api/schiedsrichter/meine-slots`
+    ] as const;
+    }
+
+
+export const getGetMeineSlotsQueryOptions = <TData = Awaited<ReturnType<typeof getMeineSlots>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMeineSlots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMeineSlotsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMeineSlots>>> = ({ signal }) => getMeineSlots({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMeineSlots>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMeineSlotsQueryResult = NonNullable<Awaited<ReturnType<typeof getMeineSlots>>>
+export type GetMeineSlotsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the personal schedule slots of the logged-in referee
+ */
+
+export function useGetMeineSlots<TData = Awaited<ReturnType<typeof getMeineSlots>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMeineSlots>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMeineSlotsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreateErgebnisUrl = () => {
 

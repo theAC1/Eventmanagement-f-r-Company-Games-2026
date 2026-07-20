@@ -12,5 +12,6 @@ export interface ErgebnisCreate {
   teamId: string;
   /** @nullable */
   zeitplanSlotId?: string | null;
+  commitId?: string;
   rohdaten: ErgebnisCreateRohdaten;
 }

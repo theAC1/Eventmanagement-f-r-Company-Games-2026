@@ -20,6 +20,8 @@ tags:
     description: Teams
   - name: checkin
     description: Referee check-in
+  - name: schiedsrichter
+    description: Referee personal schedule
   - name: ergebnisse
     description: Score entry
   - name: rangliste
@@ -146,6 +148,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CheckinResponse"
+  /schiedsrichter/meine-slots:
+    get:
+      operationId: getMeineSlots
+      tags: [schiedsrichter]
+      summary: Get the personal schedule slots of the logged-in referee
+      responses:
+        "200":
+          description: Personal slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeineSlotsResponse"
   /ergebnisse:
     post:
       operationId: createErgebnis
@@ -289,6 +303,8 @@ components:
           type: string
         checkinCode:
           type: string
+        slotId:
+          type: string
     CheckinResponse:
       type: object
       properties:
@@ -305,6 +321,57 @@ components:
         teamLogo:
           type: [string, "null"]
       required: [verified]
+    MeinSlot:
+      type: object
+      properties:
+        slotId:
+          type: string
+        status:
+          type: string
+        runde:
+          type: number
+        startZeit:
+          type: string
+        endZeit:
+          type: string
+        gameId:
+          type: string
+        gameName:
+          type: string
+        gameSlug:
+          type: string
+        gameModus:
+          type: string
+        teamsProSlot:
+          type: number
+        teamIds:
+          type: array
+          items:
+            type: string
+        teamNames:
+          type: array
+          items:
+            type: string
+      required: [slotId, status, startZeit, endZeit, gameId, gameName, gameSlug, teamIds, teamNames]
+      additionalProperties: true
+    MeineSlotsResponse:
+      type: object
+      properties:
+        config:
+          type: [object, "null"]
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            istAktiv:
+              type: boolean
+          additionalProperties: true
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/MeinSlot"
+      required: [slots]
     ErgebnisCreate:
       type: object
       properties:
@@ -314,6 +381,8 @@ components:
           type: string
         zeitplanSlotId:
           type: [string, "null"]
+        commitId:
+          type: string
         rohdaten:
           type: object
           additionalProperties: true

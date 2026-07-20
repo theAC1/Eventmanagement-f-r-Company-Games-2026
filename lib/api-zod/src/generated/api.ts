@@ -110,7 +110,8 @@ export const ListTeamsResponse = zod.array(ListTeamsResponseItem)
  */
 export const CheckinTeamBody = zod.object({
   "qrToken": zod.string().optional(),
-  "checkinCode": zod.string().optional()
+  "checkinCode": zod.string().optional(),
+  "slotId": zod.string().optional()
 })
 
 export const CheckinTeamResponse = zod.object({
@@ -124,12 +125,39 @@ export const CheckinTeamResponse = zod.object({
 
 
 /**
+ * @summary Get the personal schedule slots of the logged-in referee
+ */
+export const GetMeineSlotsResponse = zod.object({
+  "config": zod.object({
+  "id": zod.string().optional(),
+  "name": zod.string().optional(),
+  "istAktiv": zod.boolean().optional()
+}).nullish(),
+  "slots": zod.array(zod.object({
+  "slotId": zod.string(),
+  "status": zod.string(),
+  "runde": zod.number().optional(),
+  "startZeit": zod.string(),
+  "endZeit": zod.string(),
+  "gameId": zod.string(),
+  "gameName": zod.string(),
+  "gameSlug": zod.string(),
+  "gameModus": zod.string().optional(),
+  "teamsProSlot": zod.number().optional(),
+  "teamIds": zod.array(zod.string()),
+  "teamNames": zod.array(zod.string())
+}))
+})
+
+
+/**
  * @summary Submit a score result for a team in a game
  */
 export const CreateErgebnisBody = zod.object({
   "gameId": zod.string(),
   "teamId": zod.string(),
   "zeitplanSlotId": zod.string().nullish(),
+  "commitId": zod.string().optional(),
   "rohdaten": zod.record(zod.string(), zod.unknown())
 })
 
