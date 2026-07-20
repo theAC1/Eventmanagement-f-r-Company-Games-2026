@@ -7,4 +7,4 @@ Artifact tsconfigs use project references to `lib/*` composite packages that emi
 
 **Why:** Mobile typecheck reported dozens of "Module '@workspace/api-client-react' has no exported member" errors while `src/generated/api.ts` exported everything correctly; the dist was just out of date.
 
-**How to apply:** When a `@workspace/*` import "has no exported member" but the source clearly exports it, run `tsc --build lib/<pkg>` (or root `pnpm run typecheck:libs`) first. Root `pnpm run typecheck` already does this; per-artifact typechecks do not.
+**How to apply:** When a `@workspace/*` import "has no exported member" but the source clearly exports it, run `tsc --build lib/<pkg>` (or root `pnpm run typecheck:libs`) first. Root `pnpm run typecheck` already does this. Per-artifact typecheck scripts should self-heal by prepending `tsc --build ../../lib/<pkg>` for their referenced libs (mobile does this now).
