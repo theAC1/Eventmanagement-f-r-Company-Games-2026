@@ -6,6 +6,7 @@ import { useLocation } from 'wouter';
 import { Link } from 'wouter';
 import jsQR from "jsqr";
 import { ErgebnisFormular } from "@/components/ergebnis-formular";
+import { parseQrToken, resolveScanResult, applyScannedTeam } from "@/lib/qr-scan";
 
 type Wertungslogik = {
   typ?: string;
@@ -125,37 +126,26 @@ export default function EingabePage() {
     resolvingRef.current = true;
     try {
       // Token kann als Portal-URL (…/team/<token>), `token`-Query-Param oder Rohwert kommen
-      let token = raw.trim();
-      const tokenMatch = raw.match(/team\/([a-z0-9]+)/i);
-      if (tokenMatch) {
-        token = tokenMatch[1];
-      } else {
-        try {
-          const url = new URL(raw);
-          token = url.searchParams.get("token") ?? url.pathname.split("/").filter(Boolean).pop() ?? token;
-        } catch { /* kein URL — Rohwert verwenden */ }
-      }
+      const token = parseQrToken(raw);
 
       const res = await fetch("/api/qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ qrToken: token }),
       });
-      if (!res.ok) {
-        setScanError("Unbekannter QR-Code – Team nicht gefunden");
-        return;
-      }
-      const data = await res.json();
-      if (!data.verified || !data.teamId) {
-        setScanError("Unbekannter QR-Code – Team nicht gefunden");
+      const result = resolveScanResult(res.ok ? await res.json() : null);
+      if (!result.ok) {
+        setScanError(result.error);
         return;
       }
       const target = scanTargetRef.current;
-      if (target === "B") {
-        setSelectedTeamId2(data.teamId);
-      } else {
-        setSelectedTeamId(data.teamId);
-      }
+      const next = applyScannedTeam(
+        { selectedTeamId, selectedTeamId2 },
+        target,
+        result.teamId,
+      );
+      setSelectedTeamId(next.selectedTeamId);
+      setSelectedTeamId2(next.selectedTeamId2);
       setScanError(null);
       stopScanner();
     } finally {
