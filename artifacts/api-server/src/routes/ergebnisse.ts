@@ -8,6 +8,15 @@ import type { Wertungslogik } from "../lib/wertungslogik-types";
 
 const router = Router();
 
+class DuellConflictError extends Error {
+  existing: unknown[];
+  constructor(existing: unknown[]) {
+    super("Duell-Ergebnis existiert bereits");
+    this.name = "DuellConflictError";
+    this.existing = existing;
+  }
+}
+
 // GET /api/ergebnisse
 router.get("/", async (req, res) => {
   const teamIdParam = req.query.teamId as string | undefined;
@@ -164,6 +173,9 @@ router.post("/duell", async (req, res) => {
     if (!gameId || !teamAId || !teamBId || !rohdatenA || !rohdatenB) {
       return res.status(400).json({ error: "gameId, teamAId, teamBId, rohdatenA, rohdatenB erforderlich" });
     }
+    if (teamAId === teamBId) {
+      return res.status(400).json({ error: "Team A und Team B müssen unterschiedlich sein" });
+    }
 
     const game = await prisma.game.findUnique({
       where: { id: gameId },
@@ -181,29 +193,23 @@ router.post("/duell", async (req, res) => {
     const commit = commitId ?? null;
 
     const [ergebnisA, ergebnisB] = await prisma.$transaction(async (tx) => {
-      const upsertTeam = async (teamId: string, rohdaten: Record<string, unknown>, gamePunkte: number, existing: any) => {
-        const result = await tx.ergebnis.upsert({
-          where: { gameId_teamId: { gameId, teamId } },
-          create: {
+      const createTeam = async (teamId: string, rohdaten: Record<string, unknown>, gamePunkte: number) => {
+        const result = await tx.ergebnis.create({
+          data: {
             gameId, teamId, zeitplanSlotId: slotId,
             rohdaten: rohdaten as Prisma.InputJsonValue,
             gamePunkte, status: "EINGETRAGEN",
-            eingetragenVonId: userId, eingetragenUm: now, istTest, commitId: commit,
-          },
-          update: {
-            rohdaten: rohdaten as Prisma.InputJsonValue,
-            gamePunkte, status: "KORRIGIERT",
             eingetragenVonId: userId, eingetragenUm: now, istTest, commitId: commit,
           },
         });
         await tx.ergebnisHistory.create({
           data: {
             ergebnisId: result.id,
-            vorher: existing ? (existing.rohdaten as Prisma.InputJsonValue) : Prisma.JsonNull,
+            vorher: Prisma.JsonNull,
             nachher: rohdaten as Prisma.InputJsonValue,
-            gamePunkteVorher: existing ? existing.gamePunkte : null,
+            gamePunkteVorher: null,
             gamePunkteNachher: gamePunkte,
-            statusVorher: existing ? existing.status : null,
+            statusVorher: null,
             statusNachher: result.status,
             geaendertVonId: userId,
           },
@@ -211,13 +217,25 @@ router.post("/duell", async (req, res) => {
         return result;
       };
 
+      // Konfliktprüfung: existiert bereits ein Ergebnis für eines der Teams,
+      // wird NICHT überschrieben, sondern die Transaktion mit Konflikt abgebrochen.
       const [existingA, existingB] = await Promise.all([
-        tx.ergebnis.findUnique({ where: { gameId_teamId: { gameId, teamId: teamAId } } }),
-        tx.ergebnis.findUnique({ where: { gameId_teamId: { gameId, teamId: teamBId } } }),
+        tx.ergebnis.findUnique({
+          where: { gameId_teamId: { gameId, teamId: teamAId } },
+          include: { eingetragenVon: { select: { id: true, name: true } }, team: { select: { id: true, name: true, nummer: true } } },
+        }),
+        tx.ergebnis.findUnique({
+          where: { gameId_teamId: { gameId, teamId: teamBId } },
+          include: { eingetragenVon: { select: { id: true, name: true } }, team: { select: { id: true, name: true, nummer: true } } },
+        }),
       ]);
 
-      const a = await upsertTeam(teamAId, rohdatenA, punksteA, existingA);
-      const b = await upsertTeam(teamBId, rohdatenB, punkteB, existingB);
+      if (existingA || existingB) {
+        throw new DuellConflictError([existingA, existingB].filter(Boolean));
+      }
+
+      const a = await createTeam(teamAId, rohdatenA, punksteA);
+      const b = await createTeam(teamBId, rohdatenB, punkteB);
 
       await updateGameRaenge(gameId, wertungslogik, tx as any);
       return [a, b] as const;
@@ -225,6 +243,21 @@ router.post("/duell", async (req, res) => {
 
     return res.status(201).json({ ergebnisA, ergebnisB });
   } catch (error) {
+    if (error instanceof DuellConflictError) {
+      return res.status(409).json({
+        error: "Für dieses Match wurde bereits ein Ergebnis eingetragen — es wurde nichts überschrieben.",
+        conflict: true,
+        existing: error.existing,
+      });
+    }
+    // Unique-Constraint-Verletzung: zwei Schiedsrichter haben gleichzeitig gespeichert
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return res.status(409).json({
+        error: "Ein anderer Schiedsrichter hat soeben ein Ergebnis für dieses Match gespeichert — es wurde nichts überschrieben.",
+        conflict: true,
+        existing: [],
+      });
+    }
     console.error("POST /api/ergebnisse/duell error:", error);
     return res.status(500).json({ error: "Fehler beim Speichern" });
   }
