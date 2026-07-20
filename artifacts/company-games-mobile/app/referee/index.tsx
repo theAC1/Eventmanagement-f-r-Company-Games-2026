@@ -8,6 +8,7 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useListGames, type Game } from '@workspace/api-client-react';
 import { Button, Card, EmptyState, ErrorState, Loading, TextField } from '@/components/ui';
+import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 
 export default function RefereeHome() {
   const { isReferee, isLoading } = useAuth();
@@ -119,15 +120,61 @@ function GamesList() {
       style={{ backgroundColor: c.background }}
       contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 32 }}
       ListHeaderComponent={
-        <Text style={[styles.hello, { color: c.mutedForeground }]}>
-          Hallo {user?.name} · Wähle ein Game
-        </Text>
+        <View style={{ gap: 10 }}>
+          <PendingQueueCard />
+          <Text style={[styles.hello, { color: c.mutedForeground }]}>
+            Hallo {user?.name} · Wähle ein Game
+          </Text>
+        </View>
       }
       renderItem={({ item }) => <GameRow game={item} onPress={() => openGame(router, item)} />}
       ListEmptyComponent={
         <EmptyState icon="clipboard" title="Keine Games" subtitle="Es sind noch keine Games angelegt." />
       }
     />
+  );
+}
+
+function PendingQueueCard() {
+  const c = useColors();
+  const { queue, syncing, retryNow } = useOfflineQueue();
+  if (queue.length === 0) return null;
+
+  return (
+    <View
+      testID="pending-queue"
+      style={[styles.pendingCard, { backgroundColor: c.card, borderColor: c.border, borderRadius: c.radius }]}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Feather name="upload-cloud" size={18} color={c.primary} />
+        <Text style={[styles.pendingTitle, { color: c.foreground }]}>
+          {queue.length === 1
+            ? '1 Ergebnis wartet auf Übertragung'
+            : `${queue.length} Ergebnisse warten auf Übertragung`}
+        </Text>
+      </View>
+      {queue.map((e) => (
+        <View key={e.commitId} style={styles.pendingRow}>
+          <Feather name="clock" size={14} color={c.mutedForeground} />
+          <Text style={{ color: c.mutedForeground, fontSize: 13, flex: 1 }} numberOfLines={1}>
+            {e.teamName} · {e.gameName}
+          </Text>
+          {e.attempts > 0 && (
+            <Text style={{ color: c.mutedForeground, fontSize: 11 }}>
+              {e.attempts}. Versuch fehlgeschlagen
+            </Text>
+          )}
+        </View>
+      ))}
+      <Button
+        label={syncing ? 'Übertrage…' : 'Jetzt synchronisieren'}
+        icon="refresh-cw"
+        variant="ghost"
+        onPress={() => void retryNow()}
+        loading={syncing}
+        testID="sync-now"
+      />
+    </View>
   );
 }
 
@@ -172,6 +219,9 @@ const styles = StyleSheet.create({
   loginTitle: { fontSize: 22, fontFamily: 'Inter_700Bold' },
   loginSub: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   hello: { fontSize: 13, fontFamily: 'Inter_500Medium', marginBottom: 6 },
+  pendingCard: { borderWidth: 1, padding: 14, gap: 10, marginBottom: 4 },
+  pendingTitle: { fontSize: 14, fontFamily: 'Inter_600SemiBold', flex: 1 },
+  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   gameRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 1 },
   gameName: { fontSize: 16, fontFamily: 'Inter_600SemiBold' },
   gameMeta: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },

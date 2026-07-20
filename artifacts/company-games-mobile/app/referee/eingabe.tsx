@@ -9,6 +9,7 @@ import { QRScanner } from '@/components/QRScanner';
 import { Button, Card, ErrorState, Loading, Stepper, TextField } from '@/components/ui';
 import { useCheckinTeam, useCreateErgebnis, useGetGameBySlug } from '@workspace/api-client-react';
 import { parseQrToken } from '@/utils/parseQrToken';
+import { enqueueErgebnis, isNetworkError, makeCommitId } from '@/lib/offline-queue';
 
 type Feld = { name: string; typ?: string; label?: string; einheit?: string };
 
@@ -45,9 +46,15 @@ export default function EingabeScreen() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   const { data: game, isLoading, isError, refetch } = useGetGameBySlug(slug);
-  const create = useCreateErgebnis();
+  // networkMode 'always': attempt the request even when the browser reports
+  // offline, so our own offline queue (not react-query's pause) handles the
+  // failure and enqueues the entry.
+  const create = useCreateErgebnis({ mutation: { networkMode: 'always' } });
   const checkin = useCheckinTeam();
   const [error, setError] = useState<string | null>(null);
+  // One idempotency key per form session: manual retries after a failure
+  // reuse it, so the server can never record the same entry twice.
+  const commitIdRef = React.useRef<string>(makeCommitId());
 
   const felder = useMemo<Feld[]>(() => {
     const wl = (game?.wertungslogik ?? null) as { eingabefelder?: Feld[] } | null;
@@ -101,8 +108,9 @@ export default function EingabeScreen() {
       }
     }
 
+    const commitId = commitIdRef.current;
     create.mutate(
-      { data: { gameId, teamId, rohdaten } },
+      { data: { gameId, teamId, rohdaten, commitId } },
       {
         onSuccess: (res) => {
           router.replace({
@@ -116,7 +124,26 @@ export default function EingabeScreen() {
             },
           });
         },
-        onError: (e) => setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen'),
+        onError: async (e) => {
+          if (isNetworkError(e)) {
+            // No connection: queue locally and retry automatically later.
+            await enqueueErgebnis({
+              commitId,
+              gameId,
+              teamId,
+              gameName: gameName ?? '',
+              teamName: teamName ?? '',
+              slug: slug ?? '',
+              rohdaten,
+            });
+            router.replace({
+              pathname: '/referee/bestaetigung',
+              params: { slug, gameId, gameName, teamName, punkte: '', pending: '1' },
+            });
+            return;
+          }
+          setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen');
+        },
       },
     );
   };

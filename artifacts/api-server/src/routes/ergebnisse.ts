@@ -113,6 +113,15 @@ router.post("/", async (req, res) => {
     const slotId = zeitplanSlotId ?? null;
     const commit = commitId ?? null;
 
+    // Idempotenz: gleicher commitId für dasselbe Game/Team bedeutet, dass die
+    // Übermittlung bereits verarbeitet wurde (z.B. Retry nach Verbindungsabbruch).
+    if (commit) {
+      const replay = await prisma.ergebnis.findUnique({ where: { gameId_teamId: { gameId, teamId } } });
+      if (replay && replay.commitId === commit) {
+        return res.status(200).json(replay);
+      }
+    }
+
     const ergebnis = await prisma.$transaction(async (tx) => {
       const existing = await tx.ergebnis.findUnique({ where: { gameId_teamId: { gameId, teamId } } });
       const result = await tx.ergebnis.upsert({
