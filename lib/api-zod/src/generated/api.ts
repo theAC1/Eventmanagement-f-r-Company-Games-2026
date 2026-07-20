@@ -157,6 +157,7 @@ export const CreateErgebnisBody = zod.object({
   "gameId": zod.string(),
   "teamId": zod.string(),
   "zeitplanSlotId": zod.string().nullish(),
+  "commitId": zod.string().optional(),
   "rohdaten": zod.record(zod.string(), zod.unknown())
 })
 
