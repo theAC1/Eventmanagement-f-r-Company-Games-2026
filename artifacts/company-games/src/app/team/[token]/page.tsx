@@ -4,75 +4,59 @@ import { useEffect, useState } from "react";
 import { useParams } from 'wouter';
 import { Link } from 'wouter';
 
-type TeamInfo = {
-  id: string;
-  name: string;
-  nummer: number;
+type Slot = {
+  slotId: string;
+  startZeit: string;
+  endZeit: string;
+  runde: number;
+  status: string;
+  gameName: string;
+  gameSlug: string;
 };
 
 type Ergebnis = {
   id: string;
+  gameName: string;
+  gameSlug: string;
   gamePunkte: number | null;
-  rangImGame: number | null;
   rangPunkte: number | null;
   status: string;
-  game: { name: string };
 };
 
-type RanglisteEntry = {
+type TeamPortal = {
   teamId: string;
   teamName: string;
+  teamNummer: number;
+  teamFarbe: string;
+  teamLogo: string | null;
+  slots: Slot[];
+  ergebnisse: Ergebnis[];
   rangPunkteSumme: number;
-  gamesGespielt: number;
-  gamesTotal: number;
-  gesamtRang: number;
+  lageplanUrl: string | null;
 };
 
 export default function TeamPortalPage() {
   const params = useParams();
   const token = params.token as string;
 
-  const [team, setTeam] = useState<TeamInfo | null>(null);
-  const [ergebnisse, setErgebnisse] = useState<Ergebnis[]>([]);
-  const [rangliste, setRangliste] = useState<RanglisteEntry[]>([]);
+  const [data, setData] = useState<TeamPortal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/team/${token}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Ungültiger QR-Code");
-        return r.json();
-      })
-      .then((data) => {
-        setTeam({ id: data.teamId, name: data.teamName, nummer: data.teamNummer });
-        return Promise.all([
-          fetch(`/api/ergebnisse?teamId=${data.teamId}`).then((r) => r.json()),
-          fetch("/api/rangliste").then((r) => r.json()),
-        ]);
-      })
-      .then(([erg, rang]) => {
-        setErgebnisse(erg);
-        setRangliste(rang.rangliste ?? []);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [token]);
-
-  // Auto-refresh
-  useEffect(() => {
-    if (!team) return;
-    const interval = setInterval(() => {
-      Promise.all([
-        fetch(`/api/ergebnisse?teamId=${team.id}`).then((r) => r.json()),
-        fetch("/api/rangliste").then((r) => r.json()),
-      ]).then(([erg, rang]) => {
-        setErgebnisse(erg);
-        setRangliste(rang.rangliste ?? []);
-      });
-    }, 15000);
+    const load = () =>
+      fetch(`/api/team/${token}`)
+        .then((r) => {
+          if (!r.ok) throw new Error("Ungültiger QR-Code");
+          return r.json();
+        })
+        .then((d) => setData(d))
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    load();
+    const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
-  }, [team]);
+  }, [token]);
 
   if (loading) {
     return (
@@ -82,7 +66,7 @@ export default function TeamPortalPage() {
     );
   }
 
-  if (error || !team) {
+  if (error || !data) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center gap-4">
         <p className="text-red-400">{error ?? "Team nicht gefunden"}</p>
@@ -91,107 +75,136 @@ export default function TeamPortalPage() {
     );
   }
 
-  const myRang = rangliste.find((r) => r.teamId === team.id);
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  // Determine current/next slot: first slot not yet ended
+  const nextSlotId = data.slots.find(
+    (s) => s.status !== "ABGESCHLOSSEN" && toMin(s.endZeit) >= nowMin,
+  )?.slotId;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
-          <div>
-            <span className="text-sm font-semibold">#{team.nummer} {team.name}</span>
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
+            style={{ backgroundColor: data.teamFarbe }}
+          >
+            {data.teamNummer}
           </div>
-          <Link to="/scoreboard" className="text-xs text-zinc-500">Rangliste</Link>
+          <span className="text-sm font-semibold">{data.teamName}</span>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-6 space-y-6">
-        {/* Aktuelle Position */}
-        {myRang && (
-          <div className="border border-zinc-800 rounded-lg p-5 text-center space-y-2">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">Aktuelle Position</p>
-            <p className="text-5xl font-bold">{myRang.gesamtRang}.</p>
-            <p className="text-sm text-zinc-400">
-              {myRang.rangPunkteSumme} Rangpunkte &middot;{" "}
-              {myRang.gamesGespielt}/{myRang.gamesTotal} Games
-            </p>
-          </div>
-        )}
-
-        {/* Ergebnisse */}
+      <main className="max-w-lg mx-auto px-4 py-6 space-y-8">
+        {/* Spielplan */}
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-            Deine Ergebnisse
+            Spielplan
           </h2>
-          {ergebnisse.length === 0 ? (
+          {data.slots.length === 0 ? (
+            <p className="text-sm text-zinc-600">Noch kein Zeitplan verfügbar</p>
+          ) : (
+            <div className="space-y-2">
+              {data.slots.map((s) => {
+                const done = s.status === "ABGESCHLOSSEN";
+                const isNext = s.slotId === nextSlotId;
+                return (
+                  <div
+                    key={s.slotId}
+                    className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
+                      done
+                        ? "border-zinc-800/50 opacity-40"
+                        : isNext
+                          ? "border-emerald-700 bg-emerald-950/20"
+                          : "border-zinc-800"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{s.gameName}</p>
+                      <p className="text-xs text-zinc-500">Runde {s.runde}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-mono tabular-nums">
+                        {s.startZeit}–{s.endZeit}
+                      </p>
+                      {isNext && (
+                        <p className="text-xs text-emerald-400">Als Nächstes</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Punkte */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
+              Punkte
+            </h2>
+            <span className="text-sm text-zinc-300">
+              <span className="font-bold text-white">{data.rangPunkteSumme}</span>{" "}
+              Rangpunkte
+            </span>
+          </div>
+          {data.ergebnisse.length === 0 ? (
             <p className="text-sm text-zinc-600">Noch keine Ergebnisse</p>
           ) : (
             <div className="space-y-2">
-              {ergebnisse.map((e) => (
+              {data.ergebnisse.map((e) => (
                 <div
                   key={e.id}
                   className="flex items-center justify-between border border-zinc-800 rounded-lg px-4 py-3"
                 >
-                  <div>
-                    <span className="text-sm font-medium">{e.game.name}</span>
+                  <span className="text-sm font-medium">{e.gameName}</span>
+                  <div className="text-right text-sm">
                     {e.gamePunkte !== null && (
-                      <span className="ml-2 text-xs text-zinc-500">
-                        {e.gamePunkte} Punkte
+                      <span className="text-zinc-400">{e.gamePunkte} Pkt</span>
+                    )}
+                    {e.rangPunkte !== null && (
+                      <span className="ml-3 font-bold text-white tabular-nums">
+                        +{e.rangPunkte}
                       </span>
                     )}
                   </div>
-                  {e.rangImGame !== null && (
-                    <span
-                      className={`text-sm font-bold ${
-                        e.rangImGame <= 3 ? "text-amber-400" : "text-zinc-400"
-                      }`}
-                    >
-                      #{e.rangImGame}
-                    </span>
-                  )}
                 </div>
               ))}
             </div>
           )}
         </section>
 
-        {/* Rangliste (kompakt) */}
+        {/* Lageplan */}
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-            Rangliste
+            Lageplan
           </h2>
-          <div className="space-y-1">
-            {rangliste.slice(0, 10).map((r) => (
-              <div
-                key={r.teamId}
-                className={`flex items-center justify-between text-sm px-3 py-2 rounded-lg ${
-                  r.teamId === team.id
-                    ? "bg-blue-950/30 border border-blue-800"
-                    : "border border-transparent"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-5 text-right text-zinc-500 tabular-nums">
-                    {r.gesamtRang}
-                  </span>
-                  <span className={r.teamId === team.id ? "font-bold" : ""}>
-                    {r.teamName}
-                  </span>
-                </div>
-                <span className="tabular-nums text-zinc-400">
-                  {r.rangPunkteSumme}
-                </span>
-              </div>
-            ))}
-            {rangliste.length > 10 && (
-              <Link
-                to="/scoreboard"
-                className="block text-center text-xs text-zinc-500 py-2"
-              >
-                Alle anzeigen
-              </Link>
-            )}
-          </div>
+          {data.lageplanUrl ? (
+            <a
+              href={data.lageplanUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block rounded-lg overflow-hidden border border-zinc-800"
+            >
+              <img
+                src={data.lageplanUrl}
+                alt="Lageplan"
+                className="w-full h-auto"
+              />
+            </a>
+          ) : (
+            <div className="rounded-lg border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-600">
+              Lageplan noch nicht verfügbar
+            </div>
+          )}
         </section>
       </main>
     </div>
