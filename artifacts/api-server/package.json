@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:seed": "node prisma/seed.mjs",
+    "db:seed:clean": "node prisma/seed-clean.mjs",
     "test": "vitest run"
   },
   "dependencies": {
