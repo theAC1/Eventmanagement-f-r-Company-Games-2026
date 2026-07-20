@@ -83,6 +83,33 @@ router.post("/", async (req, res) => {
   }
 });
 
+// PUT /api/situationsplan/:id/hintergrund – set/clear the site-map background image URL
+router.put("/:id/hintergrund", async (req, res) => {
+  const user = requireRole(req, res, "ORGA");
+  if (!user) return;
+  const { id } = req.params;
+  try {
+    const raw = req.body?.hintergrundbildUrl;
+    let url: string | null = null;
+    if (typeof raw === "string" && raw.trim() !== "") {
+      url = raw.trim();
+      try {
+        new URL(url);
+      } catch {
+        return res.status(400).json({ error: "Ungültige URL" });
+      }
+    }
+    const plan = await prisma.situationsplan.update({
+      where: { id },
+      data: { hintergrundbildUrl: url },
+    });
+    return res.json(plan);
+  } catch (error) {
+    console.error(`PUT /api/situationsplan/${id}/hintergrund error:`, error);
+    return res.status(500).json({ error: "Fehler" });
+  }
+});
+
 // PUT /api/situationsplan/position/:id
 router.put("/position/:id", async (req, res) => {
   const user = requireRole(req, res, "ORGA");

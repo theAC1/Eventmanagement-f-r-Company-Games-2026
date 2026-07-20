@@ -25,6 +25,7 @@ type InfraElement = {
 
 type Plan = {
   id: string; name: string;
+  hintergrundbildUrl: string | null;
   gamePositionen: GamePosition[];
   customFelder: CustomFeld[];
   infrastruktur: InfraElement[];
@@ -58,18 +59,21 @@ export default function SituationsplanPage() {
   const [selected, setSelected] = useState<{ type: "game" | "custom" | "infra"; id: string } | null>(null);
   const [addingInfra, setAddingInfra] = useState<string | null>(null);
   const [mpp, setMpp] = useState(DEFAULT_MPP);
+  const [bildUrl, setBildUrl] = useState("");
+  const [bildSaving, setBildSaving] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(async () => {
     const p = await fetch("/api/situationsplan").then(r => r.json());
     setPlan(p);
+    setBildUrl(p?.hintergrundbildUrl ?? "");
   }, []);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/situationsplan").then(r => r.json()),
       fetch("/api/games").then(r => r.json()),
-    ]).then(([p, g]) => { setPlan(p); setAllGames(g); setLoading(false); });
+    ]).then(([p, g]) => { setPlan(p); setBildUrl(p?.hintergrundbildUrl ?? ""); setAllGames(g); setLoading(false); });
   }, []);
 
   const placedIds = new Set(plan?.gamePositionen.map(p => p.gameId) ?? []);
@@ -211,6 +215,26 @@ export default function SituationsplanPage() {
     setAddingInfra(null);
   };
 
+  // ─── Lageplan-Hintergrundbild (Team-Portal) ───
+  const saveBildUrl = async (value: string | null) => {
+    if (!plan) return;
+    setBildSaving(true);
+    try {
+      const res = await fetch(`/api/situationsplan/${plan.id}/hintergrund`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hintergrundbildUrl: value }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? "Speichern fehlgeschlagen");
+        return;
+      }
+      await reload();
+    } finally {
+      setBildSaving(false);
+    }
+  };
+
   // ─── Export ───
   const exportImage = async () => {
     if (!ref.current) return;
@@ -252,6 +276,35 @@ export default function SituationsplanPage() {
             Export PNG
           </button>
         </div>
+      </div>
+
+      {/* Lageplan-Bild fürs Team-Portal */}
+      <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">Lageplan-Bild (Team-Portal)</h3>
+          {plan?.hintergrundbildUrl
+            ? <span className="text-[10px] text-emerald-400">Aktiv – Teams sehen dieses Bild</span>
+            : <span className="text-[10px] text-zinc-500">Kein Bild gesetzt – Teams sehen Platzhalter</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="url" value={bildUrl} placeholder="https://… Bild-URL des Lageplans einfügen"
+            onChange={e => setBildUrl(e.target.value)}
+            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs" />
+          <button onClick={() => saveBildUrl(bildUrl)} disabled={bildSaving}
+            className="px-3 py-1 border border-emerald-700 text-emerald-300 rounded hover:bg-emerald-950 transition disabled:opacity-50">
+            {bildSaving ? "Speichert…" : "Speichern"}
+          </button>
+          {plan?.hintergrundbildUrl && (
+            <button onClick={() => { setBildUrl(""); saveBildUrl(null); }} disabled={bildSaving}
+              className="px-3 py-1 border border-red-900 text-red-400 rounded hover:bg-red-950 transition disabled:opacity-50">
+              Entfernen
+            </button>
+          )}
+        </div>
+        {plan?.hintergrundbildUrl && (
+          <img src={plan.hintergrundbildUrl} alt="Lageplan-Vorschau"
+            className="max-h-32 rounded border border-zinc-800 object-contain" />
+        )}
       </div>
 
       <div className="grid grid-cols-[1fr_260px] gap-4">
