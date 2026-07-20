@@ -381,11 +381,12 @@ components:
           type: string
         zeitplanSlotId:
           type: [string, "null"]
-        commitId:
-          type: string
         rohdaten:
           type: object
           additionalProperties: true
+        commitId:
+          type: string
+          description: "Client-generated idempotency key: retries with the same commitId are not re-applied."
       required: [gameId, teamId, rohdaten]
     Ergebnis:
       type: object
@@ -400,6 +401,8 @@ components:
           type: [number, "null"]
         status:
           type: string
+        eingetragenUm:
+          type: [string, "null"]
       required: [id, gameId, teamId]
       additionalProperties: true
     RanglisteEntry:
