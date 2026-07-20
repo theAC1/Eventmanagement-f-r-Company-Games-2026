@@ -1,0 +1,421 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Kern-Entitäten ───
+
+model Game {
+  id               String     @id @default(cuid())
+  name             String
+  slug             String     @unique
+  typ              GameTyp
+  status           GameStatus @default(ENTWURF)
+  kurzbeschreibung String?    @db.Text
+  modus            GameModus
+  teamsProSlot     Int        @default(1)
+
+  einfuehrungMin Int @default(3)
+  playtimeMin    Int @default(10)
+  reserveMin     Int @default(2)
+
+  regeln        String? @db.Text
+  wertungstyp   String?
+  wertungslogik Json?
+
+  flaecheLaengeM Float?
+  flaecheBreiteM Float?
+  helferAnzahl   Int     @default(1)
+  stromNoetig    Boolean @default(false)
+
+  createdById String?
+  createdBy   Person? @relation("gameCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   Person? @relation("gameUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  varianten      GameVariante[]
+  materialItems  MaterialItem[]
+  zeitplanSlots  ZeitplanSlot[]
+  gamePositionen GamePosition[]
+  ergebnisse     Ergebnis[]
+}
+
+enum GameTyp {
+  RETURNEE
+  NEU
+}
+
+enum GameStatus {
+  ENTWURF
+  BEREIT
+  AKTIV
+  ABGESCHLOSSEN
+}
+
+enum GameModus {
+  SOLO
+  DUELL
+}
+
+model GameVariante {
+  id           String  @id @default(cuid())
+  gameId       String
+  game         Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  name         String
+  beschreibung String? @db.Text
+  istAktiv     Boolean @default(false)
+}
+
+model Team {
+  id              String   @id @default(cuid())
+  name            String
+  nummer          Int      @unique
+  captainName     String?
+  captainEmail    String?
+  farbe           String   @default("#6b7280")
+  logoUrl         String?
+  motto           String?
+  teilnehmerAnzahl Int?
+  teilnehmerNamen  Json?
+  qrToken         String   @unique @default(cuid())
+  checkinCode     String   @unique @default(cuid())
+
+  createdById String?
+  createdBy   Person? @relation("teamCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   Person? @relation("teamUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  slotTeams  ZeitplanSlotTeam[]
+  ergebnisse Ergebnis[]
+  qrScans    QRVerifikation[]
+}
+
+model Person {
+  id           String      @id @default(cuid())
+  name         String
+  email        String?
+  username     String?     @unique
+  passwordHash String?
+  rolle        PersonRolle
+  istAktiv     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  materialVerantwortlich MaterialItem[]     @relation("verantwortlich")
+  materialKommentare     MaterialKommentar[]
+  kvpEintraege           KvpEintrag[]
+  zeitplanSlots          ZeitplanSlot[]
+  ergebnisseEingetragen  Ergebnis[]         @relation("eingetragen_von")
+  qrScans                QRVerifikation[]
+
+  ergebnisHistories ErgebnisHistory[] @relation("history_geaendert_von")
+  gamedaysStarted  GamedayConfig[]   @relation("gameday_started_by")
+  gamesCreated     Game[]           @relation("gameCreatedBy")
+  gamesUpdated     Game[]           @relation("gameUpdatedBy")
+  teamsCreated     Team[]           @relation("teamCreatedBy")
+  teamsUpdated     Team[]           @relation("teamUpdatedBy")
+  materialsCreated MaterialItem[]   @relation("materialCreatedBy")
+  materialsUpdated MaterialItem[]   @relation("materialUpdatedBy")
+}
+
+enum PersonRolle {
+  ADMIN
+  ORGA
+  SCHIEDSRICHTER
+  HELFER
+}
+
+// ─── Material ───
+
+model MaterialItem {
+  id               String            @id @default(cuid())
+  gameId           String?
+  game             Game?             @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  name             String
+  kategorie        MaterialKategorie
+  menge            String?
+  beschreibung     String?           @db.Text
+  status           MaterialStatus    @default(OFFEN)
+  sponsor          String?
+  verantwortlichId String?
+  verantwortlich   Person?           @relation("verantwortlich", fields: [verantwortlichId], references: [id], onDelete: SetNull)
+  kostenGeschaetzt Float?
+  kostenEffektiv   Float?
+
+  createdById String?
+  createdBy   Person? @relation("materialCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   Person? @relation("materialUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  kommentare MaterialKommentar[]
+}
+
+enum MaterialKategorie {
+  SPONSOR
+  MIETE
+  KAUF
+  EIGENBAU
+  VERBRAUCH
+  INFRASTRUKTUR
+}
+
+enum MaterialStatus {
+  OFFEN
+  ANGEFRAGT
+  BESTAETIGT
+  VORHANDEN
+  GELIEFERT
+}
+
+model MaterialKommentar {
+  id        String       @id @default(cuid())
+  itemId    String
+  item      MaterialItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  autorId   String?
+  autor     Person?      @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  text      String       @db.Text
+  createdAt DateTime     @default(now())
+}
+
+// ─── Ergebnisse ───
+
+model Ergebnis {
+  id               String         @id @default(cuid())
+  gameId           String
+  game             Game           @relation(fields: [gameId], references: [id])
+  teamId           String
+  team             Team           @relation(fields: [teamId], references: [id])
+  zeitplanSlotId   String?
+  zeitplanSlot     ZeitplanSlot?  @relation(fields: [zeitplanSlotId], references: [id], onDelete: SetNull)
+  rohdaten         Json
+  gamePunkte       Float?
+  rangImGame       Int?
+  rangPunkte       Int?
+  status           ErgebnisStatus @default(EINGETRAGEN)
+  eingetragenVonId String?
+  eingetragenVon   Person?        @relation("eingetragen_von", fields: [eingetragenVonId], references: [id], onDelete: SetNull)
+  eingetragenUm    DateTime?
+  istTest          Boolean        @default(false)
+  commitId         String?
+
+  histories ErgebnisHistory[]
+
+  @@unique([gameId, teamId])
+}
+
+enum ErgebnisStatus {
+  LAUFEND
+  EINGETRAGEN
+  KORRIGIERT
+  VERIFIZIERT
+}
+
+model ErgebnisHistory {
+  id                String   @id @default(cuid())
+  ergebnisId        String
+  ergebnis          Ergebnis @relation(fields: [ergebnisId], references: [id], onDelete: Cascade)
+  vorher            Json?
+  nachher           Json?
+  gamePunkteVorher  Float?
+  gamePunkteNachher Float?
+  statusVorher      String?
+  statusNachher     String?
+  grund             String?  @db.Text
+  geaendertVonId    String?
+  geaendertVon      Person?  @relation("history_geaendert_von", fields: [geaendertVonId], references: [id], onDelete: SetNull)
+  geaendertUm       DateTime @default(now())
+}
+
+// ─── Zeitplan ───
+
+model ZeitplanConfig {
+  id             String   @id @default(cuid())
+  name           String
+  anzahlTeams    Int
+  blockDauerMin  Int
+  wechselzeitMin Int
+  startZeit      String
+  endZeit        String?
+  pausen         Json     @default("[]")
+  mittagspause   Json?
+  createdAt      DateTime @default(now())
+
+  slots ZeitplanSlot[]
+}
+
+model ZeitplanSlot {
+  id               String         @id @default(cuid())
+  configId         String
+  config           ZeitplanConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  runde            Int
+  startZeit        String
+  endZeit          String
+  gameId           String?
+  game             Game?          @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  status           SlotStatus     @default(GEPLANT)
+  schiedsrichterId String?
+  schiedsrichter   Person?        @relation(fields: [schiedsrichterId], references: [id], onDelete: SetNull)
+
+  teams      ZeitplanSlotTeam[]
+  ergebnisse Ergebnis[]
+  qrScans    QRVerifikation[]
+}
+
+enum SlotStatus {
+  GEPLANT
+  AKTIV
+  ABGESCHLOSSEN
+}
+
+model ZeitplanSlotTeam {
+  id     String       @id @default(cuid())
+  slotId String
+  slot   ZeitplanSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  teamId String
+  team   Team         @relation(fields: [teamId], references: [id])
+
+  @@unique([slotId, teamId])
+}
+
+// ─── Gameday ───
+
+model GamedayConfig {
+  id          String    @id @default(cuid())
+  modus       String
+  startedAt   DateTime?
+  endedAt     DateTime?
+  startedById String?
+  startedBy   Person?   @relation("gameday_started_by", fields: [startedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+}
+
+// ─── Situationsplan ───
+
+model Situationsplan {
+  id                 String   @id @default(cuid())
+  name               String
+  hintergrundbildUrl String?
+  massstab           Float?
+  istAktiv           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  gamePositionen GamePosition[]
+  infrastruktur  InfrastrukturElement[]
+  customFelder   CustomFeld[]
+}
+
+model GamePosition {
+  id          String         @id @default(cuid())
+  planId      String
+  plan        Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  gameId      String
+  game        Game           @relation(fields: [gameId], references: [id])
+  x           Float
+  y           Float
+  rotation    Float          @default(0)
+  nummer      String         @default("")
+  oeffentlich Boolean        @default(true)
+
+  @@unique([planId, gameId])
+}
+
+model CustomFeld {
+  id          String         @id @default(cuid())
+  planId      String
+  plan        Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  label       String
+  nummer      String         @default("")
+  farbe       String         @default("#6b7280")
+  breiteM     Float          @default(10)
+  laengeM     Float          @default(10)
+  x           Float
+  y           Float
+  rotation    Float          @default(0)
+  oeffentlich Boolean        @default(true)
+}
+
+model InfrastrukturElement {
+  id       String         @id @default(cuid())
+  planId   String
+  plan     Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  typ      InfraTyp
+  label    String?
+  x        Float
+  y        Float
+  rotation Float          @default(0)
+}
+
+enum InfraTyp {
+  EINGANG
+  AUSGANG
+  TOILETTE
+  ERSTE_HILFE
+  KASSE
+  INFO
+  PARKING
+  BÜHNE
+  ZELT
+  SONSTIGES
+}
+
+// ─── QR-Verifikation ───
+
+model QRVerifikation {
+  id               String               @id @default(cuid())
+  teamId           String
+  team             Team                 @relation(fields: [teamId], references: [id])
+  zeitplanSlotId   String
+  zeitplanSlot     ZeitplanSlot         @relation(fields: [zeitplanSlotId], references: [id])
+  schiedsrichterId String
+  schiedsrichter   Person               @relation(fields: [schiedsrichterId], references: [id])
+  timestamp        DateTime             @default(now())
+  methode          VerifikationsMethode
+}
+
+enum VerifikationsMethode {
+  QR_SCAN
+  MANUELL
+}
+
+// ─── KVP (Kontinuierliche Verbesserung) ───
+
+model KvpEintrag {
+  id           String    @id @default(cuid())
+  typ          KvpTyp
+  titel        String    @db.VarChar(100)
+  beschreibung String    @db.Text
+  seite        String?
+  status       KvpStatus @default(OFFEN)
+
+  eingetragenVonId String?
+  eingetragenVon   Person? @relation(fields: [eingetragenVonId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([typ])
+}
+
+enum KvpTyp {
+  BUG
+  WUNSCHFUNKTION
+  IDEE
+}
+
+enum KvpStatus {
+  OFFEN
+  IN_BEARBEITUNG
+  ERLEDIGT
+}

@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Company Games 2026"
+version = "1.0.0"
+id = "artifacts/company-games"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18999
+
+[services.development]
+run = "pnpm --filter @workspace/company-games run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/company-games", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/company-games/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18999"
+BASE_PATH = "/"

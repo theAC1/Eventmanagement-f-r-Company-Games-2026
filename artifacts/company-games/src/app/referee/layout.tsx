@@ -1,0 +1,30 @@
+import { Link } from "wouter";
+
+export default function RefereeLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between">
+          <Link
+            to="/referee"
+            className="flex items-center gap-2 hover:opacity-80 transition"
+          >
+            <img src="/images/logo.png" alt="CG26" className="h-6 w-auto" />
+            <span className="text-sm font-semibold tracking-tight">Schiedsrichter</span>
+          </Link>
+          <Link
+            to="/"
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition"
+          >
+            Startseite
+          </Link>
+        </div>
+      </header>
+      <main className="max-w-3xl mx-auto px-4 py-6">{children}</main>
+    </div>
+  );
+}

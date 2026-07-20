@@ -1,0 +1,2 @@
+- [Prisma v7 config](prisma-v7-config.md) — v7 removed `url` from datasource; use `prisma.config.ts` with `defineConfig({ datasource: { url: ... } })` instead.
+- [CG26 auth pattern](cg26-auth.md) — cookie name is `cg26-auth`, JWT signed with SESSION_SECRET env var; all routes use requireRole(req, res, "ROLE") helper, not middleware.

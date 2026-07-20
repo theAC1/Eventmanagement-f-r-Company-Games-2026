@@ -1,8 +1,42 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
+import gamesRouter from "./games";
+import teamsRouter from "./teams";
+import teamPortalRouter from "./team-portal";
+import ergebnisseRouter from "./ergebnisse";
+import materialsRouter from "./materials";
+import scheduleRouter from "./schedule";
+import gamedayRouter from "./gameday";
+import usersRouter from "./users";
+import personsRouter from "./persons";
+import ranglisteRouter from "./rangliste";
+import kvpRouter from "./kvp";
+import situationsplanRouter from "./situationsplan";
+import qrRouter from "./qr";
+import checkinRouter from "./checkin";
+import partieRouter from "./partie";
+import exportsRouter from "./exports";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/auth", authRouter);
+router.use("/games", gamesRouter);
+router.use("/teams", teamsRouter);
+router.use("/ergebnisse", ergebnisseRouter);
+router.use("/materials", materialsRouter);
+router.use("/schedule", scheduleRouter);
+router.use("/gameday", gamedayRouter);
+router.use("/users", usersRouter);
+router.use("/persons", personsRouter);
+router.use("/rangliste", ranglisteRouter);
+router.use("/kvp", kvpRouter);
+router.use("/situationsplan", situationsplanRouter);
+router.use("/qr", qrRouter);
+router.use("/checkin", checkinRouter);
+router.use("/partie", partieRouter);
+router.use("/export", exportsRouter);
+router.use("/team", teamPortalRouter);
 
 export default router;
