@@ -124,9 +124,15 @@ router.put("/position/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const body = req.body;
+    // Partial-update semantics: only touch fields the client actually sent, so a
+    // drag (x/y only) never resets a previously set rotation, and vice versa.
+    const data: { x?: number; y?: number; rotation?: number } = {};
+    if (body.x !== undefined) data.x = body.x;
+    if (body.y !== undefined) data.y = body.y;
+    if (body.rotation !== undefined) data.rotation = body.rotation;
     const position = await prisma.gamePosition.update({
       where: { id },
-      data: { x: body.x, y: body.y, rotation: body.rotation ?? 0 },
+      data,
     });
     return res.json(position);
   } catch (error) {
@@ -170,13 +176,16 @@ router.put("/custom/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const body = req.body;
+    // Partial-update semantics: only touch fields the client actually sent, so a
+    // drag/resize never wipes label/nummer/farbe/rotation and a metadata edit
+    // never resets rotation or position.
+    const data: Record<string, unknown> = {};
+    for (const key of ["label", "nummer", "farbe", "breiteM", "laengeM", "x", "y", "rotation", "oeffentlich"]) {
+      if (body[key] !== undefined) data[key] = body[key];
+    }
     const feld = await prisma.customFeld.update({
       where: { id },
-      data: {
-        label: body.label, nummer: body.nummer, farbe: body.farbe,
-        breiteM: body.breiteM, laengeM: body.laengeM, x: body.x, y: body.y,
-        rotation: body.rotation ?? 0, oeffentlich: body.oeffentlich,
-      },
+      data,
     });
     return res.json(feld);
   } catch (error) {
