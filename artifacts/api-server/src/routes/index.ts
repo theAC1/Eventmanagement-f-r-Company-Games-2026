@@ -18,6 +18,7 @@ import checkinRouter from "./checkin";
 import partieRouter from "./partie";
 import exportsRouter from "./exports";
 import einsatzplanRouter from "./einsatzplan";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use("/partie", partieRouter);
 router.use("/export", exportsRouter);
 router.use("/team", teamPortalRouter);
 router.use("/einsatzplan", einsatzplanRouter);
+router.use(storageRouter);
 
 export default router;
