@@ -26,7 +26,34 @@ app.use(
     },
   }),
 );
-app.use(cors({ origin: true, credentials: true }));
+// Restrict CORS to known first-party origins. Reflecting arbitrary origins
+// with credentials enabled would let any website make authenticated
+// cross-site requests (CSRF) using the cg26-auth cookie.
+const allowedOrigins = new Set<string>();
+for (const domain of (process.env.REPLIT_DOMAINS ?? "").split(",")) {
+  const d = domain.trim();
+  if (d) allowedOrigins.add(`https://${d}`);
+}
+if (process.env.REPLIT_DEV_DOMAIN) {
+  allowedOrigins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+}
+if (process.env.REPLIT_EXPO_DEV_DOMAIN) {
+  allowedOrigins.add(`https://${process.env.REPLIT_EXPO_DEV_DOMAIN}`);
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Same-origin requests and non-browser clients send no Origin header.
+      if (!origin || allowedOrigins.has(origin)) {
+        callback(null, origin ?? false);
+      } else {
+        callback(null, false);
+      }
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
