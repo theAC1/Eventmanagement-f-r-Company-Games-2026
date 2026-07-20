@@ -18,6 +18,8 @@ type RanglisteResponse = {
   totalGames: number;
   totalTeams: number;
   ergebnisseEingetragen: number;
+  modus?: "INAKTIV" | "TEST" | "HOT";
+  enthaeltTestErgebnisse?: boolean;
 };
 
 export default function ScoreboardPage() {
@@ -107,6 +109,13 @@ export default function ScoreboardPage() {
           </div>
         </div>
       </header>
+
+      {/* Test-Modus Hinweis */}
+      {data.enthaeltTestErgebnisse && (
+        <div className="bg-blue-900/50 border-b border-blue-800 text-blue-300 text-center text-xs py-1.5">
+          TEST-MODUS — angezeigte Ergebnisse sind Probelauf-Daten
+        </div>
+      )}
 
       {/* Rangliste */}
       <main className="max-w-4xl mx-auto px-4 py-6">
