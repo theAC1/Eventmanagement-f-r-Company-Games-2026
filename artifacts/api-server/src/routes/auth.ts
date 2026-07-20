@@ -32,7 +32,9 @@ router.post("/login", async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000,
     });
 
-    return res.json({ user });
+    // Return the token in the body as well so non-browser clients (e.g. the
+    // Expo mobile app) can store it and send it as a Bearer token.
+    return res.json({ user, token });
   } catch (error) {
     console.error("POST /api/auth/login error:", error);
     return res.status(500).json({ error: "Fehler beim Einloggen" });
