@@ -14,3 +14,5 @@ The admin Situationsplan map uses GridStack.js for drag/resize of fields over a 
 **Why:** the same endpoint serves drag, resize, rotation, nummer, and visibility edits — full-object writes silently drop whichever fields that particular edit omits.
 
 **Infra type contract:** the infra button list, API validation, and the Prisma `InfraTyp` enum must stay in lockstep; the enum has been changed by other tasks before, silently breaking placement. Validate `typ` against the enum and return 400 on mismatch.
+
+**Touch:** Resize handles are hover-only by default; a `@media (pointer: coarse)` block makes them always visible with 28px tap targets. Verified touch drag/resize e2e — synthetic touch needs pointer-capture-compatible sequences (low-fidelity dispatch doesn't trigger GridStack saves).
