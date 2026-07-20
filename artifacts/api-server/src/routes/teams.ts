@@ -12,6 +12,11 @@ const TEAM_PUBLIC_SELECT = {
   createdAt: true, updatedAt: true,
 } as const;
 
+const BADGE_SELECT = {
+  id: true, name: true, nummer: true, farbe: true, logoUrl: true, motto: true,
+  qrToken: true, checkinCode: true,
+} as const;
+
 // GET /api/teams
 router.get("/", async (req, res) => {
   const user = requireRole(req, res, "SCHIEDSRICHTER");
@@ -22,6 +27,20 @@ router.get("/", async (req, res) => {
   } catch (error) {
     console.error("GET /api/teams error:", error);
     return res.status(500).json({ error: "Fehler beim Laden der Teams" });
+  }
+});
+
+// GET /api/teams/badges — all teams' badge data (for print-all). Registered
+// before "/:id" so "badges" is not interpreted as a team id.
+router.get("/badges", async (req, res) => {
+  const user = requireRole(req, res, "SCHIEDSRICHTER");
+  if (!user) return;
+  try {
+    const teams = await prisma.team.findMany({ select: BADGE_SELECT, orderBy: { nummer: "asc" } });
+    return res.json(teams);
+  } catch (error) {
+    console.error("GET /api/teams/badges error:", error);
+    return res.status(500).json({ error: "Fehler" });
   }
 });
 
@@ -57,14 +76,10 @@ router.get("/:id/badge", async (req, res) => {
   try {
     const team = await prisma.team.findUnique({
       where: { id },
-      select: { id: true, name: true, nummer: true, qrToken: true },
+      select: BADGE_SELECT,
     });
     if (!team) return res.status(404).json({ error: "Team nicht gefunden" });
-
-    const baseUrl = process.env.APP_URL || "https://games.arvuna.ch";
-    const portalUrl = `${baseUrl}/team/${team.qrToken}`;
-
-    return res.json({ teamId: team.id, teamName: team.name, teamNummer: team.nummer, qrToken: team.qrToken, portalUrl });
+    return res.json(team);
   } catch (error) {
     console.error(`GET /api/teams/${id}/badge error:`, error);
     return res.status(500).json({ error: "Fehler" });

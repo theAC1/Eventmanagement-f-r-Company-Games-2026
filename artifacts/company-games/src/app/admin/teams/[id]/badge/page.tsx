@@ -25,11 +25,11 @@ export default function BadgePage() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/teams/${teamId}`).then(r => r.json()),
-      fetch("/api/teams").then(r => r.json()),
+      fetch(`/api/teams/${teamId}/badge`).then(r => r.json()),
+      fetch("/api/teams/badges").then(r => r.json()),
     ]).then(([t, all]) => {
       setTeam(t);
-      setAllTeams(all);
+      setAllTeams(Array.isArray(all) ? all : []);
       setLoading(false);
     });
   }, [teamId]);
