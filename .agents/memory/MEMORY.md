@@ -5,4 +5,5 @@
 - [Situationsplan GridStack](situationsplan-gridstack.md) — GridStack owns item DOM; React remounts via key only on structural/rotation/scale change, never on drag/resize.
 - [CG26 auth pattern](cg26-auth.md) — cookie `cg26-auth`, JWT signed with SESSION_SECRET; routes use requireRole() helper, not middleware. OWNER sits above ADMIN; user-management mutations are OWNER-only; unactivated accounts log in via one-time activation code.
 - [Orval query options](orval-query-options.md) — generated hooks require queryKey when passing query options; regen via `pnpm codegen` in lib/api-spec; dev DB may need `prisma db push` after merges.
+- [Stale composite dist](stale-composite-dist.md) — phantom "no exported member" from @workspace libs = stale dist .d.ts; run `tsc --build` on the lib first.
 - [api-server seed shares TS](api-server-seed-ts-import.md) — Node 24 runs .ts directly, so prisma/seed.mjs imports src/lib/seed-demo.ts; keep seed logic there, not duplicated.
