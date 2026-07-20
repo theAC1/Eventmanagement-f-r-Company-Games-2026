@@ -1,12 +1,30 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { Prisma } from "@prisma/client";
-import { requireRole, getAuthUser } from "../middlewares/auth";
+import { requireRole, getAuthUser, hasMinRole } from "../middlewares/auth";
 import { ErgebnisCreateSchema, ErgebnisUpdateSchema, zodValidationError } from "../lib/schemas";
 import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "../lib/game-punkte";
 import type { Wertungslogik } from "../lib/wertungslogik-types";
 
 const router = Router();
+
+// Sperrfrist: Schiedsrichter dürfen ein Ergebnis nur 5 Minuten nach
+// `eingetragenUm` selbst korrigieren; danach kann nur Admin/Orga korrigieren.
+export const KORREKTUR_FENSTER_MS = 5 * 60 * 1000;
+
+function istGesperrt(eingetragenUm: Date | null): boolean {
+  if (!eingetragenUm) return false;
+  return Date.now() - eingetragenUm.getTime() > KORREKTUR_FENSTER_MS;
+}
+
+class LockedError extends Error {
+  lockedAt: Date | null;
+  constructor(lockedAt: Date | null) {
+    super("Korrekturfrist abgelaufen");
+    this.name = "LockedError";
+    this.lockedAt = lockedAt;
+  }
+}
 
 class DuellConflictError extends Error {
   existing: unknown[];
@@ -53,6 +71,7 @@ router.get("/", async (req, res) => {
             game: { select: { id: true, name: true, slug: true, wertungslogik: true } },
             team: { select: { id: true, name: true, nummer: true } },
             eingetragenVon: { select: { id: true, name: true } },
+            zeitplanSlot: { select: { id: true, startZeit: true } },
           },
           orderBy: { eingetragenUm: "desc" },
           skip: (page - 1) * limit,
@@ -122,8 +141,14 @@ router.post("/", async (req, res) => {
       }
     }
 
+    const istOrga = hasMinRole(user.rolle, "ORGA");
+
     const ergebnis = await prisma.$transaction(async (tx) => {
       const existing = await tx.ergebnis.findUnique({ where: { gameId_teamId: { gameId, teamId } } });
+      // Sperrfrist: Schiedsrichter dürfen nur innerhalb von 5 Minuten korrigieren
+      if (existing && !istOrga && istGesperrt(existing.eingetragenUm)) {
+        throw new LockedError(existing.eingetragenUm);
+      }
       const result = await tx.ergebnis.upsert({
         where: { gameId_teamId: { gameId, teamId } },
         create: {
@@ -135,7 +160,10 @@ router.post("/", async (req, res) => {
         update: {
           rohdaten: rohdaten as Prisma.InputJsonValue,
           gamePunkte, status: "KORRIGIERT",
-          eingetragenVonId: userId, eingetragenUm: now, istTest, commitId: commit,
+          eingetragenVonId: userId,
+          // Timer läuft ab dem ursprünglichen Eintrag weiter
+          eingetragenUm: existing?.eingetragenUm ?? now,
+          istTest, commitId: commit,
         },
       });
 
@@ -158,6 +186,13 @@ router.post("/", async (req, res) => {
 
     return res.status(201).json(ergebnis);
   } catch (error) {
+    if (error instanceof LockedError) {
+      return res.status(403).json({
+        code: "LOCKED",
+        lockedAt: error.lockedAt,
+        error: "Die Korrekturfrist von 5 Minuten ist abgelaufen — nur ein Admin kann das Ergebnis noch korrigieren.",
+      });
+    }
     console.error("POST /api/ergebnisse error:", error);
     return res.status(500).json({ error: "Fehler beim Speichern" });
   }
@@ -348,6 +383,57 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+// PUT /api/ergebnisse/:id/admin-korrektur
+// Admin/Orga überschreibt ein (ggf. gesperrtes) Ergebnis direkt → Status VERIFIZIERT.
+router.put("/:id/admin-korrektur", async (req, res) => {
+  const user = requireRole(req, res, "ORGA");
+  if (!user) return;
+  const { id } = req.params;
+  try {
+    const parsed = ErgebnisUpdateSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json(zodValidationError(parsed.error));
+
+    const { rohdaten, grund } = parsed.data;
+    const existing = await prisma.ergebnis.findUnique({
+      where: { id },
+      include: { game: { select: { id: true, wertungslogik: true } } },
+    });
+    if (!existing) return res.status(404).json({ error: "Ergebnis nicht gefunden" });
+
+    const wertungslogik = existing.game.wertungslogik as Wertungslogik | null;
+    const gamePunkte = berechneGamePunkteAusRohdaten(rohdaten as Record<string, unknown>, wertungslogik);
+
+    const ergebnis = await prisma.$transaction(async (tx) => {
+      const result = await tx.ergebnis.update({
+        where: { id },
+        data: {
+          rohdaten: rohdaten as Prisma.InputJsonValue,
+          gamePunkte, status: "VERIFIZIERT",
+        },
+      });
+      await tx.ergebnisHistory.create({
+        data: {
+          ergebnisId: result.id,
+          vorher: existing.rohdaten as Prisma.InputJsonValue,
+          nachher: rohdaten as Prisma.InputJsonValue,
+          gamePunkteVorher: existing.gamePunkte,
+          gamePunkteNachher: gamePunkte,
+          statusVorher: existing.status,
+          statusNachher: "VERIFIZIERT",
+          grund: grund ?? null,
+          geaendertVonId: user.id,
+        },
+      });
+      await updateGameRaenge(existing.game.id, wertungslogik, tx as any);
+      return result;
+    });
+    return res.json(ergebnis);
+  } catch (error) {
+    console.error(`PUT /api/ergebnisse/${id}/admin-korrektur error:`, error);
+    return res.status(500).json({ error: "Fehler beim Aktualisieren des Ergebnisses" });
+  }
+});
+
 // PUT /api/ergebnisse/:id/verify
 router.put("/:id/verify", async (req, res) => {
   const user = requireRole(req, res, "SCHIEDSRICHTER");
@@ -359,8 +445,10 @@ router.put("/:id/verify", async (req, res) => {
       select: { id: true, status: true, rohdaten: true, gamePunkte: true, zeitplanSlotId: true },
     });
     if (!existing) return res.status(404).json({ error: "Ergebnis nicht gefunden" });
-    if (existing.status !== "EINGETRAGEN") {
-      return res.status(400).json({ error: "Nur Ergebnisse mit Status EINGETRAGEN können verifiziert werden" });
+    // Sowohl neu eingetragene als auch (innerhalb der Frist) korrigierte
+    // Ergebnisse können vom Schiedsrichter bestätigt werden.
+    if (existing.status !== "EINGETRAGEN" && existing.status !== "KORRIGIERT") {
+      return res.status(400).json({ error: "Nur eingetragene oder korrigierte Ergebnisse können verifiziert werden" });
     }
 
     const ergebnis = await prisma.$transaction(async (tx) => {
@@ -375,7 +463,7 @@ router.put("/:id/verify", async (req, res) => {
           nachher: existing.rohdaten as Prisma.InputJsonValue,
           gamePunkteVorher: existing.gamePunkte,
           gamePunkteNachher: existing.gamePunkte,
-          statusVorher: "EINGETRAGEN",
+          statusVorher: existing.status,
           statusNachher: "VERIFIZIERT",
           geaendertVonId: user.id,
         },

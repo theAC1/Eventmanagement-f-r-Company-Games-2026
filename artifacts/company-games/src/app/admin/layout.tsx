@@ -69,6 +69,12 @@ export default function AdminLayout({
               >
                 Gameday
               </Link>
+              <Link
+                to="/admin/ergebnisse"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
+                Ergebnisse
+              </Link>
               {isAdmin && (
                 <Link
                   to="/admin/users"

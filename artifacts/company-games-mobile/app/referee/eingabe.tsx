@@ -118,9 +118,11 @@ export default function EingabeScreen() {
             params: {
               slug,
               gameId,
+              teamId,
               gameName,
               teamName,
               punkte: res.gamePunkte != null ? String(res.gamePunkte) : '',
+              eingetragenUm: res.eingetragenUm ? String(new Date(res.eingetragenUm as string).getTime()) : '',
             },
           });
         },

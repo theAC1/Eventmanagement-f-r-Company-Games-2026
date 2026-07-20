@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -7,18 +7,34 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { Button } from '@/components/ui';
 
+const KORREKTUR_FENSTER_MS = 5 * 60 * 1000;
+
+function formatRest(ms: number) {
+  const total = Math.ceil(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export default function BestaetigungScreen() {
   const c = useColors();
   const router = useRouter();
-  const { gameId, slug, gameName, teamName, punkte, pending } = useLocalSearchParams<{
+  const { gameId, slug, gameName, teamId, teamName, punkte, eingetragenUm, pending } = useLocalSearchParams<{
     gameId: string;
     slug: string;
     gameName: string;
+    teamId: string;
     teamName: string;
     punkte: string;
+    eingetragenUm: string;
     pending: string;
   }>();
   const isPending = pending === '1';
+
+  const eingetragenMs = eingetragenUm ? Number(eingetragenUm) : null;
+  const [now, setNow] = useState(() => Date.now());
+  const restMs = eingetragenMs ? Math.max(0, eingetragenMs + KORREKTUR_FENSTER_MS - now) : 0;
+  const korrekturOffen = eingetragenMs !== null && restMs > 0;
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -29,6 +45,12 @@ export default function BestaetigungScreen() {
       );
     }
   }, [isPending]);
+
+  useEffect(() => {
+    if (eingetragenMs === null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [eingetragenMs]);
 
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
@@ -57,6 +79,35 @@ export default function BestaetigungScreen() {
         <View style={[styles.pointsCard, { backgroundColor: c.card, borderColor: c.border, borderRadius: c.radius }]}>
           <Text style={[styles.pointsValue, { color: c.primary }]}>{punkte}</Text>
           <Text style={[styles.pointsLabel, { color: c.mutedForeground }]}>Game-Punkte</Text>
+        </View>
+      )}
+
+      {/* Korrektur-Countdown */}
+      {eingetragenMs !== null && (
+        <View style={[styles.timerCard, { borderColor: c.border, borderRadius: c.radius }]}>
+          {korrekturOffen ? (
+            <>
+              <Text style={[styles.timerText, { color: c.foreground }]}>
+                Noch <Text style={{ fontFamily: 'Inter_700Bold' }}>{formatRest(restMs)}</Text> zum Korrigieren
+              </Text>
+              <Button
+                label="Korrigieren"
+                icon="edit-2"
+                variant="ghost"
+                onPress={() =>
+                  router.replace({
+                    pathname: '/referee/eingabe',
+                    params: { gameId, slug, gameName, teamId, teamName },
+                  })
+                }
+                testID="korrigieren"
+              />
+            </>
+          ) : (
+            <Text style={[styles.timerText, { color: c.mutedForeground }]}>
+              Korrekturfrist abgelaufen — nur ein Admin kann das Ergebnis noch korrigieren.
+            </Text>
+          )}
         </View>
       )}
 
@@ -104,4 +155,14 @@ const styles = StyleSheet.create({
   },
   pointsValue: { fontSize: 48, fontFamily: 'Inter_700Bold', fontVariant: ['tabular-nums'] },
   pointsLabel: { fontSize: 13, fontFamily: 'Inter_500Medium', marginTop: 4 },
+  timerCard: {
+    marginTop: 20,
+    borderWidth: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  timerText: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' },
 });

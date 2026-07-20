@@ -164,6 +164,26 @@ export default function BestaetigungPage() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [eingetragenUm, setEingetragenUm] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  const KORREKTUR_FENSTER_MS = 5 * 60 * 1000;
+  const restMs = eingetragenUm !== null ? Math.max(0, eingetragenUm + KORREKTUR_FENSTER_MS - now) : 0;
+  const korrekturOffen = eingetragenUm !== null && restMs > 0;
+
+  // Tick countdown every second while the correction window is open
+  useEffect(() => {
+    if (step !== 2 || eingetragenUm === null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [step, eingetragenUm]);
+
+  const formatRest = (ms: number) => {
+    const total = Math.ceil(ms / 1000);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
 
   // Load data from sessionStorage
   useEffect(() => {
@@ -211,9 +231,14 @@ export default function BestaetigungPage() {
 
         const result = await res.json();
         ids.push(result.id);
+        // Timer läuft ab dem ursprünglichen eingetragenUm-Timestamp
+        if (result.eingetragenUm && eingetragenUm === null) {
+          setEingetragenUm(new Date(result.eingetragenUm).getTime());
+        }
       }
 
       setSavedIds(ids);
+      setNow(Date.now());
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler beim Speichern");
@@ -376,6 +401,38 @@ export default function BestaetigungPage() {
       {/* Step 2: Verify button */}
       {step === 2 && (
         <div className="space-y-4">
+          {/* Korrektur-Countdown */}
+          {eingetragenUm !== null && (
+            <div className={`border rounded-lg p-4 ${korrekturOffen ? "border-amber-700/50 bg-amber-950/20" : "border-zinc-800 bg-zinc-900/50"}`}>
+              {korrekturOffen ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-center">
+                    <span className="text-zinc-400">Noch </span>
+                    <span className="font-mono font-bold text-amber-400 tabular-nums">{formatRest(restMs)}</span>
+                    <span className="text-zinc-400"> zum Korrigieren</span>
+                  </p>
+                  <button
+                    onClick={() => {
+                      const qs = new URLSearchParams();
+                      if (savedIds.length) qs.set("ergebnisIds", savedIds.join(","));
+                      if (payload.slotId) qs.set("slotId", payload.slotId);
+                      const query = qs.toString();
+                      navigate(`/referee/${slug}/live${query ? `?${query}` : ""}`);
+                    }}
+                    disabled={savedIds.length === 0}
+                    className="w-full py-2.5 border border-amber-700/60 text-amber-300 text-sm font-medium rounded-lg hover:bg-amber-900/30 transition disabled:opacity-40"
+                  >
+                    Korrigieren
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-400 text-center">
+                  Die Korrekturfrist ist abgelaufen. Ab jetzt kann nur noch ein Admin das Ergebnis korrigieren.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="border border-zinc-800 rounded-lg p-4 bg-zinc-900/50">
             <p className="text-sm text-zinc-300 text-center">
               Hiermit bestätige ich die Richtigkeit der Ergebnisse.
