@@ -1,20 +1,19 @@
 ---
-name: api-server seed shares TS logic
-description: How the CLI seed and the API endpoint share one seed implementation.
+name: api-server shares TS logic with plain-node scripts
+description: How prisma scripts run outside the esbuild bundle can still share typed src/ logic.
 ---
 
-The demo/rehearsal seed logic lives in `artifacts/api-server/src/lib/seed-demo.ts`
-(exports `seedDemo(prisma, startedById?)` and `hasHotGameday(prisma)`).
+The esbuild build only bundles `src/index.ts`; scripts under `prisma/` (e.g.
+`db:seed` → `node prisma/seed.mjs`) run with no build step. To avoid duplicating
+logic between such a script and the bundled server, keep the logic in one typed
+module under `src/lib/` and import it from both.
 
-- The API route `POST /api/gameday/seed-demo` (ADMIN-only, refuses when a HOT
-  gameday is active) imports it directly.
-- The CLI `prisma/seed.mjs` (run by `db:seed`) also imports it via
-  `import { seedDemo } from "../src/lib/seed-demo.ts"`.
+**Why:** Node 24 strips types and can import a `.ts` module directly from a
+`.mjs` file, so a single `src/lib/*.ts` source serves both the CLI script and the
+bundled API route — no duplicated seed/business logic that can drift apart.
 
-**Why:** `db:seed` runs `node prisma/seed.mjs` with no build step, and esbuild
-only bundles `src/index.ts`. Node 24 strips types and can import a `.ts` module
-from a `.mjs` file, so a single shared TS source works for both without a build.
-
-**How to apply:** Don't duplicate seed data into seed.mjs. If Node ever loses
-type-stripping, either add a build entry for the seed or convert seed-demo to
-plain JS. Note tsconfig `include` is `["src"]`, so `prisma/*.mjs` is not typechecked.
+**How to apply:** Put shared logic in `src/lib/`. Import it from `prisma/*.mjs`
+via a relative `.ts` specifier. Caveat: tsconfig `include` is `["src"]`, so
+`prisma/*.mjs` is NOT typechecked — keep those wrappers thin. If a future Node
+drops type-stripping, add a dedicated build entry for the script or convert the
+shared module to plain JS.

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GamedayControls } from "./components/gameday-controls";
 import { DemoSeed } from "./components/demo-seed";
+import { useAuth } from "../../../lib/auth-context";
 import { TabBar } from "./components/tab-bar";
 import { UebersichtTab } from "./components/uebersicht-tab";
 import { AktivitaetTab } from "./components/aktivitaet-tab";
@@ -29,6 +30,7 @@ type TeamInfo = {
 };
 
 export default function GamedayDashboard() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("uebersicht");
   const [rangliste, setRangliste] = useState<RanglisteEntry[]>([]);
   const [ergebnisse, setErgebnisse] = useState<GameErgebnis[]>([]);
@@ -128,7 +130,9 @@ export default function GamedayDashboard() {
 
       <GamedayControls onStatusChange={loadData} />
 
-      {gamedayModus !== "HOT" && <DemoSeed onSeeded={loadData} />}
+      {user?.rolle === "ADMIN" && gamedayModus !== "HOT" && (
+        <DemoSeed onSeeded={loadData} />
+      )}
 
       <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
