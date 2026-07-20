@@ -37,6 +37,7 @@ export function getAuthUser(req: Request): AuthUser | null {
 }
 
 const ROLE_HIERARCHY: Record<string, number> = {
+  OWNER: 200,
   ADMIN: 100,
   ORGA: 50,
   SCHIEDSRICHTER: 20,

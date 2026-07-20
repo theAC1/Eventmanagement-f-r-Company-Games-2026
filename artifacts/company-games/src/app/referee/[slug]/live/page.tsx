@@ -318,6 +318,8 @@ export default function LivePage() {
   // Check if minimum data is entered
   const hasMinimumData = (): boolean => {
     if (!game?.wertungslogik) return false;
+    // Ohne geladene Ergebnisse (z.B. fehlende ergebnisIds) darf nichts übermittelt werden
+    if (ergebnisse.length === 0) return false;
     const wl = game.wertungslogik;
 
     for (const e of ergebnisse) {

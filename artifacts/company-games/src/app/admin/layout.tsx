@@ -52,6 +52,12 @@ export default function AdminLayout({
                 Zeitplan
               </Link>
               <Link
+                to="/admin/einsatzplan"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
+                Einsatzplan
+              </Link>
+              <Link
                 to="/admin/situationsplan"
                 className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
               >
@@ -62,6 +68,12 @@ export default function AdminLayout({
                 className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
               >
                 Gameday
+              </Link>
+              <Link
+                to="/admin/ergebnisse"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
+                Ergebnisse
               </Link>
               {isAdmin && (
                 <Link

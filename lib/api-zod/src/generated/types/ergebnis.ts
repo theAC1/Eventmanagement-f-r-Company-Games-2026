@@ -13,5 +13,7 @@ export interface Ergebnis {
   /** @nullable */
   gamePunkte?: number | null;
   status?: string;
+  /** @nullable */
+  eingetragenUm?: string | null;
   [key: string]: unknown;
  }

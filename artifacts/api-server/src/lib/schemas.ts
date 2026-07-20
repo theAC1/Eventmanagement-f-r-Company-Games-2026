@@ -36,6 +36,7 @@ export const GameCreateSchema = z.object({
   flaecheLaengeM: z.number().nullable().optional(),
   flaecheBreiteM: z.number().nullable().optional(),
   helferAnzahl: z.number().int().min(0).optional(),
+  schiedsrichterAnzahl: z.number().int().min(0).optional(),
   stromNoetig: z.boolean().optional(),
 });
 
@@ -105,16 +106,15 @@ export const ErgebnisUpdateSchema = z.object({
 export const UserCreateSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich").max(100),
   username: z.string().min(2, "Username mind. 2 Zeichen").max(50),
-  password: z.string().min(6, "Passwort mind. 6 Zeichen"),
-  rolle: z.enum(["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]),
+  rolle: z.enum(["OWNER", "ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]),
   email: z.string().email().nullable().optional(),
 });
 
 export const UserUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   username: z.string().min(2).max(50).optional(),
-  password: z.string().min(6).optional(),
-  rolle: z.enum(["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]).optional(),
+  password: z.string().min(10).optional(),
+  rolle: z.enum(["OWNER", "ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]).optional(),
   email: z.string().email().nullable().optional(),
   istAktiv: z.boolean().optional(),
 });

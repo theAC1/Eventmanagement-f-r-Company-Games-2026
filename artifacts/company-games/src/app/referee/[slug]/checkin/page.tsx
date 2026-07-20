@@ -5,6 +5,7 @@ import { useParams } from 'wouter';
 import { useLocation } from 'wouter';
 import { useSearch } from 'wouter';
 import { Link } from 'wouter';
+import jsQR from "jsqr";
 
 type Game = { id: string; name: string; slug: string; modus: string; teamsProSlot: number };
 type CheckedInTeam = { teamId: string; teamName: string; teamNummer: number; teamFarbe: string };
@@ -16,6 +17,7 @@ export default function CheckinPage() {
   const searchParams = new URLSearchParams(searchString);
   const slug = params.slug as string;
   const slotId = searchParams.get("slotId") ?? undefined;
+  const slotTeamIds = (searchParams.get("teams") ?? "").split(",").filter(Boolean);
 
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,9 +29,13 @@ export default function CheckinPage() {
   const [scanning, setScanning] = useState(false);
   const scanningRef = useRef(false); // Fix: useRef statt Closure für requestAnimationFrame
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
-  const isDuell = game?.modus === "DUELL" && (game?.teamsProSlot ?? 1) >= 2;
+  const isDuell =
+    slotTeamIds.length >= 2 ||
+    (game?.modus === "DUELL" && (game?.teamsProSlot ?? 1) >= 2);
   const maxTeams = isDuell ? 2 : 1;
   const allCheckedIn = checkedIn.length >= maxTeams;
 
@@ -43,6 +49,10 @@ export default function CheckinPage() {
   useEffect(() => {
     return () => {
       scanningRef.current = false;
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
       if (videoRef.current?.srcObject) {
         (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       }
@@ -63,11 +73,12 @@ export default function CheckinPage() {
     const res = await fetch("/api/checkin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ checkinCode: trimmed }),
+      body: JSON.stringify({ checkinCode: trimmed, ...(slotId ? { slotId } : {}) }),
     });
 
     if (!res.ok) {
-      setError("Ungültiger Code");
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Ungültiger Code");
       return;
     }
 
@@ -92,10 +103,14 @@ export default function CheckinPage() {
     const res = await fetch("/api/checkin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ qrToken: token }),
+      body: JSON.stringify({ qrToken: token, ...(slotId ? { slotId } : {}) }),
     });
 
-    if (!res.ok) { setError("Ungültiger QR-Code"); return; }
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Ungültiger QR-Code");
+      return;
+    }
     const data = await res.json();
 
     if (checkedIn.find(t => t.teamId === data.teamId)) { return; } // Already checked in
@@ -108,37 +123,75 @@ export default function CheckinPage() {
     }]);
   };
 
-  // QR-Scanner via Kamera (Fix: useRef für Loop-Control)
+  // Decodierten QR-Wert verarbeiten (URL kann Portal- oder Check-in-Code sein)
+  const handleDecoded = async (raw: string) => {
+    const checkinMatch = raw.match(/checkin\/([A-Z0-9]{3})/i);
+    const tokenMatch = raw.match(/team\/([a-z0-9]+)/i);
+    if (checkinMatch) {
+      await verifyCode(checkinMatch[1]);
+    } else if (tokenMatch) {
+      await verifyQrToken(tokenMatch[1]);
+    }
+  };
+
+  // QR-Scanner via Kamera – BarcodeDetector wenn verfügbar, sonst jsQR-Fallback (iOS Safari)
   const startScanner = async () => {
     scanningRef.current = true;
     setScanning(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        if ("BarcodeDetector" in window) {
-          const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
-          const scanLoop = async () => {
-            if (!scanningRef.current || !videoRef.current) return;
-            try {
-              const barcodes = await detector.detect(videoRef.current);
-              if (barcodes.length > 0) {
-                const url = barcodes[0].rawValue;
-                const checkinMatch = url.match(/checkin\/([A-Z0-9]{3})/i);
-                const tokenMatch = url.match(/team\/([a-z0-9]+)/i);
-                if (checkinMatch) {
-                  await verifyCode(checkinMatch[1]);
-                } else if (tokenMatch) {
-                  await verifyQrToken(tokenMatch[1]);
-                }
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+
+      const hasBarcodeDetector = "BarcodeDetector" in window;
+      const detector = hasBarcodeDetector
+        ? new (window as any).BarcodeDetector({ formats: ["qr_code"] })
+        : null;
+
+      const scanOnce = async () => {
+        if (!scanningRef.current || !videoRef.current) return;
+        const video = videoRef.current;
+        try {
+          if (detector) {
+            const barcodes = await detector.detect(video);
+            if (barcodes.length > 0) {
+              await handleDecoded(barcodes[0].rawValue);
+            }
+          } else if (video.videoWidth > 0) {
+            // jsQR-Fallback: Frame in Canvas zeichnen und dekodieren
+            let canvas = canvasRef.current;
+            if (!canvas) {
+              canvas = document.createElement("canvas");
+              canvasRef.current = canvas;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext("2d", { willReadFrequently: true });
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const result = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+              });
+              if (result?.data) {
+                await handleDecoded(result.data);
               }
-            } catch { /* ignore scan errors */ }
-            if (scanningRef.current) requestAnimationFrame(scanLoop);
-          };
-          requestAnimationFrame(scanLoop);
-        }
-      }
+            }
+          }
+        } catch { /* ignore scan errors */ }
+      };
+
+      const rafLoop = async () => {
+        if (!scanningRef.current) return;
+        await scanOnce();
+        if (scanningRef.current) requestAnimationFrame(rafLoop);
+      };
+      requestAnimationFrame(rafLoop);
+
+      // Fallback-Loop: requestAnimationFrame kann auf Safari stillschweigend anhalten
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = setInterval(() => { void scanOnce(); }, 500);
     } catch {
       setError("Kamera-Zugriff verweigert");
       scanningRef.current = false;
@@ -149,6 +202,10 @@ export default function CheckinPage() {
   const stopScanner = () => {
     scanningRef.current = false;
     setScanning(false);
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
     if (videoRef.current?.srcObject) {
       (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       videoRef.current.srcObject = null;
@@ -208,6 +265,22 @@ export default function CheckinPage() {
           {isDuell ? "2 Teams einchecken" : "Team einchecken"} &middot; {game.name}
         </p>
       </div>
+
+      {/* Fortschritt bei Duell-Slots */}
+      {isDuell && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className={checkedIn.length >= 1 ? "text-emerald-400" : "text-zinc-500"}>
+            {checkedIn[0] ? `${checkedIn[0].teamName} ✓` : "Team A ausstehend"}
+          </span>
+          <span className="text-zinc-700">—</span>
+          <span className={checkedIn.length >= 2 ? "text-emerald-400" : "text-zinc-500"}>
+            {checkedIn[1] ? `${checkedIn[1].teamName} ✓` : "Team B ausstehend"}
+          </span>
+          <span className="ml-auto text-xs text-zinc-500">
+            {checkedIn.length} von 2 Teams verifiziert
+          </span>
+        </div>
+      )}
 
       {/* Eingecheckte Teams */}
       <div className="space-y-2">
@@ -309,7 +382,7 @@ export default function CheckinPage() {
                 )}
               </div>
               <p className="text-xs text-zinc-600 text-center">
-                Check-in QR-Code (gelb) auf dem Badge scannen
+                Team-QR-Code auf dem Badge scannen
               </p>
             </div>
           )}

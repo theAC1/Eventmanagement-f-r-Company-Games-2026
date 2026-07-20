@@ -8,6 +8,7 @@ import { lazy, Suspense } from "react";
 // Pages
 import HomePage from "@/app/page";
 import LoginPage from "@/app/login/page";
+import ActivatePage from "@/app/activate/page";
 import ScoreboardPage from "@/app/scoreboard/page";
 
 // Layouts
@@ -26,8 +27,10 @@ const AdminMaterialNewPage = lazy(() => import("@/app/admin/materials/new/page")
 const AdminMaterialDetailPage = lazy(() => import("@/app/admin/materials/[id]/page"));
 const AdminSchedulePage = lazy(() => import("@/app/admin/schedule/page"));
 const AdminSituationsplanPage = lazy(() => import("@/app/admin/situationsplan/page"));
+const AdminEinsatzplanPage = lazy(() => import("@/app/admin/einsatzplan/page"));
 const AdminGamedayPage = lazy(() => import("@/app/admin/gameday/page"));
 const AdminGamedayPrintPage = lazy(() => import("@/app/admin/gameday/print/page"));
+const AdminErgebnissePage = lazy(() => import("@/app/admin/ergebnisse/page"));
 const AdminUsersPage = lazy(() => import("@/app/admin/users/page"));
 const AdminKvpPage = lazy(() => import("@/app/admin/kvp/page"));
 
@@ -56,6 +59,7 @@ function Router() {
       {/* Public routes */}
       <Route path="/" component={HomePage} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/activate" component={ActivatePage} />
       <Route path="/scoreboard" component={ScoreboardPage} />
 
       {/* Team portal - no auth */}
@@ -158,6 +162,15 @@ function Router() {
           </RequireAuth>
         )}
       </Route>
+      <Route path="/admin/einsatzplan">
+        {() => (
+          <RequireAuth minRole="ORGA">
+            <AdminLayout>
+              <Suspense fallback={<PageLoader />}><AdminEinsatzplanPage /></Suspense>
+            </AdminLayout>
+          </RequireAuth>
+        )}
+      </Route>
       <Route path="/admin/situationsplan">
         {() => (
           <RequireAuth minRole="ORGA">
@@ -181,6 +194,15 @@ function Router() {
           <RequireAuth minRole="SCHIEDSRICHTER">
             <AdminLayout>
               <Suspense fallback={<PageLoader />}><AdminGamedayPage /></Suspense>
+            </AdminLayout>
+          </RequireAuth>
+        )}
+      </Route>
+      <Route path="/admin/ergebnisse">
+        {() => (
+          <RequireAuth minRole="ORGA">
+            <AdminLayout>
+              <Suspense fallback={<PageLoader />}><AdminErgebnissePage /></Suspense>
             </AdminLayout>
           </RequireAuth>
         )}

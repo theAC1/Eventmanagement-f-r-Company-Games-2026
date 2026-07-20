@@ -72,6 +72,7 @@ export interface Team {
 export interface CheckinRequest {
   qrToken?: string;
   checkinCode?: string;
+  slotId?: string;
 }
 
 export interface CheckinResponse {
@@ -85,6 +86,38 @@ export interface CheckinResponse {
   teamLogo?: string | null;
 }
 
+export interface MeinSlot {
+  slotId: string;
+  status: string;
+  runde?: number;
+  startZeit: string;
+  endZeit: string;
+  gameId: string;
+  gameName: string;
+  gameSlug: string;
+  gameModus?: string;
+  teamsProSlot?: number;
+  teamIds: string[];
+  teamNames: string[];
+  [key: string]: unknown;
+ }
+
+/**
+ * @nullable
+ */
+export type MeineSlotsResponseConfig = {
+  id?: string;
+  name?: string;
+  istAktiv?: boolean;
+  [key: string]: unknown;
+ } | null;
+
+export interface MeineSlotsResponse {
+  /** @nullable */
+  config?: MeineSlotsResponseConfig;
+  slots: MeinSlot[];
+}
+
 export type ErgebnisCreateRohdaten = { [key: string]: unknown };
 
 export interface ErgebnisCreate {
@@ -93,6 +126,8 @@ export interface ErgebnisCreate {
   /** @nullable */
   zeitplanSlotId?: string | null;
   rohdaten: ErgebnisCreateRohdaten;
+  /** Client-generated idempotency key: retries with the same commitId are not re-applied. */
+  commitId?: string;
 }
 
 export interface Ergebnis {
@@ -102,6 +137,8 @@ export interface Ergebnis {
   /** @nullable */
   gamePunkte?: number | null;
   status?: string;
+  /** @nullable */
+  eingetragenUm?: string | null;
   [key: string]: unknown;
  }
 
