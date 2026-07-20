@@ -6,4 +6,4 @@ Passing `{ query: { ... } }` to an orval-generated hook (e.g. `useGetMeineSlots`
 
 **Why:** orval v8 generates strict `UseQueryOptions` types.
 
-**How to apply:** import the generated key helper and pass it: `useGetX({ query: { queryKey: getGetXQueryKey(), refetchInterval: 10_000 } })`. After editing `lib/api-spec/openapi.yaml`, run `pnpm codegen` in `lib/api-spec`. Also: dev DB may lag the Prisma schema after merges — run `prisma generate` + `prisma db push` in artifacts/api-server when columns are "missing".
+**How to apply:** import the generated key helper and pass it: `useGetX({ query: { queryKey: getGetXQueryKey(), refetchInterval: 10_000 } })`. After editing `lib/api-spec/openapi.yaml`, run `pnpm codegen` in `lib/api-spec`.

@@ -33,12 +33,16 @@ export default function EingabeScreen() {
     gameName,
     teamId: initialTeamId,
     teamName: initialTeamName,
+    slotId,
+    teamCount,
   } = useLocalSearchParams<{
     gameId: string;
     slug: string;
     gameName: string;
     teamId: string;
     teamName: string;
+    slotId?: string;
+    teamCount?: string;
   }>();
 
   const [teamId, setTeamId] = useState(initialTeamId);
@@ -72,7 +76,7 @@ export default function EingabeScreen() {
   const onRescan = (value: string) => {
     setScanError(null);
     checkin.mutate(
-      { data: { qrToken: parseQrToken(value) } },
+      { data: { qrToken: parseQrToken(value), ...(slotId ? { slotId } : {}) } },
       {
         onSuccess: (res) => {
           const outcome = resolveRescan(res);
@@ -125,6 +129,8 @@ export default function EingabeScreen() {
               teamName,
               punkte: res.gamePunkte != null ? String(res.gamePunkte) : '',
               eingetragenUm: res.eingetragenUm ? String(new Date(res.eingetragenUm as string).getTime()) : '',
+              ...(slotId ? { slotId } : {}),
+              ...(teamCount ? { teamCount } : {}),
             },
           });
         },
@@ -142,7 +148,16 @@ export default function EingabeScreen() {
             });
             router.replace({
               pathname: '/referee/bestaetigung',
-              params: { slug, gameId, gameName, teamName, punkte: '', pending: '1' },
+              params: {
+                slug,
+                gameId,
+                gameName,
+                teamName,
+                punkte: '',
+                pending: '1',
+                ...(slotId ? { slotId } : {}),
+                ...(teamCount ? { teamCount } : {}),
+              },
             });
             return;
           }

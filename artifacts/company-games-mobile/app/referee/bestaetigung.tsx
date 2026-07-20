@@ -19,7 +19,7 @@ function formatRest(ms: number) {
 export default function BestaetigungScreen() {
   const c = useColors();
   const router = useRouter();
-  const { gameId, slug, gameName, teamId, teamName, punkte, eingetragenUm, pending } = useLocalSearchParams<{
+  const { gameId, slug, gameName, teamId, teamName, punkte, eingetragenUm, pending, slotId, teamCount } = useLocalSearchParams<{
     gameId: string;
     slug: string;
     gameName: string;
@@ -28,6 +28,8 @@ export default function BestaetigungScreen() {
     punkte: string;
     eingetragenUm: string;
     pending: string;
+    slotId?: string;
+    teamCount?: string;
   }>();
   const isPending = pending === '1';
 
@@ -97,7 +99,15 @@ export default function BestaetigungScreen() {
                 onPress={() =>
                   router.replace({
                     pathname: '/referee/eingabe',
-                    params: { gameId, slug, gameName, teamId, teamName },
+                    params: {
+                      gameId,
+                      slug,
+                      gameName,
+                      teamId,
+                      teamName,
+                      ...(slotId ? { slotId } : {}),
+                      ...(teamCount ? { teamCount } : {}),
+                    },
                   })
                 }
                 testID="korrigieren"
@@ -118,7 +128,13 @@ export default function BestaetigungScreen() {
           onPress={() =>
             router.replace({
               pathname: '/referee/checkin',
-              params: { gameId, slug, gameName },
+              params: {
+                gameId,
+                slug,
+                gameName,
+                ...(slotId ? { slotId } : {}),
+                ...(teamCount ? { teamCount } : {}),
+              },
             })
           }
           testID="next-team"
