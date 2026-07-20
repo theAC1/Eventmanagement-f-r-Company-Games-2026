@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GamedayControls } from "./components/gameday-controls";
+import { DemoSeed } from "./components/demo-seed";
 import { TabBar } from "./components/tab-bar";
 import { UebersichtTab } from "./components/uebersicht-tab";
 import { AktivitaetTab } from "./components/aktivitaet-tab";
@@ -126,6 +127,8 @@ export default function GamedayDashboard() {
       </div>
 
       <GamedayControls onStatusChange={loadData} />
+
+      {gamedayModus !== "HOT" && <DemoSeed onSeeded={loadData} />}
 
       <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
