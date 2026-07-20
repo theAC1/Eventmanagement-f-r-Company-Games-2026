@@ -36,6 +36,7 @@ export const GameCreateSchema = z.object({
   flaecheLaengeM: z.number().nullable().optional(),
   flaecheBreiteM: z.number().nullable().optional(),
   helferAnzahl: z.number().int().min(0).optional(),
+  schiedsrichterAnzahl: z.number().int().min(0).optional(),
   stromNoetig: z.boolean().optional(),
 });
 

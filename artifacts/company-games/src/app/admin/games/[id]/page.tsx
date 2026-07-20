@@ -31,6 +31,7 @@ type Game = {
   flaecheLaengeM: number | null;
   flaecheBreiteM: number | null;
   helferAnzahl: number;
+  schiedsrichterAnzahl: number;
   stromNoetig: boolean;
   varianten: GameVariante[];
   _count: { materialItems: number; ergebnisse: number };
@@ -308,7 +309,7 @@ export default function GameDetailPage() {
       <section className="border border-zinc-800 rounded-lg p-6 space-y-5">
         <h2 className="text-lg font-semibold">Setup &amp; Infrastruktur</h2>
 
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           <Field label="Länge (m)">
             <input
               type="number"
@@ -337,6 +338,15 @@ export default function GameDetailPage() {
               min={0}
               value={game.helferAnzahl}
               onChange={(e) => updateField("helferAnzahl", parseInt(e.target.value) || 0)}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+            />
+          </Field>
+          <Field label="Schiedsrichter benötigt">
+            <input
+              type="number"
+              min={0}
+              value={game.schiedsrichterAnzahl}
+              onChange={(e) => updateField("schiedsrichterAnzahl", parseInt(e.target.value) || 0)}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
             />
           </Field>

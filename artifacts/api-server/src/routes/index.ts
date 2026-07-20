@@ -17,6 +17,7 @@ import qrRouter from "./qr";
 import checkinRouter from "./checkin";
 import partieRouter from "./partie";
 import exportsRouter from "./exports";
+import einsatzplanRouter from "./einsatzplan";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use("/checkin", checkinRouter);
 router.use("/partie", partieRouter);
 router.use("/export", exportsRouter);
 router.use("/team", teamPortalRouter);
+router.use("/einsatzplan", einsatzplanRouter);
 
 export default router;
