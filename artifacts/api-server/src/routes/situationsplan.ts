@@ -125,11 +125,12 @@ router.put("/position/:id", async (req, res) => {
   try {
     const body = req.body;
     // Partial-update semantics: only touch fields the client actually sent, so a
-    // drag (x/y only) never resets a previously set rotation, and vice versa.
-    const data: { x?: number; y?: number; rotation?: number } = {};
-    if (body.x !== undefined) data.x = body.x;
-    if (body.y !== undefined) data.y = body.y;
-    if (body.rotation !== undefined) data.rotation = body.rotation;
+    // drag (x/y only) never resets rotation, and a metadata edit (nummer/
+    // oeffentlich) never resets position or rotation.
+    const data: Record<string, unknown> = {};
+    for (const key of ["x", "y", "rotation", "nummer", "oeffentlich"]) {
+      if (body[key] !== undefined) data[key] = body[key];
+    }
     const position = await prisma.gamePosition.update({
       where: { id },
       data,

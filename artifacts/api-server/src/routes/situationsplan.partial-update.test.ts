@@ -74,6 +74,36 @@ describe("PUT /api/situationsplan/position/:id — partial updates preserve rota
     const call = mocked.gamePosition.update.mock.calls[0][0];
     expect(call.data).toEqual({ rotation: 90 });
   });
+
+  it("a nummer edit persists and does NOT touch position/rotation", async () => {
+    mocked.gamePosition.update.mockResolvedValue({ id: "gp1", nummer: "7" });
+
+    await fetch(`${baseUrl}/api/situationsplan/position/gp1`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nummer: "7" }),
+    });
+
+    const call = mocked.gamePosition.update.mock.calls[0][0];
+    expect(call.data).toEqual({ nummer: "7" });
+    expect(call.data).not.toHaveProperty("x");
+    expect(call.data).not.toHaveProperty("rotation");
+  });
+
+  it("a visibility toggle (oeffentlich) persists and does NOT touch position/rotation", async () => {
+    mocked.gamePosition.update.mockResolvedValue({ id: "gp1", oeffentlich: false });
+
+    await fetch(`${baseUrl}/api/situationsplan/position/gp1`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ oeffentlich: false }),
+    });
+
+    const call = mocked.gamePosition.update.mock.calls[0][0];
+    expect(call.data).toEqual({ oeffentlich: false });
+    expect(call.data).not.toHaveProperty("x");
+    expect(call.data).not.toHaveProperty("rotation");
+  });
 });
 
 describe("PUT /api/situationsplan/custom/:id — partial updates preserve other fields", () => {
