@@ -19,6 +19,7 @@ import partieRouter from "./partie";
 import exportsRouter from "./exports";
 import einsatzplanRouter from "./einsatzplan";
 import storageRouter from "./storage";
+import schiedsrichterRouter from "./schiedsrichter";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use("/export", exportsRouter);
 router.use("/team", teamPortalRouter);
 router.use("/einsatzplan", einsatzplanRouter);
 router.use(storageRouter);
+router.use("/schiedsrichter", schiedsrichterRouter);
 
 export default router;

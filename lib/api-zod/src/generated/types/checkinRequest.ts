@@ -9,4 +9,5 @@
 export interface CheckinRequest {
   qrToken?: string;
   checkinCode?: string;
+  slotId?: string;
 }
