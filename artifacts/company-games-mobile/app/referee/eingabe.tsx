@@ -1,0 +1,170 @@
+import React, { useMemo, useState } from 'react';
+import { StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { Feather } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useColors } from '@/hooks/useColors';
+import { Button, Card, ErrorState, Loading, Stepper, TextField } from '@/components/ui';
+import { useCreateErgebnis, useGetGameBySlug } from '@workspace/api-client-react';
+
+type Feld = { name: string; typ?: string; label?: string; einheit?: string };
+
+const NUMBER_TYPES = ['number', 'zahl', 'int', 'integer', 'zeit', 'time', 'punkte', 'anzahl'];
+const BOOL_TYPES = ['boolean', 'bool', 'ja_nein', 'checkbox'];
+
+function isNumberType(typ?: string) {
+  return !typ || NUMBER_TYPES.includes(typ.toLowerCase());
+}
+function isBoolType(typ?: string) {
+  return !!typ && BOOL_TYPES.includes(typ.toLowerCase());
+}
+
+export default function EingabeScreen() {
+  const c = useColors();
+  const router = useRouter();
+  const { gameId, slug, gameName, teamId, teamName } = useLocalSearchParams<{
+    gameId: string;
+    slug: string;
+    gameName: string;
+    teamId: string;
+    teamName: string;
+  }>();
+
+  const { data: game, isLoading, isError, refetch } = useGetGameBySlug(slug);
+  const create = useCreateErgebnis();
+  const [error, setError] = useState<string | null>(null);
+
+  const felder = useMemo<Feld[]>(() => {
+    const wl = (game?.wertungslogik ?? null) as { eingabefelder?: Feld[] } | null;
+    const fields = wl?.eingabefelder;
+    if (Array.isArray(fields) && fields.length > 0) return fields;
+    // Fallback: a single points field for games without a defined scheme.
+    return [{ name: 'punkte', typ: 'number', label: 'Punkte' }];
+  }, [game]);
+
+  const [values, setValues] = useState<Record<string, unknown>>({});
+
+  const setValue = (name: string, v: unknown) => setValues((prev) => ({ ...prev, [name]: v }));
+
+  const submit = () => {
+    setError(null);
+    // Build rohdaten, defaulting empty number fields to 0.
+    const rohdaten: Record<string, unknown> = {};
+    for (const f of felder) {
+      const raw = values[f.name];
+      if (isBoolType(f.typ)) {
+        rohdaten[f.name] = !!raw;
+      } else if (isNumberType(f.typ)) {
+        rohdaten[f.name] = typeof raw === 'number' ? raw : Number(raw ?? 0) || 0;
+      } else {
+        rohdaten[f.name] = raw ?? '';
+      }
+    }
+
+    create.mutate(
+      { data: { gameId, teamId, rohdaten } },
+      {
+        onSuccess: (res) => {
+          router.replace({
+            pathname: '/referee/bestaetigung',
+            params: {
+              slug,
+              gameId,
+              gameName,
+              teamName,
+              punkte: res.gamePunkte != null ? String(res.gamePunkte) : '',
+            },
+          });
+        },
+        onError: (e) => setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen'),
+      },
+    );
+  };
+
+  if (isLoading) return <Loading label="Lade Game…" />;
+  if (isError || !game) {
+    return <ErrorState message="Game konnte nicht geladen werden" onRetry={() => refetch()} />;
+  }
+
+  return (
+    <KeyboardAwareScrollView
+      bottomOffset={24}
+      keyboardShouldPersistTaps="handled"
+      style={{ backgroundColor: c.background }}
+      contentContainerStyle={{ padding: 20, gap: 18 }}
+    >
+      <View style={[styles.teamCard, { backgroundColor: c.card, borderColor: c.border, borderRadius: c.radius }]}>
+        <Feather name="users" size={20} color={c.primary} />
+        <View>
+          <Text style={[styles.teamName, { color: c.foreground }]}>{teamName}</Text>
+          <Text style={[styles.gameName, { color: c.mutedForeground }]}>{gameName}</Text>
+        </View>
+      </View>
+
+      {felder.map((f) => (
+        <Card key={f.name} style={{ gap: 12 }}>
+          <Text style={[styles.fieldLabel, { color: c.foreground }]}>
+            {f.label ?? f.name}
+            {f.einheit ? ` (${f.einheit})` : ''}
+          </Text>
+
+          {isBoolType(f.typ) ? (
+            <View style={styles.switchRow}>
+              <Text style={{ color: c.mutedForeground, fontSize: 14 }}>
+                {values[f.name] ? 'Ja' : 'Nein'}
+              </Text>
+              <Switch
+                value={!!values[f.name]}
+                onValueChange={(v) => setValue(f.name, v)}
+                trackColor={{ true: c.primary, false: c.accent }}
+                thumbColor="#fff"
+              />
+            </View>
+          ) : isNumberType(f.typ) ? (
+            <Stepper
+              value={typeof values[f.name] === 'number' ? (values[f.name] as number) : 0}
+              onChange={(v) => setValue(f.name, v)}
+            />
+          ) : (
+            <TextField
+              value={(values[f.name] as string) ?? ''}
+              onChangeText={(t) => setValue(f.name, t)}
+              placeholder="Eingabe"
+            />
+          )}
+        </Card>
+      ))}
+
+      {error && (
+        <View style={[styles.errorBox, { borderColor: c.destructive }]}>
+          <Feather name="alert-circle" size={16} color={c.destructive} />
+          <Text style={{ color: c.destructive, fontSize: 14, flex: 1 }}>{error}</Text>
+        </View>
+      )}
+
+      <Button
+        label="Ergebnis speichern"
+        icon="save"
+        onPress={submit}
+        loading={create.isPending}
+        testID="ergebnis-submit"
+      />
+    </KeyboardAwareScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  teamCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderWidth: 1 },
+  teamName: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  gameName: { fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 1 },
+  fieldLabel: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+});

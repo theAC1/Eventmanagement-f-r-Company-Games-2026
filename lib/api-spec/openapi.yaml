@@ -10,6 +10,22 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: gameday
+    description: Gameday status
+  - name: games
+    description: Games
+  - name: teams
+    description: Teams
+  - name: checkin
+    description: Referee check-in
+  - name: ergebnisse
+    description: Score entry
+  - name: rangliste
+    description: Standings
+  - name: team-portal
+    description: Public team portal
 paths:
   /healthz:
     get:
@@ -24,6 +40,160 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in a person
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResult"
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the currently authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+  /gameday:
+    get:
+      operationId: getGameday
+      tags: [gameday]
+      summary: Get the current gameday status
+      responses:
+        "200":
+          description: Gameday status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GamedayStatus"
+  /games:
+    get:
+      operationId: listGames
+      tags: [games]
+      summary: List all games
+      responses:
+        "200":
+          description: Games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Game"
+  /games/by-slug/{slug}:
+    get:
+      operationId: getGameBySlug
+      tags: [games]
+      summary: Get a game by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Game
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+  /teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: List all teams
+      responses:
+        "200":
+          description: Teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+  /checkin:
+    post:
+      operationId: checkinTeam
+      tags: [checkin]
+      summary: Verify a team via QR token or check-in code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckinRequest"
+      responses:
+        "200":
+          description: Verified team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckinResponse"
+  /ergebnisse:
+    post:
+      operationId: createErgebnis
+      tags: [ergebnisse]
+      summary: Submit a score result for a team in a game
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErgebnisCreate"
+      responses:
+        "201":
+          description: Created result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ergebnis"
+  /rangliste:
+    get:
+      operationId: getRangliste
+      tags: [rangliste]
+      summary: Get the current standings
+      responses:
+        "200":
+          description: Standings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RanglisteResponse"
+  /team/{token}:
+    get:
+      operationId: getTeamPortal
+      tags: [team-portal]
+      summary: Get public team info by QR token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team portal info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamPortal"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +203,178 @@ components:
           type: string
       required:
         - status
-
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: [string, "null"]
+        rolle:
+          type: string
+      required: [id, name, rolle]
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required: [username, password]
+    LoginResult:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [user, token]
+    MeResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+      required: [user]
+    GamedayStatus:
+      type: object
+      properties:
+        modus:
+          type: string
+        active:
+          type: boolean
+        startedAt:
+          type: [string, "null"]
+      required: [modus]
+    Game:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        modus:
+          type: [string, "null"]
+        status:
+          type: [string, "null"]
+        teamsProSlot:
+          type: [number, "null"]
+        wertungslogik:
+          type: [object, "null"]
+          additionalProperties: true
+      required: [id, name, slug]
+      additionalProperties: true
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        nummer:
+          type: number
+        farbe:
+          type: [string, "null"]
+        logoUrl:
+          type: [string, "null"]
+      required: [id, name, nummer]
+      additionalProperties: true
+    CheckinRequest:
+      type: object
+      properties:
+        qrToken:
+          type: string
+        checkinCode:
+          type: string
+    CheckinResponse:
+      type: object
+      properties:
+        verified:
+          type: boolean
+        teamId:
+          type: string
+        teamName:
+          type: string
+        teamNummer:
+          type: number
+        teamFarbe:
+          type: [string, "null"]
+        teamLogo:
+          type: [string, "null"]
+      required: [verified]
+    ErgebnisCreate:
+      type: object
+      properties:
+        gameId:
+          type: string
+        teamId:
+          type: string
+        zeitplanSlotId:
+          type: [string, "null"]
+        rohdaten:
+          type: object
+          additionalProperties: true
+      required: [gameId, teamId, rohdaten]
+    Ergebnis:
+      type: object
+      properties:
+        id:
+          type: string
+        gameId:
+          type: string
+        teamId:
+          type: string
+        gamePunkte:
+          type: [number, "null"]
+        status:
+          type: string
+      required: [id, gameId, teamId]
+      additionalProperties: true
+    RanglisteEntry:
+      type: object
+      properties:
+        teamId:
+          type: string
+        teamName:
+          type: string
+        rangPunkteSumme:
+          type: number
+        gamesGespielt:
+          type: number
+        gamesTotal:
+          type: number
+        gesamtRang:
+          type: number
+      required: [teamId, teamName, rangPunkteSumme, gamesGespielt, gamesTotal, gesamtRang]
+      additionalProperties: true
+    RanglisteResponse:
+      type: object
+      properties:
+        rangliste:
+          type: array
+          items:
+            $ref: "#/components/schemas/RanglisteEntry"
+        totalGames:
+          type: number
+        totalTeams:
+          type: number
+        ergebnisseEingetragen:
+          type: number
+      required: [rangliste, totalGames, totalTeams, ergebnisseEingetragen]
+    TeamPortal:
+      type: object
+      properties:
+        teamId:
+          type: string
+        teamName:
+          type: string
+        teamNummer:
+          type: number
+        teamFarbe:
+          type: [string, "null"]
+        teamLogo:
+          type: [string, "null"]
+      required: [teamId, teamName, teamNummer]

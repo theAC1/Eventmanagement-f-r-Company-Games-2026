@@ -1,0 +1,23 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "Company Games 2026 Mobile"
+version = "1.0.0"
+id = "artifacts/company-games-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/mobile/" ]
+localPort = 22211
+
+[services.development]
+run = "pnpm --filter @workspace/company-games-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/company-games-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/company-games-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22211"
+BASE_PATH = "/mobile/"
