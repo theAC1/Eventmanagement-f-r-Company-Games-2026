@@ -225,6 +225,8 @@ export default function SituationsplanPage() {
   const [creating, setCreating] = useState<CreateForm | null>(null);
   const [bildUrl, setBildUrl] = useState("");
   const [bildSaving, setBildSaving] = useState(false);
+  const [bildUploading, setBildUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(async () => {
@@ -403,6 +405,57 @@ export default function SituationsplanPage() {
     }
   };
 
+  const uploadBild = async (file: File) => {
+    if (!plan) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Bitte eine Bilddatei auswählen.");
+      return;
+    }
+    setBildUploading(true);
+    try {
+      // 1. Presigned Upload-URL anfordern
+      const urlRes = await fetch("/api/storage/uploads/request-url", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (!urlRes.ok) {
+        const err = await urlRes.json().catch(() => ({}));
+        alert(err.error ?? "Upload-URL konnte nicht erstellt werden");
+        return;
+      }
+      const { uploadURL } = await urlRes.json();
+
+      // 2. Datei direkt zu Object Storage hochladen
+      const putRes = await fetch(uploadURL, {
+        method: "PUT", headers: { "Content-Type": file.type }, body: file,
+      });
+      if (!putRes.ok) {
+        alert("Datei-Upload fehlgeschlagen");
+        return;
+      }
+
+      // 3. Objekt öffentlich schalten + normalisierten Pfad holen
+      const aclRes = await fetch("/api/storage/objects/acl", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objectURL: uploadURL }),
+      });
+      if (!aclRes.ok) {
+        const err = await aclRes.json().catch(() => ({}));
+        alert(err.error ?? "Freigabe fehlgeschlagen");
+        return;
+      }
+      const { objectPath } = await aclRes.json();
+
+      // 4. Ergebnis-URL als Lageplan-Bild speichern
+      const servingUrl = `/api/storage${objectPath}`;
+      setBildUrl(servingUrl);
+      await saveBildUrl(servingUrl);
+    } finally {
+      setBildUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   // ─── Export ───
   const exportImage = async () => {
     if (!ref.current) return;
@@ -483,6 +536,15 @@ export default function SituationsplanPage() {
           {plan?.hintergrundbildUrl
             ? <span className="text-[10px] text-emerald-400">Aktiv – Teams sehen dieses Bild</span>
             : <span className="text-[10px] text-zinc-500">Kein Bild gesetzt – Teams sehen Platzhalter</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadBild(f); }} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={bildUploading || bildSaving}
+            className="px-3 py-1 border border-emerald-700 text-emerald-300 rounded hover:bg-emerald-950 transition disabled:opacity-50">
+            {bildUploading ? "Lädt hoch…" : "Bild hochladen"}
+          </button>
+          <span className="text-[10px] text-zinc-600">oder URL einfügen:</span>
         </div>
         <div className="flex items-center gap-2">
           <input type="url" value={bildUrl} placeholder="https://… Bild-URL des Lageplans einfügen"

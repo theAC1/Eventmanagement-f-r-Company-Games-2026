@@ -100,10 +100,14 @@ router.put("/:id/hintergrund", async (req, res) => {
     let url: string | null = null;
     if (typeof raw === "string" && raw.trim() !== "") {
       url = raw.trim();
-      try {
-        new URL(url);
-      } catch {
-        return res.status(400).json({ error: "Ungültige URL" });
+      // Accept absolute URLs (pasted) as well as internal storage paths
+      // (e.g. /api/storage/objects/…) produced by the direct upload flow.
+      if (!url.startsWith("/")) {
+        try {
+          new URL(url);
+        } catch {
+          return res.status(400).json({ error: "Ungültige URL" });
+        }
       }
     }
     const plan = await prisma.situationsplan.update({
