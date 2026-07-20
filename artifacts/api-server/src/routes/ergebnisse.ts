@@ -445,8 +445,10 @@ router.put("/:id/verify", async (req, res) => {
       select: { id: true, status: true, rohdaten: true, gamePunkte: true, zeitplanSlotId: true },
     });
     if (!existing) return res.status(404).json({ error: "Ergebnis nicht gefunden" });
-    if (existing.status !== "EINGETRAGEN") {
-      return res.status(400).json({ error: "Nur Ergebnisse mit Status EINGETRAGEN können verifiziert werden" });
+    // Sowohl neu eingetragene als auch (innerhalb der Frist) korrigierte
+    // Ergebnisse können vom Schiedsrichter bestätigt werden.
+    if (existing.status !== "EINGETRAGEN" && existing.status !== "KORRIGIERT") {
+      return res.status(400).json({ error: "Nur eingetragene oder korrigierte Ergebnisse können verifiziert werden" });
     }
 
     const ergebnis = await prisma.$transaction(async (tx) => {
@@ -461,7 +463,7 @@ router.put("/:id/verify", async (req, res) => {
           nachher: existing.rohdaten as Prisma.InputJsonValue,
           gamePunkteVorher: existing.gamePunkte,
           gamePunkteNachher: existing.gamePunkte,
-          statusVorher: "EINGETRAGEN",
+          statusVorher: existing.status,
           statusNachher: "VERIFIZIERT",
           geaendertVonId: user.id,
         },
