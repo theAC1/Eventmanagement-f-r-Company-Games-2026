@@ -10,6 +10,7 @@ import { Button, Card, ErrorState, Loading, Stepper, TextField } from '@/compone
 import { useCheckinTeam, useCreateErgebnis, useGetGameBySlug } from '@workspace/api-client-react';
 import { parseQrToken } from '@/utils/parseQrToken';
 import { enqueueErgebnis, isNetworkError, makeCommitId } from '@/lib/offline-queue';
+import { resolveRescan } from '@/utils/rescan';
 
 type Feld = { name: string; typ?: string; label?: string; einheit?: string };
 
@@ -74,15 +75,16 @@ export default function EingabeScreen() {
       { data: { qrToken: parseQrToken(value) } },
       {
         onSuccess: (res) => {
-          if (!res.verified || !res.teamId) {
-            setScanError('Team nicht gefunden');
+          const outcome = resolveRescan(res);
+          if (!outcome.ok) {
+            setScanError(outcome.error);
             return;
           }
           if (Platform.OS !== 'web') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
-          setTeamId(res.teamId);
-          setTeamName(res.teamName ?? 'Team');
+          setTeamId(outcome.teamId);
+          setTeamName(outcome.teamName);
           // New team → reset all form inputs.
           setValues({});
           setError(null);
