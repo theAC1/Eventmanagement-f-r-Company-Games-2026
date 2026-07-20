@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "../lib/prisma";
 import { requireRole } from "../middlewares/auth";
+import { validatePassword } from "../lib/password";
 import { UserCreateSchema, UserUpdateSchema, zodValidationError } from "../lib/schemas";
 
 const router = Router();
@@ -92,9 +93,9 @@ router.post("/:id/reset-activation", async (req, res) => {
   return res.json({ ...updated, aktivierungsCode });
 });
 
-// PUT /api/users/:id
+// PUT /api/users/:id — nur OWNER
 router.put("/:id", async (req, res) => {
-  const user = requireRole(req, res, "ADMIN");
+  const user = requireRole(req, res, "OWNER");
   if (!user) return;
   const { id } = req.params;
   const parsed = UserUpdateSchema.safeParse(req.body);
@@ -104,9 +105,26 @@ router.put("/:id", async (req, res) => {
   const existing = await prisma.person.findUnique({ where: { id } });
   if (!existing) return res.status(404).json({ error: "Benutzer nicht gefunden." });
 
-  if (rolle !== undefined && rolle !== existing.rolle && user.rolle !== "OWNER") {
-    return res.status(403).json({ error: "Nur der Owner kann Rollen ändern." });
+  // OWNER-Account-Integrität schützen: nicht deaktivieren, nicht wegrollen
+  if (existing.rolle === "OWNER") {
+    if (istAktiv === false) {
+      return res.status(400).json({ error: "Der OWNER-Account kann nicht deaktiviert werden." });
+    }
+    if (rolle !== undefined && rolle !== "OWNER") {
+      return res.status(400).json({ error: "Die OWNER-Rolle kann nicht entzogen werden." });
+    }
   }
+
+  if (password) {
+    const check = validatePassword(password);
+    if (!check.ok) {
+      return res.status(400).json({
+        error: `Passwort erfüllt die Anforderungen nicht: ${check.fehler.join(", ")}`,
+        regeln: check.regeln,
+      });
+    }
+  }
+
   if (rolle === "OWNER" && existing.rolle !== "OWNER") {
     const ownerExists = await prisma.person.findFirst({ where: { rolle: "OWNER" } });
     if (ownerExists) {
@@ -131,9 +149,9 @@ router.put("/:id", async (req, res) => {
   return res.json(updatedUser);
 });
 
-// DELETE /api/users/:id
+// DELETE /api/users/:id — nur OWNER
 router.delete("/:id", async (req, res) => {
-  const user = requireRole(req, res, "ADMIN");
+  const user = requireRole(req, res, "OWNER");
   if (!user) return;
   const { id } = req.params;
   if (user.id === id) return res.status(400).json({ error: "Du kannst dich nicht selbst löschen." });
