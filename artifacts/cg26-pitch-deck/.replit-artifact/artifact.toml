@@ -1,0 +1,27 @@
+kind = "slides"
+previewPath = "/cg26-pitch-deck/"
+title = "CG26 Pitch Deck"
+version = "1.0.0"
+id = "artifacts/cg26-pitch-deck"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/cg26-pitch-deck/" ]
+localPort = 20909
+
+[services.development]
+run = "pnpm --filter @workspace/cg26-pitch-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cg26-pitch-deck", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/cg26-pitch-deck/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20909"
+BASE_PATH = "/cg26-pitch-deck/"
