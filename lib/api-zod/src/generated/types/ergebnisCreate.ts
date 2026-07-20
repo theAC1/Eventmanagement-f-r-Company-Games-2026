@@ -12,6 +12,7 @@ export interface ErgebnisCreate {
   teamId: string;
   /** @nullable */
   zeitplanSlotId?: string | null;
-  commitId?: string;
   rohdaten: ErgebnisCreateRohdaten;
+  /** Client-generated idempotency key: retries with the same commitId are not re-applied. */
+  commitId?: string;
 }

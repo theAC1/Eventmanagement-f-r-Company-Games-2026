@@ -157,8 +157,8 @@ export const CreateErgebnisBody = zod.object({
   "gameId": zod.string(),
   "teamId": zod.string(),
   "zeitplanSlotId": zod.string().nullish(),
-  "commitId": zod.string().optional(),
-  "rohdaten": zod.record(zod.string(), zod.unknown())
+  "rohdaten": zod.record(zod.string(), zod.unknown()),
+  "commitId": zod.string().optional().describe('Client-generated idempotency key: retries with the same commitId are not re-applied.')
 })
 
 export const CreateErgebnisResponse = zod.object({
@@ -166,7 +166,8 @@ export const CreateErgebnisResponse = zod.object({
   "gameId": zod.string(),
   "teamId": zod.string(),
   "gamePunkte": zod.number().nullish(),
-  "status": zod.string().optional()
+  "status": zod.string().optional(),
+  "eingetragenUm": zod.string().nullish()
 })
 
 

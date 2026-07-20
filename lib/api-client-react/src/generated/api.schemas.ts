@@ -125,8 +125,9 @@ export interface ErgebnisCreate {
   teamId: string;
   /** @nullable */
   zeitplanSlotId?: string | null;
-  commitId?: string;
   rohdaten: ErgebnisCreateRohdaten;
+  /** Client-generated idempotency key: retries with the same commitId are not re-applied. */
+  commitId?: string;
 }
 
 export interface Ergebnis {
@@ -136,6 +137,8 @@ export interface Ergebnis {
   /** @nullable */
   gamePunkte?: number | null;
   status?: string;
+  /** @nullable */
+  eingetragenUm?: string | null;
   [key: string]: unknown;
  }
 
