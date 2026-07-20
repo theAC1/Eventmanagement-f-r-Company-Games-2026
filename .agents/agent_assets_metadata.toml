@@ -1,0 +1,14 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "knhAihdI4Ln_47iWJpkZZ"
+uri = "file://.local/outputs/CG26-Pitch-Deck.pdf"
+type = "pdf"
+title = "CG26 Pitch Deck (PDF)"
+
+[[outputs]]
+id = "12TQ5xzL9NoXUNInb9y4T"
+uri = "file://.local/outputs/CG26-Pitch-Deck.pptx"
+type = "slides"
+title = "CG26 Pitch Deck (PPTX)"
