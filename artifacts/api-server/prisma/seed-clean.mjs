@@ -79,6 +79,12 @@ async function main() {
       where: { gameId: { in: gameIds } },
     });
 
+    // ZeitplanSlotTeam.team has no onDelete rule (restrict), so slot
+    // assignments for demo teams must be removed before the teams.
+    await tx.zeitplanSlotTeam.deleteMany({
+      where: { teamId: { in: teamIds } },
+    });
+
     // Person is restrict-referenced as createdBy/updatedBy on Game, Team and
     // MaterialItem. Clear any such pointers that reference a demo person so
     // the person rows can be removed (SetNull semantics; only demo pointers
@@ -110,7 +116,7 @@ async function main() {
       });
     }
 
-    // Parents. Remaining dependents (GameVariante, ZeitplanSlotTeam) cascade;
+    // Parents. Remaining dependents (GameVariante) cascade;
     // SetNull relations (ZeitplanSlot.gameId, MaterialItem.gameId,
     // GamedayConfig.startedById, …) are cleared automatically.
     const games = await tx.game.deleteMany({
