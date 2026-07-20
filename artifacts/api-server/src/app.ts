@@ -7,6 +7,10 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Behind the Replit proxy: trust the first hop so req.ip reflects the
+// real client IP (required for correct per-IP rate limiting).
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,
