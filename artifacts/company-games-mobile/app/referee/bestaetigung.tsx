@@ -10,30 +10,48 @@ import { Button } from '@/components/ui';
 export default function BestaetigungScreen() {
   const c = useColors();
   const router = useRouter();
-  const { gameId, slug, gameName, teamName, punkte } = useLocalSearchParams<{
+  const { gameId, slug, gameName, teamName, punkte, pending } = useLocalSearchParams<{
     gameId: string;
     slug: string;
     gameName: string;
     teamName: string;
     punkte: string;
+    pending: string;
   }>();
+  const isPending = pending === '1';
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.notificationAsync(
+        isPending
+          ? Haptics.NotificationFeedbackType.Warning
+          : Haptics.NotificationFeedbackType.Success,
+      );
     }
-  }, []);
+  }, [isPending]);
 
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
-      <View style={[styles.check, { backgroundColor: c.primary }]}>
-        <Feather name="check" size={48} color={c.primaryForeground} />
+      <View style={[styles.check, { backgroundColor: isPending ? c.accent : c.primary }]}>
+        <Feather
+          name={isPending ? 'clock' : 'check'}
+          size={48}
+          color={isPending ? c.foreground : c.primaryForeground}
+        />
       </View>
 
-      <Text style={[styles.title, { color: c.foreground }]}>Ergebnis gespeichert</Text>
+      <Text style={[styles.title, { color: c.foreground }]} testID="bestaetigung-title">
+        {isPending ? 'Offline gespeichert' : 'Ergebnis gespeichert'}
+      </Text>
       <Text style={[styles.sub, { color: c.mutedForeground }]}>
         {teamName} · {gameName}
       </Text>
+      {isPending && (
+        <Text style={[styles.sub, { color: c.mutedForeground, maxWidth: 300 }]}>
+          Keine Verbindung — das Ergebnis wird automatisch übertragen, sobald wieder Empfang
+          besteht. Den Status siehst du in der Spielübersicht.
+        </Text>
+      )}
 
       {!!punkte && (
         <View style={[styles.pointsCard, { backgroundColor: c.card, borderColor: c.border, borderRadius: c.radius }]}>
