@@ -2,9 +2,29 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { requireRole, getAuthUser } from "../middlewares/auth";
 import { updateGameRaenge } from "../lib/game-punkte";
+import { seedDemo, hasHotGameday } from "../lib/seed-demo";
 import type { Wertungslogik } from "../lib/wertungslogik-types";
 
 const router = Router();
+
+// POST /api/gameday/seed-demo — ADMIN-only: legt Demo-/Generalproben-Daten an
+router.post("/seed-demo", async (req, res) => {
+  const user = requireRole(req, res, "ADMIN");
+  if (!user) return;
+  try {
+    if (await hasHotGameday(prisma)) {
+      return res.status(400).json({
+        error:
+          "Ein HOT-Gameday ist aktiv. Demo-Daten können nicht angelegt werden, solange der produktive Gameday läuft.",
+      });
+    }
+    const result = await seedDemo(prisma, user.id);
+    return res.status(201).json(result);
+  } catch (error) {
+    console.error("POST /api/gameday/seed-demo error:", error);
+    return res.status(500).json({ error: "Fehler beim Anlegen der Demo-Daten" });
+  }
+});
 
 // GET /api/gameday
 router.get("/", async (req, res) => {
