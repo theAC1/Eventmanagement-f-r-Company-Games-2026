@@ -50,6 +50,28 @@ const MODUS_TW: Record<string, string> = {
   DUELL: "bg-blue-900/80 border-blue-600 text-blue-200",
 };
 
+// ─── Touch-Drag Fix ───
+// GridStack (dd-touch.js) ruft bei pointerdown bedingungslos
+// e.target.releasePointerCapture(e.pointerId) auf. Ohne aktive Capture wirft
+// das einen DOMException ("No active pointer with the given id is found"),
+// der im Dev-Overlay als Fehler aufblitzt. Wir machen den Aufruf idempotent:
+// nur freigeben, wenn die Capture tatsächlich gehalten wird.
+let pointerCapturePatched = false;
+function patchReleasePointerCapture() {
+  if (pointerCapturePatched || typeof Element === "undefined") return;
+  pointerCapturePatched = true;
+  const original = Element.prototype.releasePointerCapture;
+  Element.prototype.releasePointerCapture = function (pointerId: number) {
+    try {
+      if (!this.hasPointerCapture || this.hasPointerCapture(pointerId)) {
+        original.call(this, pointerId);
+      }
+    } catch {
+      // Kein aktiver Pointer mit dieser id → ignorieren (Release ist ohnehin no-op)
+    }
+  };
+}
+
 const DEFAULT_MPP = 2.8;
 const IMG_RATIO = 2078 / 1342;
 
@@ -122,6 +144,7 @@ function MapGrid({ games, customs, mpp, selected, onSelect, onSave }: MapGridPro
 
   useEffect(() => {
     if (!elRef.current) return;
+    patchReleasePointerCapture();
     const grid = GridStack.init(
       {
         column: COLS,
