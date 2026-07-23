@@ -27,9 +27,11 @@ export async function PUT(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Ergebnis nicht gefunden" }, { status: 404 });
     }
 
-    if (existing.status !== "EINGETRAGEN") {
+    // Sowohl neu eingetragene als auch (innerhalb der Frist) korrigierte
+    // Ergebnisse können vom Schiedsrichter bestätigt werden.
+    if (existing.status !== "EINGETRAGEN" && existing.status !== "KORRIGIERT") {
       return NextResponse.json(
-        { error: "Nur Ergebnisse mit Status EINGETRAGEN können verifiziert werden" },
+        { error: "Nur eingetragene oder korrigierte Ergebnisse können verifiziert werden" },
         { status: 400 },
       );
     }
@@ -56,7 +58,7 @@ export async function PUT(_request: NextRequest, { params }: RouteParams) {
           nachher: existing.rohdaten as Prisma.InputJsonValue,
           gamePunkteVorher: existing.gamePunkte,
           gamePunkteNachher: existing.gamePunkte,
-          statusVorher: "EINGETRAGEN",
+          statusVorher: existing.status,
           statusNachher: "VERIFIZIERT",
           geaendertVonId: userId,
         },

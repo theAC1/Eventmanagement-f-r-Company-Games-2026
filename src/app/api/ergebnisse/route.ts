@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
+import { hasMinRole } from "@/lib/roles";
 import { ErgebnisCreateSchema, zodValidationError } from "@/lib/schemas";
 import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
+import { istGesperrt } from "@/lib/ergebnis-sperre";
 import { Prisma } from "@prisma/client";
 import type { Wertungslogik } from "@/lib/wertungslogik-types";
+
+// Sperrfrist abgelaufen: Schiedsrichter darf nicht mehr selbst korrigieren
+class LockedError extends Error {
+  lockedAt: Date | null;
+  constructor(lockedAt: Date | null) {
+    super("Korrekturfrist abgelaufen");
+    this.name = "LockedError";
+    this.lockedAt = lockedAt;
+  }
+}
 
 // GET /api/ergebnisse
 export async function GET(request: NextRequest) {
@@ -117,14 +129,30 @@ export async function POST(request: NextRequest) {
     );
 
     const userId = session?.user?.id ?? null;
+    const istOrga = hasMinRole(session?.user?.rolle ?? "", "ORGA");
+    const now = new Date();
 
-    const existing = await prisma.ergebnis.findUnique({
-      where: { gameId_teamId: { gameId, teamId } },
-      select: { id: true, rohdaten: true, gamePunkte: true, status: true },
-    });
-    const isUpdate = !!existing;
+    // Idempotenz: gleicher commitId für dasselbe Game/Team bedeutet, dass die
+    // Übermittlung bereits verarbeitet wurde (z.B. Retry nach Verbindungsabbruch).
+    if (commitId) {
+      const replay = await prisma.ergebnis.findUnique({
+        where: { gameId_teamId: { gameId, teamId } },
+      });
+      if (replay && replay.commitId === commitId) {
+        return NextResponse.json(replay, { status: 200 });
+      }
+    }
 
     const ergebnis = await prisma.$transaction(async (tx) => {
+      const existing = await tx.ergebnis.findUnique({
+        where: { gameId_teamId: { gameId, teamId } },
+      });
+
+      // Sperrfrist: Schiedsrichter dürfen nur innerhalb des Korrekturfensters ändern
+      if (existing && !istOrga && istGesperrt(existing.eingetragenUm)) {
+        throw new LockedError(existing.eingetragenUm);
+      }
+
       const result = await tx.ergebnis.upsert({
         where: { gameId_teamId: { gameId, teamId } },
         create: {
@@ -135,7 +163,7 @@ export async function POST(request: NextRequest) {
           gamePunkte,
           status: "EINGETRAGEN",
           eingetragenVonId: userId,
-          eingetragenUm: new Date(),
+          eingetragenUm: now,
           istTest,
           commitId: commitId || null,
         },
@@ -144,7 +172,8 @@ export async function POST(request: NextRequest) {
           gamePunkte,
           status: "KORRIGIERT",
           eingetragenVonId: userId,
-          eingetragenUm: new Date(),
+          // Sperrfrist-Timer läuft ab dem ursprünglichen Eintrag weiter
+          eingetragenUm: existing?.eingetragenUm ?? now,
           istTest,
           commitId: commitId || null,
         },
@@ -153,11 +182,11 @@ export async function POST(request: NextRequest) {
       await tx.ergebnisHistory.create({
         data: {
           ergebnisId: result.id,
-          vorher: isUpdate ? (existing.rohdaten as Prisma.InputJsonValue) : Prisma.JsonNull,
+          vorher: existing ? (existing.rohdaten as Prisma.InputJsonValue) : Prisma.JsonNull,
           nachher: rohdaten,
-          gamePunkteVorher: isUpdate ? existing.gamePunkte : null,
+          gamePunkteVorher: existing ? existing.gamePunkte : null,
           gamePunkteNachher: gamePunkte,
-          statusVorher: isUpdate ? existing.status : null,
+          statusVorher: existing ? existing.status : null,
           statusNachher: result.status,
           geaendertVonId: userId,
         },
@@ -170,6 +199,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(ergebnis, { status: 201 });
   } catch (error) {
+    if (error instanceof LockedError) {
+      return NextResponse.json(
+        {
+          code: "LOCKED",
+          lockedAt: error.lockedAt,
+          error: "Die Korrekturfrist von 10 Minuten ist abgelaufen — nur ein Admin kann das Ergebnis noch korrigieren.",
+        },
+        { status: 403 },
+      );
+    }
     console.error("POST /api/ergebnisse error:", error);
     return NextResponse.json({ error: "Fehler beim Speichern" }, { status: 500 });
   }

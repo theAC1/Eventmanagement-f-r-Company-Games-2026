@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { enqueueErgebnis } from "@/lib/offline-queue";
 
 // ─── Types ───
 
@@ -163,6 +164,7 @@ export default function BestaetigungPage() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [queued, setQueued] = useState(false);
 
   // Load data from sessionStorage
   useEffect(() => {
@@ -186,26 +188,60 @@ export default function BestaetigungPage() {
     setSaving(true);
     setError(null);
 
+    const commitId = crypto.randomUUID();
+
+    // Bei Signalverlust: alle Einträge in die Offline-Warteschlange legen.
+    // Dank commitId (Idempotenz) kann ein späterer Retry keine Duplikate erzeugen.
+    const enqueueAll = () => {
+      for (const entry of payload.entries) {
+        enqueueErgebnis({
+          commitId,
+          gameId: payload.gameId,
+          teamId: entry.teamId,
+          zeitplanSlotId: payload.slotId ?? null,
+          gameName: payload.gameName,
+          teamName: entry.teamName,
+          rohdaten: entry.rohdaten,
+        });
+      }
+      sessionStorage.removeItem("bestaetigung_data");
+      setQueued(true);
+    };
+
     try {
       const ids: string[] = [];
-      const commitId = crypto.randomUUID();
 
       for (const entry of payload.entries) {
-        const res = await fetch("/api/ergebnisse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            gameId: payload.gameId,
-            teamId: entry.teamId,
-            zeitplanSlotId: payload.slotId ?? null,
-            rohdaten: entry.rohdaten,
-            commitId,
-          }),
-        });
+        let res: Response;
+        try {
+          res = await fetch("/api/ergebnisse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              gameId: payload.gameId,
+              teamId: entry.teamId,
+              zeitplanSlotId: payload.slotId ?? null,
+              rohdaten: entry.rohdaten,
+              commitId,
+            }),
+          });
+        } catch {
+          // Netzwerkfehler (offline) — Warteschlange übernimmt
+          enqueueAll();
+          return;
+        }
 
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error ?? `Fehler bei ${entry.teamName}`);
+          const data = await res.json().catch(() => null);
+          if (res.status >= 500 || res.status === 408 || res.status === 429) {
+            // Serverseitig temporär — ebenfalls in die Warteschlange
+            enqueueAll();
+            return;
+          }
+          if (data?.code === "LOCKED") {
+            throw new Error(data.error);
+          }
+          throw new Error(data?.error ?? `Fehler bei ${entry.teamName}`);
         }
 
         const result = await res.json();
@@ -266,6 +302,34 @@ export default function BestaetigungPage() {
     return (
       <div className="flex items-center justify-center h-64 text-zinc-500">
         Lade...
+      </div>
+    );
+  }
+
+  // ─── Offline-Warteschlange ───
+
+  if (queued) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
+        <div className="w-20 h-20 rounded-full bg-amber-900/40 border-2 border-amber-600 flex items-center justify-center">
+          <svg className="w-10 h-10 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
+          </svg>
+        </div>
+        <div className="text-center max-w-sm">
+          <h2 className="text-2xl font-bold">Ergebnis zwischengespeichert</h2>
+          <p className="text-sm text-zinc-400 mt-2">
+            Keine Verbindung zum Server. Das Ergebnis für {payload?.gameName} wird
+            automatisch übermittelt, sobald wieder Empfang besteht — du kannst
+            normal weiterarbeiten.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/referee")}
+          className="px-8 py-3 bg-white text-black font-semibold rounded-lg hover:bg-zinc-200 transition"
+        >
+          Zurück zur Übersicht
+        </button>
       </div>
     );
   }

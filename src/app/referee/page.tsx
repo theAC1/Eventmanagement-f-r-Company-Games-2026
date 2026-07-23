@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { initOfflineQueue, subscribeQueue } from "@/lib/offline-queue";
 
 // ─── Types ───
 
@@ -68,6 +69,13 @@ export default function RefereePage() {
   const [gamedayModus, setGamedayModus] = useState<string | null>(null);
   const [zeitplanName, setZeitplanName] = useState<string | null>(null);
   const [slots, setSlots] = useState<MeinSlot[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Offline-Warteschlange: liegengebliebene Ergebnisse weiter übermitteln
+  useEffect(() => {
+    initOfflineQueue();
+    return subscribeQueue((queue) => setPendingCount(queue.length));
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -224,6 +232,13 @@ export default function RefereePage() {
   return (
     <div className="space-y-6 pb-12">
       {gamedayBanner}
+      {pendingCount > 0 && (
+        <div className="rounded-lg border border-amber-700 bg-amber-950/30 px-4 py-2 text-sm text-amber-300">
+          {pendingCount === 1
+            ? "1 Ergebnis wartet auf Übermittlung — wird automatisch gesendet, sobald Verbindung besteht."
+            : `${pendingCount} Ergebnisse warten auf Übermittlung — werden automatisch gesendet, sobald Verbindung besteht.`}
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Mein Tagesplan</h1>
         <p className="text-sm text-zinc-500 mt-1">

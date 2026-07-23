@@ -7,6 +7,17 @@ import { Prisma } from "@prisma/client";
 import type { Wertungslogik } from "@/lib/wertungslogik-types";
 import { z } from "zod/v4";
 
+// Bereits ein Ergebnis für eines der Teams vorhanden → Transaktion abbrechen,
+// nichts überschreiben (zwei Schiedsrichter, doppelte Eingabe, Netzwerk-Retry)
+class DuellConflictError extends Error {
+  existing: unknown[];
+  constructor(existing: unknown[]) {
+    super("Duell-Ergebnis existiert bereits");
+    this.name = "DuellConflictError";
+    this.existing = existing;
+  }
+}
+
 const DuellErgebnisSchema = z.object({
   gameId: z.string().min(1, "gameId ist erforderlich"),
   teamAId: z.string().min(1, "teamAId ist erforderlich"),
@@ -62,30 +73,29 @@ export async function POST(request: NextRequest) {
     const punksteA = berechneGamePunkteAusRohdaten(rohdatenA, wertungslogik);
     const punkteB = berechneGamePunkteAusRohdaten(rohdatenB, wertungslogik);
     const userId = session?.user?.id ?? null;
+    const now = new Date();
+    const slotId = zeitplanSlotId ?? null;
+    const commit = commitId ?? null;
 
-    const existingA = await prisma.ergebnis.findUnique({
-      where: { gameId_teamId: { gameId, teamId: teamAId } },
-      select: { id: true, rohdaten: true, gamePunkte: true, status: true },
-    });
-    const existingB = await prisma.ergebnis.findUnique({
-      where: { gameId_teamId: { gameId, teamId: teamBId } },
-      select: { id: true, rohdaten: true, gamePunkte: true, status: true },
-    });
+    // Idempotenz: Retry mit demselben commitId gibt die bestehenden Ergebnisse zurück
+    if (commit) {
+      const [replayA, replayB] = await Promise.all([
+        prisma.ergebnis.findUnique({ where: { gameId_teamId: { gameId, teamId: teamAId } } }),
+        prisma.ergebnis.findUnique({ where: { gameId_teamId: { gameId, teamId: teamBId } } }),
+      ]);
+      if (replayA?.commitId === commit && replayB?.commitId === commit) {
+        return NextResponse.json({ ergebnisA: replayA, ergebnisB: replayB }, { status: 200 });
+      }
+    }
 
     const [ergebnisA, ergebnisB] = await prisma.$transaction(async (tx) => {
-      const now = new Date();
-      const slotId = zeitplanSlotId ?? null;
-      const commit = commitId ?? null;
-
-      const upsertTeam = async (
+      const createTeam = async (
         teamId: string,
         rohdaten: Record<string, unknown>,
         gamePunkte: number,
-        existing: typeof existingA,
       ) => {
-        const result = await tx.ergebnis.upsert({
-          where: { gameId_teamId: { gameId, teamId } },
-          create: {
+        const result = await tx.ergebnis.create({
+          data: {
             gameId,
             teamId,
             zeitplanSlotId: slotId,
@@ -97,25 +107,16 @@ export async function POST(request: NextRequest) {
             istTest,
             commitId: commit,
           },
-          update: {
-            rohdaten: rohdaten as Prisma.InputJsonValue,
-            gamePunkte,
-            status: "KORRIGIERT",
-            eingetragenVonId: userId,
-            eingetragenUm: now,
-            istTest,
-            commitId: commit,
-          },
         });
 
         await tx.ergebnisHistory.create({
           data: {
             ergebnisId: result.id,
-            vorher: existing ? (existing.rohdaten as Prisma.InputJsonValue) : Prisma.JsonNull,
+            vorher: Prisma.JsonNull,
             nachher: rohdaten as Prisma.InputJsonValue,
-            gamePunkteVorher: existing ? existing.gamePunkte : null,
+            gamePunkteVorher: null,
             gamePunkteNachher: gamePunkte,
-            statusVorher: existing ? existing.status : null,
+            statusVorher: null,
             statusNachher: result.status,
             geaendertVonId: userId,
           },
@@ -124,8 +125,31 @@ export async function POST(request: NextRequest) {
         return result;
       };
 
-      const a = await upsertTeam(teamAId, rohdatenA, punksteA, existingA);
-      const b = await upsertTeam(teamBId, rohdatenB, punkteB, existingB);
+      // Konfliktprüfung: existiert bereits ein Ergebnis für eines der Teams,
+      // wird NICHT überschrieben, sondern die Transaktion mit Konflikt abgebrochen.
+      const [existingA, existingB] = await Promise.all([
+        tx.ergebnis.findUnique({
+          where: { gameId_teamId: { gameId, teamId: teamAId } },
+          include: {
+            eingetragenVon: { select: { id: true, name: true } },
+            team: { select: { id: true, name: true, nummer: true } },
+          },
+        }),
+        tx.ergebnis.findUnique({
+          where: { gameId_teamId: { gameId, teamId: teamBId } },
+          include: {
+            eingetragenVon: { select: { id: true, name: true } },
+            team: { select: { id: true, name: true, nummer: true } },
+          },
+        }),
+      ]);
+
+      if (existingA || existingB) {
+        throw new DuellConflictError([existingA, existingB].filter(Boolean));
+      }
+
+      const a = await createTeam(teamAId, rohdatenA, punksteA);
+      const b = await createTeam(teamBId, rohdatenB, punkteB);
 
       await updateGameRaenge(gameId, wertungslogik, tx);
 
@@ -134,6 +158,27 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ergebnisA, ergebnisB }, { status: 201 });
   } catch (error) {
+    if (error instanceof DuellConflictError) {
+      return NextResponse.json(
+        {
+          error: "Für dieses Match wurde bereits ein Ergebnis eingetragen — es wurde nichts überschrieben.",
+          conflict: true,
+          existing: error.existing,
+        },
+        { status: 409 },
+      );
+    }
+    // Unique-Constraint-Verletzung: zwei Schiedsrichter haben gleichzeitig gespeichert
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json(
+        {
+          error: "Ein anderer Schiedsrichter hat soeben ein Ergebnis für dieses Match gespeichert — es wurde nichts überschrieben.",
+          conflict: true,
+          existing: [],
+        },
+        { status: 409 },
+      );
+    }
     console.error("POST /api/ergebnisse/duell error:", error);
     return NextResponse.json({ error: "Fehler beim Speichern" }, { status: 500 });
   }
