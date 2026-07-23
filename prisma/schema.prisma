@@ -28,7 +28,8 @@ model Game {
 
   flaecheLaengeM Float?
   flaecheBreiteM Float?
-  helferAnzahl   Int     @default(1)
+  helferAnzahl         Int     @default(1)
+  schiedsrichterAnzahl Int     @default(1)
   stromNoetig    Boolean @default(false)
 
   createdById String?
@@ -114,6 +115,7 @@ model Person {
   materialKommentare     MaterialKommentar[]
   kvpEintraege           KvpEintrag[]
   zeitplanSlots          ZeitplanSlot[]
+  slotEinsaetze          ZeitplanSlotPerson[]
   ergebnisseEingetragen  Ergebnis[]         @relation("eingetragen_von")
   qrScans                QRVerifikation[]
 
@@ -228,8 +230,22 @@ model ZeitplanSlot {
   teams      ZeitplanSlotTeam[]
   ergebnisse Ergebnis[]
   qrScans    QRVerifikation[]
+  personen   ZeitplanSlotPerson[]
 
   @@index([configId])
+}
+
+// Einsatzplan: Mehrfach-Zuweisung von Schiedsrichtern/Helfern zu Slots
+model ZeitplanSlotPerson {
+  id       String       @id @default(cuid())
+  slotId   String
+  slot     ZeitplanSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  rolle    PersonRolle
+
+  @@unique([slotId, personId])
+  @@index([personId])
 }
 
 model ZeitplanSlotTeam {

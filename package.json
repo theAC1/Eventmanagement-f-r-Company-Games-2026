@@ -1,6 +1,6 @@
 {
   "name": "company-games-2026",
-  "version": "0.5.1-alpha",
+  "version": "0.6.0-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -26,6 +26,7 @@
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "bcryptjs": "^3.0.3",
+    "jsqr": "^1.4.0",
     "next": "16.2.0",
     "next-auth": "^4.24.13",
     "pg": "^8.20.0",
@@ -36,7 +37,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-"@types/node": "^20",
+    "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.1",

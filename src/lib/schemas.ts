@@ -36,6 +36,7 @@ export const GameCreateSchema = z.object({
   flaecheLaengeM: z.number().nullable().optional(),
   flaecheBreiteM: z.number().nullable().optional(),
   helferAnzahl: z.number().int().min(0).optional(),
+  schiedsrichterAnzahl: z.number().int().min(1).max(10).optional(),
   stromNoetig: z.boolean().optional(),
 });
 
@@ -117,6 +118,14 @@ export const UserUpdateSchema = z.object({
   rolle: z.enum(["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]).optional(),
   email: z.string().email().nullable().optional(),
   istAktiv: z.boolean().optional(),
+});
+
+// ─── Einsatzplan ───
+
+export const EinsatzplanPersonenSchema = z.object({
+  personIds: z.array(z.string().min(1), {
+    message: "personIds (Array von IDs) erforderlich",
+  }),
 });
 
 // ─── KVP ───

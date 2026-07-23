@@ -51,6 +51,12 @@ export default async function AdminLayout({
                 Zeitplan
               </Link>
               <Link
+                href="/admin/einsatzplan"
+                className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
+              >
+                Einsatzplan
+              </Link>
+              <Link
                 href="/admin/situationsplan"
                 className="px-3 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition"
               >
