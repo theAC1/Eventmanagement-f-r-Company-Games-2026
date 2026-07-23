@@ -627,7 +627,8 @@ export default function LivePage() {
       )}
 
       {/* Bottom action button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-sm">
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-sm">
+        <div className="max-w-3xl mx-auto">
         <button
           onClick={handleErgebnisEintragen}
           disabled={!hasMinimumData()}
@@ -635,6 +636,7 @@ export default function LivePage() {
         >
           Ergebnis eintragen
         </button>
+        </div>
       </div>
     </div>
   );

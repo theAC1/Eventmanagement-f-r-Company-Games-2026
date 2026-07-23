@@ -341,7 +341,7 @@ export default function EingabePage() {
 
       {/* Team-Auswahl */}
       <section className="border border-zinc-800 rounded-lg p-4 space-y-4">
-        <div className={isDuell ? "grid grid-cols-2 gap-4" : ""}>
+        <div className={isDuell ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : ""}>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
               {isDuell ? "Team A" : "Team"}
@@ -431,7 +431,7 @@ export default function EingabePage() {
 
       {/* Ergebnis-Formular */}
       {isDuell ? (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ErgebnisFormular
             label={teams.find((t) => t.id === selectedTeamId)?.name ?? "Team A"}
             wertungslogik={wl}

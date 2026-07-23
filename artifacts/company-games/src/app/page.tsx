@@ -11,26 +11,26 @@ export default function Home() {
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/70" />
 
-      <div className="relative z-10 text-center space-y-6">
+      <div className="relative z-10 text-center space-y-6 w-full max-w-lg px-4">
         <img
           src="/images/logo.png"
           alt="Company Games 2026"
-          className="mx-auto h-32 w-auto drop-shadow-2xl"
+          className="mx-auto h-24 sm:h-32 w-auto drop-shadow-2xl"
         />
-        <h1 className="text-5xl font-bold tracking-tight drop-shadow-lg">
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight drop-shadow-lg">
           Company Games 2026
         </h1>
-        <p className="text-zinc-300 text-lg">
+        <p className="text-zinc-300 text-base sm:text-lg">
           Event Management System
         </p>
-        <div className="flex gap-4 justify-center text-sm pt-2">
-          <a href="/admin" className="px-5 py-2.5 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition">
+        <div className="flex flex-wrap gap-3 sm:gap-4 justify-center text-sm pt-2">
+          <a href="/admin" className="px-5 py-3 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition">
             Admin
           </a>
-          <a href="/referee" className="px-5 py-2.5 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
+          <a href="/referee" className="px-5 py-3 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
             Schiedsrichter
           </a>
-          <a href="/scoreboard" className="px-5 py-2.5 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
+          <a href="/scoreboard" className="px-5 py-3 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
             Scoreboard
           </a>
         </div>

@@ -268,16 +268,16 @@ export default function CheckinPage() {
 
       {/* Fortschritt bei Duell-Slots */}
       {isDuell && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className={checkedIn.length >= 1 ? "text-emerald-400" : "text-zinc-500"}>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span className={`truncate max-w-[40%] ${checkedIn.length >= 1 ? "text-emerald-400" : "text-zinc-500"}`}>
             {checkedIn[0] ? `${checkedIn[0].teamName} ✓` : "Team A ausstehend"}
           </span>
           <span className="text-zinc-700">—</span>
-          <span className={checkedIn.length >= 2 ? "text-emerald-400" : "text-zinc-500"}>
+          <span className={`truncate max-w-[40%] ${checkedIn.length >= 2 ? "text-emerald-400" : "text-zinc-500"}`}>
             {checkedIn[1] ? `${checkedIn[1].teamName} ✓` : "Team B ausstehend"}
           </span>
-          <span className="ml-auto text-xs text-zinc-500">
-            {checkedIn.length} von 2 Teams verifiziert
+          <span className="ml-auto text-xs text-zinc-500 whitespace-nowrap">
+            {checkedIn.length} von 2 verifiziert
           </span>
         </div>
       )}
@@ -292,18 +292,18 @@ export default function CheckinPage() {
             }`}>
               {t ? (
                 <>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white"
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-lg font-bold text-white"
                       style={{ backgroundColor: t.teamFarbe }}>
                       {t.teamNummer}
                     </div>
-                    <div>
-                      <p className="font-medium">{t.teamName}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{t.teamName}</p>
                       <p className="text-xs text-emerald-400">Eingecheckt</p>
                     </div>
                   </div>
                   <button onClick={() => removeTeam(t.teamId)}
-                    className="text-xs text-zinc-500 hover:text-red-400 transition">
+                    className="shrink-0 px-3 py-2 -mr-1 text-xs text-zinc-500 hover:text-red-400 transition">
                     Entfernen
                   </button>
                 </>
@@ -323,13 +323,13 @@ export default function CheckinPage() {
         <div className="space-y-4">
           <div className="flex gap-2">
             <button onClick={() => { setMode("code"); stopScanner(); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+              className={`flex-1 py-3 rounded-lg text-sm font-medium border transition ${
                 mode === "code" ? "bg-zinc-800 border-zinc-600 text-white" : "border-zinc-800 text-zinc-500"
               }`}>
               Code eingeben
             </button>
             <button onClick={() => { setMode("scan"); startScanner(); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+              className={`flex-1 py-3 rounded-lg text-sm font-medium border transition ${
                 mode === "scan" ? "bg-zinc-800 border-zinc-600 text-white" : "border-zinc-800 text-zinc-500"
               }`}>
               QR scannen
@@ -348,7 +348,7 @@ export default function CheckinPage() {
                   onKeyDown={e => { if (e.key === "Enter") verifyCode(codeInput); }}
                   placeholder="z.B. B6J"
                   maxLength={3}
-                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-2xl font-mono text-center tracking-[0.3em] uppercase focus:outline-none focus:border-zinc-500"
+                  className="flex-1 w-full min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-3 text-2xl font-mono text-center tracking-[0.3em] uppercase focus:outline-none focus:border-zinc-500"
                 />
                 <button onClick={() => verifyCode(codeInput)}
                   disabled={codeInput.length !== 3}

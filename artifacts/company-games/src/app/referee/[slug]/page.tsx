@@ -302,7 +302,7 @@ function InfoChip({
 }) {
   return (
     <div
-      className={`px-3 py-1.5 rounded-lg border text-sm ${
+      className={`max-w-full break-words px-3 py-1.5 rounded-lg border text-sm ${
         highlight
           ? "border-amber-700 bg-amber-950/30 text-amber-300"
           : "border-zinc-800 bg-zinc-900/50"

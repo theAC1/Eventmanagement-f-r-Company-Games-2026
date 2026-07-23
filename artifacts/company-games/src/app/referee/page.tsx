@@ -192,8 +192,8 @@ export default function RefereePage() {
               : "border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/40"
         }`}
       >
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
+        <div className="flex items-center justify-between gap-3">
+          <div className="space-y-1 min-w-0">
             <p className="text-xs font-mono text-zinc-500">
               {formatTime(slot.startZeit)} – {formatTime(slot.endZeit)}
             </p>
@@ -207,7 +207,7 @@ export default function RefereePage() {
               )}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {statusBadge(slot.status)}
             {isClickable && <span className="text-zinc-600">&rarr;</span>}
           </div>

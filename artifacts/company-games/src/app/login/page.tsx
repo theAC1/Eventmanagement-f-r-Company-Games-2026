@@ -62,7 +62,9 @@ function LoginForm() {
                 autoComplete="username"
                 autoFocus
                 required
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
+                className="w-full px-3 py-2.5 text-base bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
+                autoCapitalize="none"
+                autoCorrect="off"
                 placeholder="z.B. juan"
               />
             </div>
@@ -78,7 +80,7 @@ function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 required
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
+                className="w-full px-3 py-2.5 text-base bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
               />
             </div>
 
@@ -91,7 +93,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-amber-500 text-zinc-950 font-semibold rounded-md hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="w-full py-3 px-4 bg-amber-500 text-zinc-950 font-semibold rounded-md hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {loading ? "..." : "Anmelden"}
             </button>
