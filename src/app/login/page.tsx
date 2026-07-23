@@ -26,7 +26,16 @@ function LoginForm() {
     });
 
     if (result?.error) {
-      setError("Benutzername oder Passwort falsch.");
+      // Erstanmeldung: Aktivierungscode wurde als Passwort eingegeben
+      if (result.error === "ACTIVATION_REQUIRED") {
+        router.push(`/activate?username=${encodeURIComponent(username)}`);
+        return;
+      }
+      if (result.error.startsWith("Zu viele Anmeldeversuche")) {
+        setError(result.error);
+      } else {
+        setError("Benutzername oder Passwort falsch.");
+      }
       setLoading(false);
       return;
     }
@@ -97,7 +106,10 @@ function LoginForm() {
         </form>
 
         <p className="text-xs text-zinc-600 text-center mt-6">
-          Kein Account? Wende dich an den Admin.
+          Neuen Aktivierungscode erhalten?{" "}
+          <a href="/activate" className="text-zinc-400 hover:text-white transition">
+            Account aktivieren
+          </a>
         </p>
       </div>
     </div>

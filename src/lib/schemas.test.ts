@@ -211,21 +211,19 @@ describe("ErgebnisCreateSchema", () => {
 // ─── UserCreateSchema ───
 
 describe("UserCreateSchema", () => {
-  it("sollte validen User akzeptieren", () => {
+  it("sollte validen User akzeptieren (ohne Passwort — Aktivierungscode-Flow)", () => {
     const result = UserCreateSchema.safeParse({
       name: "Juan Hausherr",
       username: "juan",
-      password: "sicher123",
-      rolle: "ADMIN",
+      rolle: "OWNER",
     });
     expect(result.success).toBe(true);
   });
 
-  it("sollte zu kurzes Passwort ablehnen", () => {
+  it("sollte zu kurzen Username ablehnen", () => {
     const result = UserCreateSchema.safeParse({
       name: "Test",
-      username: "te",
-      password: "ab",
+      username: "t",
       rolle: "ORGA",
     });
     expect(result.success).toBe(false);
@@ -235,7 +233,6 @@ describe("UserCreateSchema", () => {
     const result = UserCreateSchema.safeParse({
       name: "Test",
       username: "test",
-      password: "passwort123",
       rolle: "SUPERADMIN",
     });
     expect(result.success).toBe(false);

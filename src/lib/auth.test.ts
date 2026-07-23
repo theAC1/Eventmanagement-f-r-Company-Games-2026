@@ -3,13 +3,14 @@ import { hasMinRole, ROLE_HIERARCHY } from "./auth";
 
 describe("ROLE_HIERARCHY", () => {
   it("sollte korrekte Hierarchie haben", () => {
+    expect(ROLE_HIERARCHY.OWNER).toBeGreaterThan(ROLE_HIERARCHY.ADMIN);
     expect(ROLE_HIERARCHY.ADMIN).toBeGreaterThan(ROLE_HIERARCHY.ORGA);
     expect(ROLE_HIERARCHY.ORGA).toBeGreaterThan(ROLE_HIERARCHY.SCHIEDSRICHTER);
     expect(ROLE_HIERARCHY.SCHIEDSRICHTER).toBeGreaterThan(ROLE_HIERARCHY.HELFER);
   });
 
-  it("sollte 4 Rollen definieren", () => {
-    expect(Object.keys(ROLE_HIERARCHY)).toHaveLength(4);
+  it("sollte 5 Rollen definieren", () => {
+    expect(Object.keys(ROLE_HIERARCHY)).toHaveLength(5);
   });
 });
 

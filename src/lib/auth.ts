@@ -35,7 +35,22 @@ export const authOptions: NextAuthOptions = {
           where: { username: credentials.username },
         });
 
-        if (!person || !person.passwordHash || !person.istAktiv) return null;
+        if (!person || !person.istAktiv) return null;
+
+        // Account noch nicht aktiviert: Eingabe des Aktivierungscodes als
+        // Passwort leitet zur Aktivierungsseite (Erstanmeldung)
+        if (person.mussPasswortAendern && person.aktivierungsCode) {
+          const codeValid = await bcrypt.compare(
+            credentials.password,
+            person.aktivierungsCode,
+          );
+          if (codeValid) {
+            throw new Error("ACTIVATION_REQUIRED");
+          }
+          return null;
+        }
+
+        if (!person.passwordHash) return null;
 
         const valid = await bcrypt.compare(credentials.password, person.passwordHash);
         if (!valid) return null;

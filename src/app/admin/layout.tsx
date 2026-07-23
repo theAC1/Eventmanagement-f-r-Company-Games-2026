@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { LogoutButton } from "./logout-button";
 import { KvpFloatingButton } from "./kvp-button";
+import { hasMinRole } from "@/lib/roles";
 
 export default async function AdminLayout({
   children,
@@ -10,7 +11,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerSession(authOptions);
-  const isAdmin = session?.user?.rolle === "ADMIN";
+  const isAdmin = hasMinRole(session?.user?.rolle ?? "", "ADMIN");
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">

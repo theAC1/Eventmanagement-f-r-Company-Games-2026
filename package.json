@@ -1,6 +1,6 @@
 {
   "name": "company-games-2026",
-  "version": "0.9.1-alpha",
+  "version": "0.10.0-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,6 +11,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "users:init": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/create-initial-users.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:build": "docker compose build",

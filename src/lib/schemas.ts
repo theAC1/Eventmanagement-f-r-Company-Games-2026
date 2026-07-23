@@ -103,19 +103,20 @@ export const ErgebnisUpdateSchema = z.object({
 
 // ─── Users ───
 
+// Neue Accounts werden ohne Passwort angelegt — Erstanmeldung läuft über
+// einen einmaligen Aktivierungscode (OWNER erhält ihn bei der Erstellung).
 export const UserCreateSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich").max(100),
   username: z.string().min(2, "Username mind. 2 Zeichen").max(50),
-  password: z.string().min(6, "Passwort mind. 6 Zeichen"),
-  rolle: z.enum(["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]),
+  rolle: z.enum(["OWNER", "ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]),
   email: z.string().email().nullable().optional(),
 });
 
 export const UserUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   username: z.string().min(2).max(50).optional(),
-  password: z.string().min(6).optional(),
-  rolle: z.enum(["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]).optional(),
+  password: z.string().min(10).optional(),
+  rolle: z.enum(["OWNER", "ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]).optional(),
   email: z.string().email().nullable().optional(),
   istAktiv: z.boolean().optional(),
 });
