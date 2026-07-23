@@ -70,8 +70,6 @@ export default function BadgePage() {
   if (loading || !team) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const portalUrl = `${origin}/team/${team.qrToken}`;
-  const checkinUrl = `${origin}/api/checkin?code=${team.checkinCode}`;
 
   const teamsToPrint = printAll ? allTeams : [team];
 
@@ -105,17 +103,16 @@ export default function BadgePage() {
       {/* Badge Preview(s) */}
       <div ref={badgeRef} className="flex flex-wrap justify-center gap-8">
         {teamsToPrint.map(t => (
-          <BadgeCard key={t.id} team={t} portalUrl={`${origin}/team/${t.qrToken}`}
-            checkinUrl={`${origin}/checkin/${t.checkinCode}`} />
+          <BadgeCard key={t.id} team={t} portalUrl={`${origin}/team/${t.qrToken}`} />
         ))}
       </div>
     </div>
   );
 }
 
-function BadgeCard({ team, portalUrl, checkinUrl }: {
+function BadgeCard({ team, portalUrl }: {
   team: { id: string; name: string; nummer: number; farbe: string; logoUrl: string | null; motto: string | null; checkinCode: string; qrToken: string };
-  portalUrl: string; checkinUrl: string;
+  portalUrl: string;
 }) {
   return (
     <div style={{ width: "380px", backgroundColor: "#0a0a0a", borderRadius: "16px", overflow: "hidden", pageBreakInside: "avoid" }}>
@@ -144,46 +141,25 @@ function BadgeCard({ team, portalUrl, checkinUrl }: {
           {team.motto && <div style={{ fontSize: "12px", color: "#52525b", fontStyle: "italic", marginTop: "4px" }}>{team.motto}</div>}
         </div>
 
-        {/* Zwei QR-Codes nebeneinander */}
-        <div style={{ display: "flex", gap: "16px", justifyContent: "center" }}>
-          {/* QR 1: Team-Portal */}
-          <div style={{ textAlign: "center", flex: 1 }}>
-            <div style={{
-              backgroundColor: "white", borderRadius: "10px", padding: "8px",
-              display: "inline-block",
-            }}>
-              <img src={qrUrl(portalUrl, 140)} alt="Portal QR" style={{ width: "120px", height: "120px" }}
-                crossOrigin="anonymous" />
-            </div>
-            <div style={{
-              marginTop: "6px", fontSize: "10px", fontWeight: "600", color: "#22c55e",
-              textTransform: "uppercase", letterSpacing: "0.05em",
-            }}>
-              Team-Portal
-            </div>
-            <div style={{ fontSize: "9px", color: "#52525b" }}>Zeitplan &middot; Punkte &middot; Lageplan</div>
+        {/* Einziger QR-Code: Team-Portal (Schiri-Scanner erkennt ihn auch beim Check-in) */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            backgroundColor: "white", borderRadius: "12px", padding: "12px",
+            display: "inline-block",
+          }}>
+            <img src={qrUrl(portalUrl, 200)} alt="Team QR" style={{ width: "180px", height: "180px" }}
+              crossOrigin="anonymous" />
           </div>
-
-          {/* QR 2: Check-in (Schiedsrichter) */}
-          <div style={{ textAlign: "center", flex: 1 }}>
-            <div style={{
-              backgroundColor: "white", borderRadius: "10px", padding: "8px",
-              display: "inline-block",
-            }}>
-              <img src={qrUrl(checkinUrl, 140)} alt="Check-in QR" style={{ width: "120px", height: "120px" }}
-                crossOrigin="anonymous" />
-            </div>
-            <div style={{
-              marginTop: "6px", fontSize: "10px", fontWeight: "600", color: "#f59e0b",
-              textTransform: "uppercase", letterSpacing: "0.05em",
-            }}>
-              Check-in
-            </div>
-            <div style={{ fontSize: "9px", color: "#52525b" }}>Schiedsrichter scannt</div>
+          <div style={{
+            marginTop: "8px", fontSize: "11px", fontWeight: "600", color: "#22c55e",
+            textTransform: "uppercase", letterSpacing: "0.05em",
+          }}>
+            Team-QR scannen
           </div>
+          <div style={{ fontSize: "9px", color: "#52525b" }}>Zeitplan &middot; Punkte &middot; Lageplan &middot; Check-in</div>
         </div>
 
-        {/* Backup-Token */}
+        {/* Backup-Token (manuelle Eingabe durch Schiedsrichter) */}
         <div style={{ textAlign: "center" }}>
           <div style={{
             display: "inline-block", backgroundColor: "#18181b", border: "1px solid #27272a",
