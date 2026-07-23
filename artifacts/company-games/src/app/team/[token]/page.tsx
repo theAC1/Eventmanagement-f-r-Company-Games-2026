@@ -98,7 +98,7 @@ export default function TeamPortalPage() {
           >
             {data.teamNummer}
           </div>
-          <span className="text-sm font-semibold">{data.teamName}</span>
+          <span className="text-sm font-semibold truncate">{data.teamName}</span>
         </div>
       </header>
 
@@ -126,11 +126,11 @@ export default function TeamPortalPage() {
                           : "border-zinc-800"
                     }`}
                   >
-                    <div>
-                      <p className="text-sm font-medium">{s.gameName}</p>
+                    <div className="min-w-0 pr-3">
+                      <p className="text-sm font-medium truncate">{s.gameName}</p>
                       <p className="text-xs text-zinc-500">Runde {s.runde}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <p className="text-sm font-mono tabular-nums">
                         {s.startZeit}–{s.endZeit}
                       </p>
@@ -165,8 +165,8 @@ export default function TeamPortalPage() {
                   key={e.id}
                   className="flex items-center justify-between border border-zinc-800 rounded-lg px-4 py-3"
                 >
-                  <span className="text-sm font-medium">{e.gameName}</span>
-                  <div className="text-right text-sm">
+                  <span className="text-sm font-medium truncate min-w-0 pr-3">{e.gameName}</span>
+                  <div className="text-right text-sm shrink-0">
                     {e.gamePunkte !== null && (
                       <span className="text-zinc-400">{e.gamePunkte} Pkt</span>
                     )}

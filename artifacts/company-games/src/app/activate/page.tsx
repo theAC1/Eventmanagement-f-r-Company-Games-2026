@@ -67,8 +67,10 @@ function ActivateForm() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
                 required
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
+                className="w-full px-3 py-2.5 text-base bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
               />
             </div>
 
@@ -80,7 +82,7 @@ function ActivateForm() {
                 value={aktivierungsCode}
                 onChange={(e) => setAktivierungsCode(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition font-mono"
+                className="w-full px-3 py-2.5 text-base bg-zinc-950 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition font-mono"
                 placeholder="Vom Owner erhalten"
               />
             </div>
@@ -94,7 +96,7 @@ function ActivateForm() {
                 onChange={(e) => setNeuesPasswort(e.target.value)}
                 autoComplete="new-password"
                 required
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-md text-white focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
+                className="w-full px-3 py-2.5 text-base bg-zinc-950 border border-zinc-800 rounded-md text-white focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
               />
             </div>
 
@@ -107,7 +109,7 @@ function ActivateForm() {
                 onChange={(e) => setBestaetigung(e.target.value)}
                 autoComplete="new-password"
                 required
-                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-md text-white focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
+                className="w-full px-3 py-2.5 text-base bg-zinc-950 border border-zinc-800 rounded-md text-white focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 transition"
               />
             </div>
 
@@ -129,7 +131,7 @@ function ActivateForm() {
             <button
               type="submit"
               disabled={loading || !passwortOk || !bestaetigungOk}
-              className="w-full py-2.5 px-4 bg-amber-500 text-zinc-950 font-semibold rounded-md hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="w-full py-3 px-4 bg-amber-500 text-zinc-950 font-semibold rounded-md hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {loading ? "..." : "Aktivieren & Passwort setzen"}
             </button>

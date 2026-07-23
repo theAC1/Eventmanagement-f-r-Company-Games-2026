@@ -80,28 +80,31 @@ export default function ScoreboardPage() {
     <div className="min-h-screen bg-zinc-950 text-white">
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <img src="/images/logo.png" alt="CG26" className="h-8 w-auto" />
-            <div>
-              <h1 className="text-sm font-semibold tracking-tight">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <img src="/images/logo.png" alt="CG26" className="h-8 w-auto shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold tracking-tight truncate">
                 Company Games 2026
               </h1>
               <span className="text-xs text-zinc-500">Live Rangliste</span>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-xs text-zinc-500">
-            <span>
+          <div className="flex items-center gap-3 text-xs text-zinc-500 shrink-0">
+            <span className="hidden sm:inline">
               {data.ergebnisseEingetragen}/{data.totalGames * data.totalTeams} Ergebnisse
             </span>
-            <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <span className="sm:hidden tabular-nums">
+              {data.ergebnisseEingetragen}/{data.totalGames * data.totalTeams}
+            </span>
+            <div className="w-12 sm:w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
               <div
                 className="h-full bg-emerald-500 rounded-full transition-all"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
             {lastUpdate && (
-              <span>{lastUpdate.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}</span>
+              <span className="hidden sm:inline">{lastUpdate.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}</span>
             )}
             {fetchError && (
               <span className="text-red-400">● Offline</span>
@@ -131,7 +134,7 @@ export default function ScoreboardPage() {
             return (
               <div
                 key={entry.teamId}
-                className={`flex items-center gap-4 px-4 py-3 rounded-lg border transition ${
+                className={`flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 rounded-lg border transition ${
                   isTop3
                     ? `bg-gradient-to-r ${medalColors[idx]}`
                     : "border-zinc-800/30 hover:border-zinc-800"
@@ -147,8 +150,8 @@ export default function ScoreboardPage() {
                 </div>
 
                 {/* Team */}
-                <div className="flex-1">
-                  <span className={`font-medium ${isTop3 ? "text-lg" : ""}`}>
+                <div className="flex-1 min-w-0">
+                  <span className={`font-medium block truncate ${isTop3 ? "text-lg" : ""}`}>
                     {entry.teamName}
                   </span>
                 </div>
@@ -167,7 +170,7 @@ export default function ScoreboardPage() {
                   {entry.rangPunkteSumme}
                 </div>
 
-                <span className="text-xs text-zinc-600">Rangpunkte</span>
+                <span className="hidden sm:inline text-xs text-zinc-600">Rangpunkte</span>
               </div>
             );
           })}
