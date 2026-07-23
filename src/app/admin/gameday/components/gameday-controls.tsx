@@ -8,6 +8,7 @@ type GamedayStatus = {
   startedAt?: string;
   startedBy?: { id: string; name: string } | null;
   id?: string;
+  testErgebnisse?: number;
 };
 
 type GamedayControlsProps = {
@@ -107,6 +108,7 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
         const data = await res.json();
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
+      await fetchStatus();
       onStatusChange();
     } catch (err) {
       alert(
@@ -172,11 +174,29 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
     );
   }
 
+  const testCount = status?.testErgebnisse ?? 0;
+
   if (!status || status.modus === "INAKTIV") {
     return (
       <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-        <span className="text-sm text-zinc-400">Kein aktiver Gameday</span>
+        <div className="space-y-0.5">
+          <span className="text-sm text-zinc-400">Kein aktiver Gameday</span>
+          {testCount > 0 && (
+            <p className="text-xs text-amber-400">
+              {testCount} Test-Ergebnis{testCount === 1 ? "" : "se"} vorhanden — vor HOT-Start löschen
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
+          {testCount > 0 && (
+            <button
+              onClick={resetTestData}
+              disabled={actionLoading}
+              className="px-3 py-1.5 text-sm font-medium rounded-md border border-amber-700 bg-amber-900/40 hover:bg-amber-900/60 text-amber-300 transition disabled:opacity-50"
+            >
+              Test-Daten löschen ({testCount})
+            </button>
+          )}
           <button
             onClick={() => startGameday("TEST")}
             disabled={actionLoading}
@@ -214,7 +234,7 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
             disabled={actionLoading}
             className="px-3 py-1.5 text-sm font-medium rounded-md border border-zinc-600 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition disabled:opacity-50"
           >
-            Test-Daten löschen
+            Test-Daten löschen{testCount > 0 ? ` (${testCount})` : ""}
           </button>
           <button
             onClick={stopGameday}

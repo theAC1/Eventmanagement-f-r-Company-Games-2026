@@ -1,14 +1,30 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { berechneGesamtrangliste } from "@/lib/rangpunkte";
+import type { Prisma } from "@prisma/client";
 
 // GET /api/rangliste – Live-Gesamtrangliste
 export async function GET() {
   try {
+    // Aktiven Gameday-Modus bestimmen: nur im TEST-Modus fliessen Test-Ergebnisse
+    // in die Rangliste ein (Probelauf-Scoreboard). In HOT/INAKTIV werden sie
+    // ausgeschlossen, damit Probeläufe die echte Rangliste nicht verfälschen.
+    const gamedayConfig = await prisma.gamedayConfig.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { modus: true },
+    });
+    const modus = gamedayConfig?.modus ?? "INAKTIV";
+    const includeTest = modus === "TEST";
+
+    const ergebnisWhere: Prisma.ErgebnisWhereInput = {
+      gamePunkte: { not: null },
+      rangImGame: { not: null },
+      ...(includeTest ? {} : { istTest: false }),
+    };
+
     const [ergebnisse, teams, games] = await Promise.all([
       prisma.ergebnis.findMany({
-        where: { gamePunkte: { not: null }, rangImGame: { not: null } },
+        where: ergebnisWhere,
         select: {
           id: true,
           gameId: true,
@@ -28,7 +44,7 @@ export async function GET() {
       }),
     ]);
 
-    const raenge = ergebnisse.map((e: any) => ({
+    const raenge = ergebnisse.map((e) => ({
       teamId: e.teamId,
       gameId: e.gameId,
       ergebnisId: e.id,
@@ -44,6 +60,8 @@ export async function GET() {
       totalGames: games.length,
       totalTeams: teams.length,
       ergebnisseEingetragen: ergebnisse.length,
+      modus,
+      enthaeltTestErgebnisse: includeTest,
     });
   } catch (error) {
     console.error("GET /api/rangliste error:", error);

@@ -6,6 +6,7 @@ import { TabBar } from "./components/tab-bar";
 import { UebersichtTab } from "./components/uebersicht-tab";
 import { AktivitaetTab } from "./components/aktivitaet-tab";
 import { KorrekturenTab } from "./components/korrekturen-tab";
+import { DemoSeed } from "./components/demo-seed";
 
 type RanglisteEntry = {
   teamId: string; teamName: string; rangPunkteSumme: number;
@@ -126,6 +127,8 @@ export default function GamedayDashboard() {
       </div>
 
       <GamedayControls onStatusChange={loadData} />
+
+      <DemoSeed onSeeded={loadData} />
 
       <TabBar activeTab={activeTab} onChange={setActiveTab} />
 

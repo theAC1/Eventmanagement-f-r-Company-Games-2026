@@ -12,8 +12,10 @@ export async function GET() {
       },
     });
 
+    const testErgebnisse = await prisma.ergebnis.count({ where: { istTest: true } });
+
     if (!config || config.modus === "INAKTIV") {
-      return NextResponse.json({ modus: "INAKTIV", active: false });
+      return NextResponse.json({ modus: "INAKTIV", active: false, testErgebnisse });
     }
 
     return NextResponse.json({
@@ -22,6 +24,7 @@ export async function GET() {
       startedAt: config.startedAt,
       startedBy: config.startedBy,
       id: config.id,
+      testErgebnisse,
     });
   } catch (error) {
     console.error("GET /api/gameday error:", error);
