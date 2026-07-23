@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 import { ROLE_HIERARCHY, hasMinRole } from "./roles";
+import { checkRateLimit } from "./rate-limit";
 
 export { ROLE_HIERARCHY, hasMinRole };
 
@@ -14,8 +15,21 @@ export const authOptions: NextAuthOptions = {
         username: { label: "Benutzername", type: "text" },
         password: { label: "Passwort", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.username || !credentials?.password) return null;
+
+        // Brute-Force-Schutz: pro IP (hinter Nginx via x-forwarded-for)
+        // und pro Benutzername limitieren
+        const ip =
+          (req?.headers?.["x-forwarded-for"] as string | undefined)
+            ?.split(",")[0]
+            ?.trim() ?? "unknown";
+        if (
+          !checkRateLimit(`login-ip:${ip}`) ||
+          !checkRateLimit(`login-user:${credentials.username.toLowerCase()}`)
+        ) {
+          throw new Error("Zu viele Anmeldeversuche. Bitte später erneut versuchen.");
+        }
 
         const person = await prisma.person.findUnique({
           where: { username: credentials.username },
