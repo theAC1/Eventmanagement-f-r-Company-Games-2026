@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
         beschreibung: data.beschreibung || null,
         status: data.status || "OFFEN",
         sponsor: data.sponsor || null,
+        verantwortlichId: data.verantwortlichId || null,
         kostenGeschaetzt: data.kostenGeschaetzt || null,
         kostenEffektiv: data.kostenEffektiv || null,
         createdById: userId,

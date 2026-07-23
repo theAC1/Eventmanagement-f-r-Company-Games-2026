@@ -51,9 +51,12 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const typ = searchParams.get("typ");
 
+    const validStatus = ["OFFEN", "IN_BEARBEITUNG", "ERLEDIGT"];
+    const validTyp = ["BUG", "WUNSCHFUNKTION", "IDEE"];
+
     const where: Record<string, unknown> = {};
-    if (status) where.status = status;
-    if (typ) where.typ = typ;
+    if (status && validStatus.includes(status)) where.status = status;
+    if (typ && validTyp.includes(typ)) where.typ = typ;
 
     const eintraege = await prisma.kvpEintrag.findMany({
       where,

@@ -7,6 +7,9 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // GET /api/materials/:id
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
     const item = await prisma.materialItem.findUnique({
