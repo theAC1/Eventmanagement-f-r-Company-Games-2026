@@ -48,3 +48,6 @@ next-env.d.ts
 # Lokale Claude-Code-Konfiguration und Review-Notizen
 .claude/
 CODE_REVIEW.md
+
+# Hochgeladene Dateien (lokal)
+uploads/

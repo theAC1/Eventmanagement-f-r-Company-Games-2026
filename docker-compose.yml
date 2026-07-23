@@ -10,6 +10,10 @@ services:
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NODE_ENV=production
+      - UPLOADS_DIR=/app/uploads
+    volumes:
+      # Hochgeladene Bilder (Lageplan etc.) überleben Deployments
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -59,6 +63,7 @@ services:
 
 volumes:
   pgdata:
+  uploads:
 
 networks:
   cg26:
