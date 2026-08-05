@@ -1,10 +1,12 @@
-import { Team, SlotOutput, ScheduleResult } from "./types";
+import { Team, SlotOutput, ScheduleResult, MittagsSchicht } from "./types";
+import { KpiBand, KpiCell } from "@/components/ui/kpi";
 
 type ZeitplanErgebnisProps = {
   result: ScheduleResult;
   teams: Team[];
   viewMode: "matrix" | "team";
   selectedTeam: string;
+  animate?: boolean;
   onViewModeChange: (mode: "matrix" | "team") => void;
   onSelectedTeamChange: (teamId: string) => void;
 };
@@ -14,6 +16,7 @@ export function ZeitplanErgebnis({
   teams,
   viewMode,
   selectedTeam,
+  animate = false,
   onViewModeChange,
   onSelectedTeamChange,
 }: ZeitplanErgebnisProps) {
@@ -21,21 +24,26 @@ export function ZeitplanErgebnis({
   const uniqueGames = getUniqueGames(result.slots);
 
   return (
-    <div className="space-y-6">
-      {/* Summary */}
-      <div className="flex items-center gap-6 text-sm">
-        <span className="text-zinc-400">
-          {result.runden} Runden &middot; {result.slots.length} Slots
-          &middot; Ende: <strong className="text-white">{result.endZeit}</strong>
-        </span>
-        {result.konflikte.length > 0 && (
-          <span className="text-red-400">
-            {result.konflikte.length} Konflikte
-          </span>
-        )}
+    <div className={`space-y-5 ${animate ? "anim-rise" : ""}`}>
+      {/* Zusammenfassung als KPI-Band */}
+      <div className="overflow-hidden rounded-[10px] border border-line bg-surface">
+        <KpiBand columns="repeat(4, minmax(0, 1fr))" className="-mb-px">
+          <KpiCell label="Runden" value={result.runden} />
+          <KpiCell label="Slots" value={result.slots.length} />
+          <KpiCell label="Endzeit" value={result.endZeit} />
+          <KpiCell
+            label="Konflikte"
+            value={result.konflikte.length}
+            valueColor={
+              result.konflikte.length > 0 ? "var(--hot-tint)" : undefined
+            }
+            note={result.konflikte.length === 0 ? "keine" : undefined}
+            last
+          />
+        </KpiBand>
       </div>
 
-      {/* Conflicts */}
+      {/* Konflikte */}
       {result.konflikte.length > 0 && (
         <KonflikteAnzeige konflikte={result.konflikte} />
       )}
@@ -45,24 +53,24 @@ export function ZeitplanErgebnis({
         <MittagsSchichtenAnzeige schichten={result.mittagsSchichten} />
       )}
 
-      {/* View Toggle */}
-      <div className="flex items-center gap-2">
+      {/* View Toggle als Segmented Control */}
+      <div className="inline-flex rounded-[9px] border border-line-strong bg-sunken p-0.5">
         <button
           onClick={() => onViewModeChange("matrix")}
-          className={`px-3 py-1.5 text-sm rounded-lg transition ${
+          className={`rounded-[7px] px-3 py-[5px] text-xs transition-colors duration-150 ${
             viewMode === "matrix"
-              ? "bg-zinc-700 text-white"
-              : "text-zinc-500 hover:text-white"
+              ? "bg-action font-semibold text-on-action"
+              : "font-medium text-ink-3 hover:text-ink"
           }`}
         >
           Matrix
         </button>
         <button
           onClick={() => onViewModeChange("team")}
-          className={`px-3 py-1.5 text-sm rounded-lg transition ${
+          className={`rounded-[7px] px-3 py-[5px] text-xs transition-colors duration-150 ${
             viewMode === "team"
-              ? "bg-zinc-700 text-white"
-              : "text-zinc-500 hover:text-white"
+              ? "bg-action font-semibold text-on-action"
+              : "font-medium text-ink-3 hover:text-ink"
           }`}
         >
           Team-Ansicht
@@ -113,42 +121,37 @@ function getUniqueGames(slots: SlotOutput[]): { id: string; name: string }[] {
 
 function KonflikteAnzeige({ konflikte }: { konflikte: string[] }) {
   return (
-    <div className="border border-red-900/50 rounded-lg p-4 space-y-1">
-      <p className="text-sm font-medium text-red-400">Konflikte:</p>
+    <div className="space-y-1.5 rounded-[10px] border border-[var(--hot-border)] bg-hot-dim/50 p-4">
+      <p className="text-[13px] font-semibold text-hot-tint">Konflikte</p>
       {konflikte.slice(0, 10).map((k, i) => (
-        <p key={i} className="text-xs text-red-300">{k}</p>
+        <p key={i} className="text-xs text-ink-2">{k}</p>
       ))}
       {konflikte.length > 10 && (
-        <p className="text-xs text-zinc-500">
-          ... und {konflikte.length - 10} weitere
+        <p className="text-xs text-ink-3">
+          ... und <span className="tnum">{konflikte.length - 10}</span> weitere
         </p>
       )}
     </div>
   );
 }
 
-function MittagsSchichtenAnzeige({
-  schichten,
-}: {
-  schichten: { schicht: number; startZeit: string; endZeit: string; teamNames: string[] }[];
-}) {
+function MittagsSchichtenAnzeige({ schichten }: { schichten: MittagsSchicht[] }) {
   return (
-    <div className="border border-amber-800/50 bg-amber-950/20 rounded-lg p-4 space-y-3">
-      <p className="text-sm font-medium text-amber-300">
-        Mittagspause: {schichten.length} Schichten
+    <div className="space-y-3 rounded-[10px] border border-[var(--warn-border)] bg-warn-dim p-4">
+      <p className="text-[13px] font-semibold text-warn">
+        Mittagspause: <span className="tnum">{schichten.length}</span> Schichten
       </p>
       <div className="space-y-2">
         {schichten.map((s) => (
           <div
             key={s.schicht}
-            className="flex items-center justify-between text-sm border border-amber-900/30 rounded px-3 py-2"
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[9px] border border-[var(--warn-border)] px-3 py-2 text-[13px]"
           >
-            <span className="text-zinc-400">
-              Schicht {s.schicht}: {s.startZeit}–{s.endZeit}
+            <span className="text-ink-3">
+              Schicht <span className="tnum">{s.schicht}</span>:{" "}
+              <span className="tnum">{s.startZeit}–{s.endZeit}</span>
             </span>
-            <span className="text-zinc-300">
-              {s.teamNames.join(", ")}
-            </span>
+            <span className="text-ink-2">{s.teamNames.join(", ")}</span>
           </div>
         ))}
       </div>
@@ -166,29 +169,32 @@ function MatrixAnsicht({
   runden: number;
 }) {
   return (
-    <div className="border border-zinc-800 rounded-lg overflow-x-auto">
+    <div className="overflow-x-auto rounded-[10px] border border-line bg-surface">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-zinc-800 bg-zinc-900/50">
-            <th className="px-3 py-2 text-left text-zinc-400 font-medium sticky left-0 bg-zinc-900/90">
+          <tr className="border-b border-line bg-sunken">
+            <th className="cg-label sticky left-0 bg-sunken px-3 py-[11px] text-left">
               Runde
             </th>
             {uniqueGames.map((g) => (
               <th
                 key={g.id}
-                className="px-3 py-2 text-left text-zinc-400 font-medium min-w-[120px]"
+                className="cg-label min-w-[120px] whitespace-nowrap px-3 py-[11px] text-left"
               >
                 {g.name}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800/50">
+        <tbody>
           {Array.from({ length: runden }, (_, i) => i + 1).map((runde) => (
-            <tr key={runde} className="hover:bg-zinc-900/40">
-              <td className="px-3 py-2 text-zinc-500 sticky left-0 bg-zinc-950/90 font-mono">
+            <tr
+              key={runde}
+              className="border-b border-line-soft transition-colors duration-150 last:border-b-0 hover:bg-sunken/60"
+            >
+              <td className="tnum sticky left-0 whitespace-nowrap bg-bg px-3 py-2.5 text-ink-2">
                 R{runde}
-                <span className="ml-2 text-zinc-700">
+                <span className="ml-2 text-label">
                   {matrix[runde]
                     ? Object.values(matrix[runde])[0]?.startZeit
                     : ""}
@@ -196,15 +202,13 @@ function MatrixAnsicht({
               </td>
               {uniqueGames.map((g) => {
                 const slot = matrix[runde]?.[g.id];
-                return (
-                  <td key={g.id} className="px-3 py-2">
-                    {slot ? (
-                      <span className="text-zinc-200">
-                        {slot.teamNames.join(" vs ")}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-800">–</span>
-                    )}
+                return slot ? (
+                  <td key={g.id} className="bg-action-row px-3 py-2.5 text-ink">
+                    {slot.teamNames.join(" vs ")}
+                  </td>
+                ) : (
+                  <td key={g.id} className="px-3 py-2.5 text-faint">
+                    –
                   </td>
                 );
               })}
@@ -232,9 +236,9 @@ function TeamAnsicht({
       <select
         value={selectedTeam}
         onChange={(e) => onSelectedTeamChange(e.target.value)}
-        className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+        className="h-[38px] w-full max-w-xs rounded-[9px] border border-line-strong bg-sunken px-3 text-sm text-ink outline-none transition-colors duration-150 focus:border-action"
       >
-        <option value="">Team waehlen...</option>
+        <option value="">Team w&auml;hlen...</option>
         {teams.map((t) => (
           <option key={t.id} value={t.id}>
             #{t.nummer} {t.name}
@@ -243,25 +247,32 @@ function TeamAnsicht({
       </select>
 
       {selectedTeam && teamZeitplaene[selectedTeam] && (
-        <div className="border border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-[10px] border border-line bg-surface">
+          <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-900/50 text-zinc-400 text-left">
-                <th className="px-4 py-2 font-medium">Runde</th>
-                <th className="px-4 py-2 font-medium">Zeit</th>
-                <th className="px-4 py-2 font-medium">Game</th>
-                <th className="px-4 py-2 font-medium">Gegen</th>
+              <tr className="border-b border-line bg-sunken text-left">
+                <th className="cg-label px-4 py-[11px]">Runde</th>
+                <th className="cg-label px-4 py-[11px]">Zeit</th>
+                <th className="cg-label px-4 py-[11px]">Game</th>
+                <th className="cg-label px-4 py-[11px]">Gegen</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/50">
+            <tbody>
               {teamZeitplaene[selectedTeam].map((slot, i) => (
-                <tr key={i}>
-                  <td className="px-4 py-2 text-zinc-500">R{slot.runde}</td>
-                  <td className="px-4 py-2 tabular-nums">
+                <tr
+                  key={i}
+                  className="border-b border-line-soft transition-colors duration-150 last:border-b-0 hover:bg-sunken/60"
+                >
+                  <td className="tnum px-4 py-2.5 text-xs text-ink-3">
+                    R{slot.runde}
+                  </td>
+                  <td className="tnum whitespace-nowrap px-4 py-2.5 text-xs text-ink-2">
                     {slot.startZeit}–{slot.endZeit}
                   </td>
-                  <td className="px-4 py-2 font-medium">{slot.gameName}</td>
-                  <td className="px-4 py-2 text-zinc-400">
+                  <td className="px-4 py-2.5 font-medium text-ink">
+                    {slot.gameName}
+                  </td>
+                  <td className="px-4 py-2.5 text-ink-3">
                     {slot.teamNames.length > 1
                       ? slot.teamNames
                           .filter(

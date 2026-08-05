@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { CaretDown } from "@phosphor-icons/react";
 import { StatusBadge } from "@/components/status-badge";
+import { Button } from "@/components/ui/button";
 
 type HistoryEntry = {
   id: string;
@@ -30,6 +32,9 @@ type KorrekturenTabProps = {
   games: { id: string; name: string; slug: string; modus: string; status: string }[];
   teams: { id: string; name: string; nummer: number }[];
 };
+
+const SELECT_CLASS =
+  "h-[34px] rounded-[9px] border border-line-strong bg-sunken px-3 text-[13px] text-ink focus:border-action focus:outline-none";
 
 export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
   const [entries, setEntries] = useState<KorrekturEntry[]>([]);
@@ -113,17 +118,14 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
 
   const hasMore = entries.length < total;
 
-  const selectClass =
-    "bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-300 focus:outline-none focus:border-zinc-500";
-
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4 px-4 py-4 sm:px-[22px]">
       {/* Filter bar */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2.5">
         <select
           value={filterGame}
           onChange={(e) => setFilterGame(e.target.value)}
-          className={selectClass}
+          className={SELECT_CLASS}
         >
           <option value="">Alle Spiele</option>
           {games.map((g) => (
@@ -136,7 +138,7 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
         <select
           value={filterTeam}
           onChange={(e) => setFilterTeam(e.target.value)}
-          className={selectClass}
+          className={SELECT_CLASS}
         >
           <option value="">Alle Teams</option>
           {teams.map((t) => (
@@ -149,21 +151,21 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
 
       {/* Entries */}
       {loading && entries.length === 0 ? (
-        <p className="text-sm text-zinc-500 py-8 text-center">Lade...</p>
+        <p className="py-8 text-center text-sm text-ink-3">Lade…</p>
       ) : entries.length === 0 ? (
-        <p className="text-sm text-zinc-500 py-8 text-center">
+        <p className="py-8 text-center text-sm text-ink-3">
           Keine Korrekturen gefunden
         </p>
       ) : (
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (
             <div key={entry.id}>
               <button
                 type="button"
                 onClick={() => handleToggle(entry.id)}
-                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border-l-2 border-amber-500 hover:bg-zinc-900/60 transition cursor-pointer"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5 py-2.5 text-left transition-colors duration-150 hover:bg-sunken/60"
               >
-                <span className="text-xs text-zinc-600 w-14 shrink-0 tabular-nums">
+                <span className="tnum w-14 shrink-0 text-xs text-label">
                   {entry.eingetragenUm
                     ? new Date(entry.eingetragenUm).toLocaleTimeString(
                         "de-CH",
@@ -172,47 +174,41 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
                     : "–"}
                 </span>
 
-                <span className="text-xs text-zinc-500 w-24 truncate shrink-0">
+                <span className="w-24 shrink-0 truncate text-xs text-ink-3">
                   {entry.eingetragenVon?.name ?? "–"}
                 </span>
 
-                <span className="text-sm text-zinc-300 w-32 truncate shrink-0">
+                <span className="w-32 shrink-0 truncate text-sm text-ink-2">
                   {entry.game.name}
                 </span>
 
-                <span className="text-sm text-zinc-200 flex-1 truncate">
+                <span className="min-w-0 flex-1 truncate text-sm text-ink">
                   {entry.team.name}{" "}
-                  <span className="text-zinc-500">#{entry.team.nummer}</span>
+                  <span className="tnum text-ink-3">#{entry.team.nummer}</span>
                 </span>
 
-                <span className="text-sm font-bold tabular-nums w-12 text-right shrink-0">
+                <span className="tnum w-12 shrink-0 text-right text-sm font-semibold text-ink">
                   {entry.gamePunkte ?? "–"}
                 </span>
 
                 <StatusBadge status={entry.status} />
 
-                <svg
-                  className={`w-4 h-4 text-zinc-500 transition-transform ${expandedId === entry.id ? "rotate-180" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                <CaretDown
+                  size={15}
+                  weight="bold"
+                  className={`shrink-0 text-faint transition-transform duration-150 ${
+                    expandedId === entry.id ? "rotate-180" : ""
+                  }`}
+                />
               </button>
 
               {/* Expanded history */}
               {expandedId === entry.id && (
-                <div className="ml-6 mt-2 mb-3 border-l border-zinc-800 pl-4 space-y-3">
+                <div className="mb-3 ml-6 mt-2 flex flex-col gap-3 border-l border-line pl-4">
                   {historyLoading === entry.id ? (
-                    <p className="text-xs text-zinc-500">Lade History...</p>
+                    <p className="text-xs text-ink-3">Lade History…</p>
                   ) : (histories[entry.id] ?? []).length === 0 ? (
-                    <p className="text-xs text-zinc-500">Keine History</p>
+                    <p className="text-xs text-ink-3">Keine History</p>
                   ) : (
                     (histories[entry.id] ?? []).map((h) => (
                       <HistoryItem key={h.id} history={h} />
@@ -226,14 +222,10 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
       )}
 
       {hasMore && (
-        <div className="text-center pt-2">
-          <button
-            onClick={handleLoadMore}
-            disabled={loading}
-            className="px-4 py-2 text-sm border border-zinc-700 rounded-lg hover:border-zinc-500 transition disabled:opacity-50"
-          >
-            {loading ? "Lade..." : "Mehr laden"}
-          </button>
+        <div className="pt-1 text-center">
+          <Button variant="ghost" onClick={handleLoadMore} disabled={loading}>
+            {loading ? "Lade…" : "Mehr laden"}
+          </Button>
         </div>
       )}
     </div>
@@ -258,36 +250,36 @@ function HistoryItem({ history }: { history: HistoryEntry }) {
   }
 
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2 text-xs">
-        <span className="text-zinc-600 tabular-nums">
+        <span className="tnum text-label">
           {new Date(history.geaendertUm).toLocaleTimeString("de-CH", {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
           })}
         </span>
-        <span className="text-zinc-500">
+        <span className="text-ink-3">
           {history.geaendertVon?.name ?? "System"}
         </span>
         {history.gamePunkteVorher !== null &&
           history.gamePunkteNachher !== null && (
-            <span className="text-zinc-400">
+            <span className="tnum text-ink-2">
               Punkte: {history.gamePunkteVorher} → {history.gamePunkteNachher}
             </span>
           )}
       </div>
 
       {changedFields.length > 0 && (
-        <div className="text-[11px] space-y-0.5">
+        <div className="flex flex-col gap-0.5 text-[11px]">
           {changedFields.map((f) => (
             <div key={f.key} className="flex items-center gap-2">
-              <span className="text-zinc-500 w-20 truncate">{f.key}:</span>
-              <span className="text-red-400/70 line-through">
+              <span className="w-20 truncate text-ink-3">{f.key}:</span>
+              <span className="tnum text-hot-tint line-through">
                 {String(f.before ?? "–")}
               </span>
-              <span className="text-zinc-600">→</span>
-              <span className="text-emerald-400/70">
+              <span className="text-faint">→</span>
+              <span className="tnum text-done-tint">
                 {String(f.after ?? "–")}
               </span>
             </div>
@@ -296,7 +288,7 @@ function HistoryItem({ history }: { history: HistoryEntry }) {
       )}
 
       {history.grund && (
-        <p className="text-[11px] text-zinc-500 italic">
+        <p className="text-[11px] italic text-ink-3">
           Grund: {history.grund}
         </p>
       )}

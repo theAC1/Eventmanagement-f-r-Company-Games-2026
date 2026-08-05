@@ -1,26 +1,309 @@
 @import "tailwindcss";
 
+/*
+ * Company Games 2026 — Design-Tokens
+ * Dunkles Leitstand-Theme (Standard) + helle Tageslicht-Variante.
+ * Quelle: Redesign/Company-Games-2026-Redesign.html (DESIGN-SPEC).
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Flächen, tief → hoch */
+  --bg: #0a111c;
+  --sunken: #0d1726; /* Sidebar, Tabellenkopf, Eingabefüllungen */
+  --surface: #101b2b; /* Karten, Listenzeilen */
+  --raised: #16243a; /* Tasten, Spec-Chips */
+  --track: #1a2739; /* Fortschrittsbalken-Hintergrund */
+  --cell-empty: #141f31; /* leere Rasterzelle (Zeitachse) */
+  --cell-empty-border: #1e2e45;
+
+  /* Linien */
+  --line: #1d2c44; /* Struktur: Panels, Topbars, Spalten */
+  --line-soft: #16233a; /* Zeilentrenner in Tabellen */
+  --line-strong: #24395a; /* interaktive Ränder: Buttons, Felder */
+  --line-key: #2c3e58; /* Zähler-Minus-Taste, Checkboxen */
+
+  /* Text-Leiter */
+  --ink: #e9f0f8; /* primär */
+  --ink-2: #c8d6e8; /* sekundäre Betonung */
+  --ink-3: #8a9cb8; /* Fliesstext sekundär */
+  --label: #7c90ae; /* ALL-CAPS-Labels, Tabellenköpfe, Mono-Meta */
+  --faint: #6b7f9c; /* Chevrons, Fussnoten */
+  --disabled: #3a4c68;
+  --nav-idle: #93a7c4;
+
+  /* Aktion (Himmelblau) */
+  --action: #3da5e5;
+  --action-hover: #7cc4ef;
+  --action-tint: #8fcbf2; /* Text auf blau getönten Chips */
+  --on-action: #06121d; /* Text auf Aktionsblau — dunkles Navy, nicht weiss */
+  --action-dim: rgba(61, 165, 229, 0.14);
+  --action-dim-strong: rgba(61, 165, 229, 0.16);
+  --action-row: rgba(61, 165, 229, 0.07); /* selektierte Zeile */
+  --action-ring: rgba(61, 165, 229, 0.25);
+
+  /* HOT / Abbruch */
+  --hot: #e23b30;
+  --hot-tint: #f58d85;
+  --on-hot: #fff3f2;
+  --hot-dim: rgba(226, 59, 48, 0.14);
+  --hot-border: rgba(226, 59, 48, 0.45);
+
+  /* Fertig */
+  --done: #34c77b;
+  --done-tint: #7adca9;
+  --done-dim: rgba(52, 199, 123, 0.12);
+  --done-dim-strong: rgba(52, 199, 123, 0.2);
+
+  /* Läuft / Verzug */
+  --warn: #e7a83a;
+  --warn-dim: rgba(231, 168, 58, 0.12);
+  --warn-row: rgba(231, 168, 58, 0.05); /* Live-Zeile */
+  --warn-border: rgba(231, 168, 58, 0.35);
+
+  /* Neutral (Entwurf / Offen) */
+  --neutral-dim: rgba(138, 156, 184, 0.1);
+
+  /* Lageplan */
+  --solo: rgba(20, 140, 90, 0.62);
+  --solo-border: rgba(52, 199, 123, 0.9);
+  --duell: rgba(30, 111, 168, 0.62);
+  --duell-border: rgba(61, 165, 229, 0.9);
+  --map-overlay: rgba(10, 17, 28, 0.86);
+
+  --bronze: #c4783c;
+  --scrim: rgba(4, 8, 14, 0.66);
+  --shadow-pop: 0 18px 40px -18px rgba(2, 6, 12, 0.85);
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #eef2f7;
+  --sunken: #e6ecf4;
+  --surface: #ffffff;
+  --raised: #eef3f9;
+  --track: #dde5ef;
+  --cell-empty: #e3eaf2;
+  --cell-empty-border: #d2dce8;
+
+  --line: #d9e1ec;
+  --line-soft: #e6ecf3;
+  --line-strong: #c2cfdf;
+  --line-key: #b3c2d6;
+
+  --ink: #101b2b;
+  --ink-2: #33465f;
+  --ink-3: #52657f;
+  --label: #5d7190;
+  --faint: #7a8ca6;
+  --disabled: #a8b7cb;
+  --nav-idle: #4a5f7c;
+
+  --action: #1878ba;
+  --action-hover: #2f8fd1;
+  --action-tint: #10639e;
+  --on-action: #ffffff;
+  --action-dim: rgba(24, 120, 186, 0.12);
+  --action-dim-strong: rgba(24, 120, 186, 0.15);
+  --action-row: rgba(24, 120, 186, 0.07);
+  --action-ring: rgba(24, 120, 186, 0.25);
+
+  --hot: #c72f26;
+  --hot-tint: #a3241d;
+  --on-hot: #fff3f2;
+  --hot-dim: rgba(199, 47, 38, 0.1);
+  --hot-border: rgba(199, 47, 38, 0.4);
+
+  --done: #178a52;
+  --done-tint: #0f6b3e;
+  --done-dim: rgba(23, 138, 82, 0.12);
+  --done-dim-strong: rgba(23, 138, 82, 0.18);
+
+  --warn: #9f6d0c;
+  --warn-dim: rgba(159, 109, 12, 0.12);
+  --warn-row: rgba(159, 109, 12, 0.06);
+  --warn-border: rgba(159, 109, 12, 0.35);
+
+  --neutral-dim: rgba(82, 101, 127, 0.1);
+
+  --solo: rgba(20, 140, 90, 0.5);
+  --solo-border: rgba(17, 122, 71, 0.9);
+  --duell: rgba(30, 111, 168, 0.5);
+  --duell-border: rgba(21, 100, 153, 0.9);
+  --map-overlay: rgba(255, 255, 255, 0.88);
+
+  --bronze: #a05f2c;
+  --scrim: rgba(16, 27, 43, 0.4);
+  --shadow-pop: 0 18px 40px -20px rgba(16, 27, 43, 0.35);
+
+  color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-bg: var(--bg);
+  --color-sunken: var(--sunken);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-track: var(--track);
+  --color-cell-empty: var(--cell-empty);
+  --color-cell-empty-border: var(--cell-empty-border);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-line-key: var(--line-key);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-label: var(--label);
+  --color-faint: var(--faint);
+  --color-disabled: var(--disabled);
+  --color-nav-idle: var(--nav-idle);
+
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-action-tint: var(--action-tint);
+  --color-on-action: var(--on-action);
+  --color-action-dim: var(--action-dim);
+  --color-action-dim-strong: var(--action-dim-strong);
+  --color-action-row: var(--action-row);
+
+  --color-hot: var(--hot);
+  --color-hot-tint: var(--hot-tint);
+  --color-on-hot: var(--on-hot);
+  --color-hot-dim: var(--hot-dim);
+
+  --color-done: var(--done);
+  --color-done-tint: var(--done-tint);
+  --color-done-dim: var(--done-dim);
+  --color-done-dim-strong: var(--done-dim-strong);
+
+  --color-warn: var(--warn);
+  --color-warn-dim: var(--warn-dim);
+  --color-warn-row: var(--warn-row);
+
+  --color-neutral-dim: var(--neutral-dim);
+  --color-bronze: var(--bronze);
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+a {
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+/* Ziffern immer gleich breit — Zeiten, Punkte, Zähler */
+.tnum {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ALL-CAPS-Sektionslabel (10px/600/.12em) */
+.cg-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+/* Sanfter Theme-Wechsel auf Token-Konsumenten */
+html[data-theme-transition] body,
+html[data-theme-transition] body * {
+  transition:
+    background-color var(--duration-slow) var(--ease-out),
+    border-color var(--duration-slow) var(--ease-out),
+    color var(--duration-slow) var(--ease-out);
+}
+
+:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* HOT-Puls — einzige Animation aus dem Redesign-Comp, unverändert */
+@keyframes cgPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.anim-hot-pulse {
+  animation: cgPulse 1.6s ease-in-out infinite;
+}
+
+/* Eintritt von Listen/Karten — einmalig, kein Scroll-Theater */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Zähler-Feedback: kurzer Puls bei Wertänderung */
+@keyframes count-pulse {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.anim-rise {
+  animation: rise-in var(--duration-slow) var(--ease-out) both;
+}
+
+.anim-pop {
+  animation: pop-in var(--duration-base) var(--ease-out) both;
+}
+
+.anim-count {
+  animation: count-pulse var(--duration-slow) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

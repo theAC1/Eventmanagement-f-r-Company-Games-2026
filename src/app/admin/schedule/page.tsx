@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Lightning } from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { Button } from "@/components/ui/button";
 import { Team, Game, ScheduleResult, SavedConfig } from "./types";
 import { GespeicherteZeitplaene } from "./GespeicherteZeitplaene";
 import { KonfigurationPanel } from "./KonfigurationPanel";
@@ -15,6 +18,9 @@ export default function SchedulePage() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"matrix" | "team">("matrix");
   const [selectedTeam, setSelectedTeam] = useState<string>("");
+
+  // Frisch generiert? (>0 = Zeitstempel der letzten Generierung, 0 = geladen)
+  const [genStamp, setGenStamp] = useState(0);
 
   // Gespeicherte Zeitplaene
   const [savedConfigs, setSavedConfigs] = useState<SavedConfig[]>([]);
@@ -102,6 +108,7 @@ export default function SchedulePage() {
       const res = await fetch("/api/schedule/" + configId);
       if (!res.ok) throw new Error("Fehler beim Laden");
       const data = await res.json();
+      setGenStamp(0);
       setResult(data);
       setLoadedConfigId(data.id);
       setSaveName(data.name);
@@ -190,6 +197,7 @@ export default function SchedulePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResult(data);
+      setGenStamp(Date.now());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Fehler");
     } finally {
@@ -211,61 +219,87 @@ export default function SchedulePage() {
     if (update.mittagVersatz !== undefined) setMittagVersatz(update.mittagVersatz);
   };
 
+  const readyGames = games.filter(
+    (g) => g.status === "BEREIT" || g.status === "AKTIV"
+  );
+  const aktiveConfig = savedConfigs.find((c) => c.istAktiv);
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Zeitplan-Engine</h1>
+    <div className="flex flex-col">
+      <TopBar title="Zeitplan">
+        <span className="hidden text-[13px] text-ink-3 md:inline">
+          {aktiveConfig ? (
+            <>
+              Aktiv:{" "}
+              <span className="font-medium text-ink-2">{aktiveConfig.name}</span>
+            </>
+          ) : (
+            "Kein aktiver Zeitplan"
+          )}
+        </span>
+        <TopBarSpacer />
+        {error && <span className="text-sm text-hot-tint">{error}</span>}
+        <Button
+          variant="primary"
+          onClick={handleGenerate}
+          disabled={loading || teams.length === 0 || readyGames.length === 0}
+        >
+          <Lightning size={15} weight="bold" />
+          {loading ? "Generiert..." : "Zeitplan generieren"}
+        </Button>
+      </TopBar>
 
-      <GespeicherteZeitplaene
-        configs={savedConfigs}
-        loadedConfigId={loadedConfigId}
-        onLoad={handleLoad}
-        onDelete={handleDelete}
-        onSetActive={handleSetActive}
-      />
-
-      <KonfigurationPanel
-        teams={teams}
-        games={games}
-        loading={loading}
-        error={error}
-        loadedConfigId={loadedConfigId}
-        saveName={saveName}
-        blockDauer={blockDauer}
-        wechselzeit={wechselzeit}
-        startZeit={startZeit}
-        mittag={{ mittagAktiv, mittagNachRunde, mittagDauer, mittagMaxTeams, mittagVersatz }}
-        quickTeamCount={quickTeamCount}
-        onBlockDauerChange={setBlockDauer}
-        onWechselzeitChange={setWechselzeit}
-        onStartZeitChange={setStartZeit}
-        onMittagChange={handleMittagChange}
-        onQuickTeamCountChange={setQuickTeamCount}
-        onGenerateQuickTeams={generateQuickTeams}
-        onGenerate={handleGenerate}
-      />
-
-      {result && (
-        <SpeichernLeiste
-          saveName={saveName}
-          loading={loading}
+      <div className="space-y-5 px-4 py-6 sm:px-[22px]">
+        <GespeicherteZeitplaene
+          configs={savedConfigs}
           loadedConfigId={loadedConfigId}
-          saveMsg={saveMsg}
-          onSaveNameChange={setSaveName}
-          onSave={handleSave}
-          onSaveAsNew={() => { setLoadedConfigId(null); setSaveName(""); }}
+          onLoad={handleLoad}
+          onDelete={handleDelete}
+          onSetActive={handleSetActive}
         />
-      )}
 
-      {result && (
-        <ZeitplanErgebnis
-          result={result}
+        <KonfigurationPanel
           teams={teams}
-          viewMode={viewMode}
-          selectedTeam={selectedTeam}
-          onViewModeChange={setViewMode}
-          onSelectedTeamChange={setSelectedTeam}
+          games={games}
+          loading={loading}
+          blockDauer={blockDauer}
+          wechselzeit={wechselzeit}
+          startZeit={startZeit}
+          mittag={{ mittagAktiv, mittagNachRunde, mittagDauer, mittagMaxTeams, mittagVersatz }}
+          quickTeamCount={quickTeamCount}
+          onBlockDauerChange={setBlockDauer}
+          onWechselzeitChange={setWechselzeit}
+          onStartZeitChange={setStartZeit}
+          onMittagChange={handleMittagChange}
+          onQuickTeamCountChange={setQuickTeamCount}
+          onGenerateQuickTeams={generateQuickTeams}
         />
-      )}
+
+        {result && (
+          <SpeichernLeiste
+            saveName={saveName}
+            loading={loading}
+            loadedConfigId={loadedConfigId}
+            saveMsg={saveMsg}
+            onSaveNameChange={setSaveName}
+            onSave={handleSave}
+            onSaveAsNew={() => { setLoadedConfigId(null); setSaveName(""); }}
+          />
+        )}
+
+        {result && (
+          <ZeitplanErgebnis
+            key={genStamp}
+            animate={genStamp > 0}
+            result={result}
+            teams={teams}
+            viewMode={viewMode}
+            selectedTeam={selectedTeam}
+            onViewModeChange={setViewMode}
+            onSelectedTeamChange={setSelectedTeam}
+          />
+        )}
+      </div>
     </div>
   );
 }

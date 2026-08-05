@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
 import { getCurrentZeitplanConfig } from "@/lib/zeitplan-config";
+import { getFeldNummern } from "@/lib/feld-info";
 
 // GET /api/schiedsrichter/meine-slots – Persönlicher Tagesplan des eingeloggten Schiedsrichters
 export async function GET() {
@@ -40,6 +41,11 @@ export async function GET() {
       orderBy: [{ startZeit: "asc" }, { runde: "asc" }],
     });
 
+    const gameIds = slots
+      .map((s) => s.game?.id)
+      .filter((id): id is string => Boolean(id));
+    const feldNummern = await getFeldNummern(gameIds);
+
     return NextResponse.json({
       config: { id: config.id, name: config.name, istAktiv: config.istAktiv },
       slots: slots.map((s) => ({
@@ -56,6 +62,7 @@ export async function GET() {
         teamIds: s.teams.map((t) => t.team.id),
         teamNames: s.teams.map((t) => t.team.name),
         ergebnisIds: s.ergebnisse.map((e) => e.id),
+        feld: s.game ? (feldNummern.get(s.game.id) ?? null) : null,
       })),
     });
   } catch (error) {

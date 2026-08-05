@@ -1,6 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { CaretRight, LockSimple } from "@phosphor-icons/react";
+import { KpiBand, KpiCell } from "@/components/ui/kpi";
+import { ModusChip } from "@/components/ui/pills";
+import { ProgressBar, progressColor } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 type RanglisteEntry = {
   teamId: string;
@@ -33,25 +37,37 @@ type UebersichtTabProps = {
   rangliste: RanglisteEntry[];
   ergebnisse: GameErgebnis[];
   games: GameInfo[];
-  lastUpdate: Date | null;
   fetchError: string | null;
   onRetry: () => void;
 };
+
+const DONE_STATUS = new Set(["EINGETRAGEN", "VERIFIZIERT", "KORRIGIERT"]);
+
+/** Rangfarben im Rangkampf: 1 amber, 2 hell, 3 bronze, 4 gedämpft. */
+const RANG_COLORS = ["var(--warn)", "var(--ink-2)", "var(--bronze)", "var(--ink-3)"];
+const RANG_BAR_COLORS = ["var(--warn)", "var(--ink-2)", "var(--bronze)", "var(--line-strong)"];
+
+function formatZeit(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString("de-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export function UebersichtTab({
   rangliste,
   ergebnisse,
   games,
-  lastUpdate,
   fetchError,
   onRetry,
 }: UebersichtTabProps) {
   const totalGames = games.length;
   const totalTeams = rangliste.length;
   const totalSlots = totalGames * totalTeams;
-  const doneSlots = ergebnisse.length;
-  const progressPct =
-    totalSlots > 0 ? Math.round((doneSlots / totalSlots) * 100) : 0;
+  const erfasste = ergebnisse.filter((e) => DONE_STATUS.has(e.status));
+  const doneSlots = erfasste.length;
+  const offeneSlots = Math.max(0, totalSlots - doneSlots);
+  const progressPct = totalSlots > 0 ? Math.round((doneSlots / totalSlots) * 100) : 0;
 
   // Ergebnisse pro Game
   const ergebnisseProGame = new Map<string, GameErgebnis[]>();
@@ -61,273 +77,266 @@ export function UebersichtTab({
     ergebnisseProGame.set(e.game.id, list);
   }
 
-  // Letztes Ergebnis (fuer Live-Feed)
-  const recentErgebnisse = [...ergebnisse]
+  // Letzte Ergebnisse (Eingänge-Feed)
+  const recentErgebnisse = [...erfasste]
     .filter((e) => e.eingetragenUm)
     .sort(
       (a, b) =>
-        new Date(b.eingetragenUm!).getTime() -
-        new Date(a.eingetragenUm!).getTime(),
+        new Date(b.eingetragenUm!).getTime() - new Date(a.eingetragenUm!).getTime(),
     )
-    .slice(0, 8);
+    .slice(0, 7);
 
   // Live-Partien (LAUFEND)
   const laufendePartien = ergebnisse.filter((e) => e.status === "LAUFEND");
 
-  return (
-    <div className="space-y-6">
-      {/* Header mit Fortschritt + Export */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-zinc-500">
-              {doneSlots}/{totalSlots} Ergebnisse ({progressPct}%)
-            </p>
-            <div className="w-32 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 rounded-full transition-all"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-            {lastUpdate && (
-              <span className="text-xs text-zinc-600">
-                {lastUpdate.toLocaleTimeString("de-CH")} &middot; Auto 5s
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative group">
-            <button className="px-3 py-2 border border-zinc-700 text-sm rounded-lg hover:border-zinc-500 transition flex items-center gap-1.5">
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              Export
-            </button>
-            <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-              <button
-                onClick={() => window.open("/api/export/rangliste", "_blank")}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 rounded-t-lg transition"
-              >
-                Rangliste CSV
-              </button>
-              <button
-                onClick={() => window.open("/api/export/ergebnisse", "_blank")}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 transition"
-              >
-                Ergebnisse CSV
-              </button>
-              <button
-                onClick={() => window.open("/api/export/teams", "_blank")}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 transition"
-              >
-                Teams CSV
-              </button>
-              <div className="border-t border-zinc-700" />
-              <button
-                onClick={() =>
-                  window.open("/admin/gameday/print", "_blank")
-                }
-                className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 rounded-b-lg transition text-zinc-400"
-              >
-                Druckansicht
-              </button>
-            </div>
-          </div>
-          <Link
-            href="/scoreboard"
-            target="_blank"
-            className="px-3 py-2 border border-zinc-700 text-sm rounded-lg hover:border-zinc-500 transition"
-          >
-            Scoreboard
-          </Link>
-        </div>
-      </div>
+  // Stationen fertig: alle Teams erfasst
+  const stationenFertig = games.filter((g) => {
+    const done = (ergebnisseProGame.get(g.id) ?? []).filter((e) =>
+      DONE_STATUS.has(e.status),
+    ).length;
+    return totalTeams > 0 && done >= totalTeams;
+  }).length;
 
+  const top4 = rangliste.slice(0, 4);
+  const leaderPunkte = top4[0]?.rangPunkteSumme ?? 0;
+
+  return (
+    <div className="flex flex-col">
       {fetchError && (
-        <div className="px-3 py-2 bg-red-900/30 border border-red-800/50 rounded-lg text-xs text-red-300 flex items-center justify-between">
-          <span>
+        <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-[10px] border border-[var(--hot-border)] bg-hot-dim px-3.5 py-2.5 sm:mx-[22px]">
+          <span className="text-xs text-hot-tint">
             {fetchError} — Daten könnten veraltet sein. Nächster Versuch in 5s.
           </span>
-          <button
-            onClick={onRetry}
-            className="ml-3 px-2 py-1 border border-red-800 rounded text-xs hover:border-red-600 transition"
-          >
+          <Button variant="danger-ghost" onClick={onRetry} className="shrink-0">
             Jetzt
-          </button>
+          </Button>
         </div>
       )}
 
-      {/* Live-Partien */}
-      {laufendePartien.length > 0 && (
-        <div className="border border-zinc-800 rounded-lg p-4 space-y-3">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-            Live-Partien
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {laufendePartien.map((e) => {
-              const startedAt = e.eingetragenUm
-                ? new Date(e.eingetragenUm)
-                : null;
-              const minutenSeit = startedAt
-                ? Math.round(
-                    (Date.now() - startedAt.getTime()) / 60000,
-                  )
-                : null;
+      {/* KPI-Band */}
+      <KpiBand columns="repeat(auto-fit, minmax(160px, 1fr))" className="mt-0">
+        <KpiCell
+          label="Ergebnisse"
+          value={doneSlots}
+          denominator={`/ ${totalSlots}`}
+          bar={{ pct: progressPct, color: "var(--done)" }}
+        />
+        <KpiCell
+          label="Offen"
+          value={offeneSlots}
+          unit="Slots"
+          valueColor={offeneSlots > 0 ? "var(--warn)" : "var(--ink)"}
+          note={
+            laufendePartien.length > 0
+              ? `${laufendePartien.length} laufen gerade`
+              : undefined
+          }
+        />
+        <KpiCell
+          label="Laufende Partien"
+          value={laufendePartien.length}
+          valueColor={laufendePartien.length > 0 ? "var(--warn)" : "var(--ink)"}
+        />
+        <KpiCell
+          label="Stationen fertig"
+          value={stationenFertig}
+          denominator={`/ ${totalGames}`}
+          valueColor={
+            totalGames > 0 && stationenFertig === totalGames
+              ? "var(--done)"
+              : "var(--ink)"
+          }
+          last
+        />
+      </KpiBand>
 
-              return (
-                <div
-                  key={e.id}
-                  className="border border-blue-900/50 bg-blue-950/20 rounded-lg p-3 space-y-1"
-                >
-                  <p className="text-xs text-blue-400 font-medium">
-                    {e.game.name}
-                  </p>
-                  <p className="text-sm text-zinc-200">
-                    {e.team.name}
-                  </p>
-                  {minutenSeit !== null && (
-                    <p className="text-[11px] text-zinc-500">
-                      Läuft seit {minutenSeit} min
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+      {/* Split: Stationen-Tabelle + rechte Leiste */}
+      <div className="flex flex-col xl:flex-row">
+        {/* Stationen */}
+        <div className="min-w-0 flex-1 border-line xl:border-r">
+          <div className="hidden gap-3.5 border-b border-line bg-sunken px-[22px] py-[11px] xl:grid xl:grid-cols-[36px_minmax(0,1fr)_168px_200px_150px_34px]">
+            <span className="cg-label">NR</span>
+            <span className="cg-label">Station</span>
+            <span className="cg-label">Fortschritt</span>
+            <span className="cg-label">Läuft jetzt</span>
+            <span className="cg-label">Zuletzt</span>
+            <span />
           </div>
-        </div>
-      )}
 
-      <div className="grid grid-cols-3 gap-4">
-        {/* Stationen-Status */}
-        <div className="col-span-2 border border-zinc-800 rounded-lg p-4 space-y-3">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-            Stationen
-          </h2>
-          <div className="space-y-1.5">
-            {games.map((g) => {
-              const erg = ergebnisseProGame.get(g.id) ?? [];
-              const done = erg.length;
-              const pct =
-                totalTeams > 0 ? Math.round((done / totalTeams) * 100) : 0;
-              const isDuell = g.modus === "DUELL";
-              const lastResult = erg
-                .filter((e) => e.eingetragenUm)
-                .sort(
-                  (a, b) =>
-                    new Date(b.eingetragenUm!).getTime() -
-                    new Date(a.eingetragenUm!).getTime(),
-                )[0];
+          {games.length === 0 && (
+            <p className="px-4 py-8 text-center text-sm text-ink-3 sm:px-[22px]">
+              Keine aktiven Stationen
+            </p>
+          )}
 
-              return (
-                <div
-                  key={g.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-900/40"
-                >
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      pct === 100
-                        ? "bg-emerald-400"
-                        : pct > 0
-                          ? "bg-amber-400"
-                          : "bg-zinc-600"
-                    }`}
-                  />
-                  <span
-                    className={`text-sm font-medium flex-1 ${isDuell ? "text-blue-300" : ""}`}
-                  >
+          {games.map((g, idx) => {
+            const erg = ergebnisseProGame.get(g.id) ?? [];
+            const done = erg.filter((e) => DONE_STATUS.has(e.status)).length;
+            const pct = totalTeams > 0 ? Math.round((done / totalTeams) * 100) : 0;
+            const liveHere = laufendePartien.filter((e) => e.game.id === g.id);
+            const isLive = liveHere.length > 0;
+            const liveText = isLive
+              ? liveHere.map((e) => e.team.name).join(", ")
+              : null;
+            const lastResult = erg
+              .filter((e) => e.eingetragenUm && DONE_STATUS.has(e.status))
+              .sort(
+                (a, b) =>
+                  new Date(b.eingetragenUm!).getTime() -
+                  new Date(a.eingetragenUm!).getTime(),
+              )[0];
+
+            return (
+              <div
+                key={g.id}
+                className={`flex flex-col gap-2 border-b border-line-soft px-4 py-3 transition-colors duration-150 hover:bg-sunken/60 sm:px-[22px] xl:grid xl:h-[62px] xl:grid-cols-[36px_minmax(0,1fr)_168px_200px_150px_34px] xl:items-center xl:gap-3.5 xl:py-0 ${
+                  isLive ? "bg-warn-row" : ""
+                }`}
+              >
+                <span className="tnum hidden text-xs font-semibold text-ink-3 xl:block">
+                  {idx + 1}
+                </span>
+
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="truncate text-sm font-medium text-ink">
+                    <span className="tnum mr-2 text-xs font-semibold text-ink-3 xl:hidden">
+                      {idx + 1}
+                    </span>
                     {g.name}
                   </span>
-                  <span className="text-xs text-zinc-500">
+                  <div className="flex items-center gap-[7px]">
+                    <ModusChip modus={g.modus} size="table" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <ProgressBar
+                    pct={pct}
+                    color={progressColor({ done, total: totalTeams, live: isLive })}
+                    height={6}
+                    className="flex-1"
+                  />
+                  <span className="tnum w-11 text-right text-xs text-ink-3">
                     {done}/{totalTeams}
                   </span>
-                  <div className="w-16 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500/60 rounded-full"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  {lastResult && (
-                    <span className="text-[10px] text-zinc-600 w-24 text-right truncate">
-                      {lastResult.team.name}
-                    </span>
+                </div>
+
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="h-[7px] w-[7px] shrink-0 rounded-full"
+                    style={{ background: isLive ? "var(--warn)" : "transparent" }}
+                  />
+                  {liveText ? (
+                    <span className="truncate text-[13px] text-ink">{liveText}</span>
+                  ) : (
+                    <span className="text-[13px] text-disabled">—</span>
                   )}
                 </div>
-              );
-            })}
-          </div>
+
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  {lastResult ? (
+                    <>
+                      <span className="truncate text-xs text-ink-3">
+                        {lastResult.team.name}
+                      </span>
+                      <span className="tnum text-[11px] text-label">
+                        {formatZeit(lastResult.eingetragenUm!)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-disabled">—</span>
+                  )}
+                </div>
+
+                <CaretRight
+                  size={15}
+                  weight="bold"
+                  className="hidden text-faint xl:block"
+                />
+              </div>
+            );
+          })}
         </div>
 
-        {/* Rangliste + Live-Feed */}
-        <div className="space-y-4">
-          <div className="border border-zinc-800 rounded-lg p-4 space-y-2">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-              Top 5
-            </h2>
-            {rangliste.slice(0, 5).map((r) => (
-              <div
-                key={r.teamId}
-                className="flex items-center justify-between text-sm px-1 py-1"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-5 text-right font-bold tabular-nums ${r.gesamtRang <= 3 ? "text-amber-400" : "text-zinc-500"}`}
-                  >
-                    {r.gesamtRang}
-                  </span>
-                  <span className="truncate max-w-[100px]">
-                    {r.teamName}
-                  </span>
-                </div>
-                <span className="font-bold tabular-nums">
-                  {r.rangPunkteSumme}
-                </span>
-              </div>
-            ))}
+        {/* Rechte Leiste */}
+        <div className="flex shrink-0 flex-col xl:w-[340px]">
+          {/* Rangkampf */}
+          <div className="flex flex-col gap-3.5 border-b border-line px-4 py-[18px] sm:px-5">
+            <div className="flex items-center justify-between">
+              <span className="cg-label">Rangkampf</span>
+              <span className="flex items-center gap-1 text-[10px] font-semibold tracking-[0.12em] text-warn">
+                <LockSimple size={12} weight="bold" />
+                NUR ORGA
+              </span>
+            </div>
+
+            {top4.length === 0 ? (
+              <p className="text-xs text-ink-3">Noch keine Rangliste</p>
+            ) : (
+              top4.map((r, idx) => {
+                const delta =
+                  idx === 0 ? "" : `−${leaderPunkte - r.rangPunkteSumme}`;
+                const barW =
+                  leaderPunkte > 0
+                    ? Math.round((r.rangPunkteSumme / leaderPunkte) * 100)
+                    : 0;
+                return (
+                  <div key={r.teamId} className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="tnum w-4 text-[15px] font-bold"
+                        style={{ color: RANG_COLORS[idx] ?? "var(--ink-3)" }}
+                      >
+                        {r.gesamtRang}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+                        {r.teamName}
+                      </span>
+                      <span className="tnum text-base font-semibold text-ink">
+                        {r.rangPunkteSumme}
+                      </span>
+                      <span className="tnum w-8 text-right text-[11px] text-ink-3">
+                        {delta}
+                      </span>
+                    </div>
+                    <ProgressBar
+                      pct={barW}
+                      color={RANG_BAR_COLORS[idx] ?? "var(--line-strong)"}
+                      height={4}
+                    />
+                  </div>
+                );
+              })
+            )}
           </div>
 
-          {/* Live-Feed */}
-          <div className="border border-zinc-800 rounded-lg p-4 space-y-2">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-              Live-Feed
-            </h2>
+          {/* Eingänge */}
+          <div className="flex flex-1 flex-col gap-3 px-4 py-[18px] sm:px-5">
+            <span className="cg-label">Eingänge</span>
             {recentErgebnisse.length === 0 ? (
-              <p className="text-xs text-zinc-600">Noch keine Ergebnisse</p>
+              <p className="text-xs text-ink-3">Noch keine Ergebnisse</p>
             ) : (
-              <div className="space-y-1.5">
-                {recentErgebnisse.map((e) => (
-                  <div key={e.id} className="text-[11px] text-zinc-400">
-                    <span
-                      className={
-                        e.rangImGame === 1 ? "text-amber-400" : ""
-                      }
-                    >
-                      #{e.rangImGame}
-                    </span>{" "}
-                    <span className="text-zinc-300">{e.team.name}</span>
-                    <span className="text-zinc-600"> @ </span>
+              recentErgebnisse.map((e) => (
+                <div key={e.id} className="flex items-center gap-2.5">
+                  <span className="tnum w-[38px] shrink-0 text-[11px] text-label">
+                    {e.eingetragenUm ? formatZeit(e.eingetragenUm) : "–"}
+                  </span>
+                  <span
+                    className="tnum w-5 shrink-0 text-[11px] font-bold"
+                    style={{
+                      color: e.rangImGame === 1 ? "var(--warn)" : "var(--ink-3)",
+                    }}
+                  >
+                    {e.rangImGame != null ? `#${e.rangImGame}` : "–"}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink-2">
+                    {e.team.name}
+                  </span>
+                  <span className="max-w-[110px] truncate text-[11px] text-ink-3">
                     {e.game.name}
-                    {e.eingetragenUm && (
-                      <span className="text-zinc-700 ml-1">
-                        {new Date(e.eingetragenUm).toLocaleTimeString(
-                          "de-CH",
-                          { hour: "2-digit", minute: "2-digit" },
-                        )}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  </span>
+                </div>
+              ))
             )}
           </div>
         </div>

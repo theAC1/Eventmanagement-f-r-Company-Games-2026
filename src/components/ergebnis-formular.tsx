@@ -27,7 +27,32 @@ export type ErgebnisFormularProps = {
 };
 
 const inputClass =
-  "w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-lg font-mono focus:outline-none focus:border-zinc-500 disabled:opacity-60 disabled:cursor-not-allowed";
+  "tnum h-12 w-full rounded-[9px] border border-line-strong bg-sunken px-3 text-lg text-ink placeholder:text-faint focus:border-action focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
+
+const labelClass = "cg-label text-label";
+
+/** Options-/Level-Taste: aktiv = Aktionsblau, idle = ruhiger Rand. */
+const optionButtonClass = (aktiv: boolean) =>
+  `min-h-12 flex-1 rounded-[9px] px-2 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
+    aktiv
+      ? "bg-action font-semibold text-on-action"
+      : "border border-line-strong font-medium text-ink-2"
+  }`;
+
+/** Erfolg-Toggle: Ja = done-Stil, Nein = hot-Stil (jeweils dim-Hintergrund). */
+const jaButtonClass = (aktiv: boolean) =>
+  `min-h-12 flex-1 rounded-[9px] px-2 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
+    aktiv
+      ? "border-[1.5px] border-done bg-done-dim font-semibold text-done-tint"
+      : "border border-line-strong font-medium text-ink-3"
+  }`;
+
+const neinButtonClass = (aktiv: boolean) =>
+  `min-h-12 flex-1 rounded-[9px] px-2 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
+    aktiv
+      ? "border-[1.5px] border-[var(--hot-border)] bg-hot-dim font-semibold text-hot-tint"
+      : "border border-line-strong font-medium text-ink-3"
+  }`;
 
 export function ErgebnisFormular({
   wertungslogik,
@@ -41,7 +66,7 @@ export function ErgebnisFormular({
 
   if (!wl) {
     return (
-      <div className="border border-zinc-800 rounded-lg p-4 text-zinc-500 text-sm">
+      <div className="rounded-xl border border-line bg-surface p-4 text-sm text-ink-3">
         Keine Wertungslogik definiert
       </div>
     );
@@ -53,9 +78,9 @@ export function ErgebnisFormular({
   };
 
   return (
-    <section className="border border-zinc-800 rounded-lg p-4 space-y-4">
+    <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
       {label && (
-        <h3 className="text-sm font-medium text-zinc-400">{label}</h3>
+        <h3 className="text-sm font-semibold text-ink">{label}</h3>
       )}
 
       {/* Eingabefelder */}
@@ -67,10 +92,10 @@ export function ErgebnisFormular({
           if (felder.indexOf(f) !== idx) return null;
         }
         return (
-          <div key={f.name} className="space-y-1">
-            <label className="text-xs text-zinc-500">{f.label}</label>
+          <div key={f.name} className="flex flex-col gap-1.5">
+            <label className={labelClass}>{f.label}</label>
             {readOnly ? (
-              <div className="px-3 py-2.5 text-lg font-mono text-zinc-300">
+              <div className="tnum px-1 py-1 text-lg text-ink">
                 {(rohdaten[f.name] as string) ?? "–"}
               </div>
             ) : (
@@ -95,21 +120,17 @@ export function ErgebnisFormular({
 
       {/* Level-Auswahl (Multi-Level) */}
       {wl.typ === "multi_level" && wl.levels && (
-        <div className="space-y-1">
-          <label className="text-xs text-zinc-500">Schwierigkeit</label>
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Schwierigkeit</label>
           <div className="flex gap-2">
             {wl.levels.map((l) => (
               <button
                 key={l.name}
                 onClick={() => update("level", l.name)}
                 disabled={readOnly}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                  rohdaten.level === l.name
-                    ? "bg-white text-black border-white"
-                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                className={`${optionButtonClass(rohdaten.level === l.name)} capitalize`}
               >
-                {l.name} ({l.grundpunkte}P)
+                {l.name} <span className="tnum">({l.grundpunkte} P)</span>
               </button>
             ))}
           </div>
@@ -119,47 +140,35 @@ export function ErgebnisFormular({
       {/* Risiko-Wahl (Eierfall) */}
       {wl.typ === "risiko_wahl" && wl.optionen && (
         <>
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">Höhe</label>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass}>Höhe</label>
             <div className="flex gap-2">
               {wl.optionen.map((o) => (
                 <button
                   key={o.name}
                   onClick={() => update("option", o.name)}
                   disabled={readOnly}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                    rohdaten.option === o.name
-                      ? "bg-white text-black border-white"
-                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                  className={optionButtonClass(rohdaten.option === o.name)}
                 >
-                  {o.name} ({o.punkte_erfolg}P)
+                  {o.name} <span className="tnum">({o.punkte_erfolg} P)</span>
                 </button>
               ))}
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">Überlebt?</label>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass}>Überlebt?</label>
             <div className="flex gap-2">
               <button
                 onClick={() => update("erfolg", true)}
                 disabled={readOnly}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                  rohdaten.erfolg === true
-                    ? "bg-emerald-900/60 border-emerald-700 text-emerald-300"
-                    : "border-zinc-700 text-zinc-400"
-                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                className={jaButtonClass(rohdaten.erfolg === true)}
               >
                 Ja
               </button>
               <button
                 onClick={() => update("erfolg", false)}
                 disabled={readOnly}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                  rohdaten.erfolg === false
-                    ? "bg-red-900/60 border-red-700 text-red-300"
-                    : "border-zinc-700 text-zinc-400"
-                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                className={neinButtonClass(rohdaten.erfolg === false)}
               >
                 Nein
               </button>
@@ -172,12 +181,12 @@ export function ErgebnisFormular({
       {wl.strafen && (
         <>
           {Object.entries(wl.strafen).map(([key, sek]) => (
-            <div key={key} className="space-y-1">
-              <label className="text-xs text-zinc-500 capitalize">
-                {key.replace(/_/g, " ")} (+{sek}s)
+            <div key={key} className="flex flex-col gap-1.5">
+              <label className={`${labelClass} capitalize`}>
+                {key.replace(/_/g, " ")} (+{sek} s)
               </label>
               {readOnly ? (
-                <div className="px-3 py-2.5 text-lg font-mono text-zinc-300">
+                <div className="tnum px-1 py-1 text-lg text-ink">
                   {(rohdaten[key] as number) ?? 0}
                 </div>
               ) : (
@@ -193,29 +202,23 @@ export function ErgebnisFormular({
             </div>
           ))}
           {wl.nicht_geschafft && (
-            <div className="space-y-1">
-              <label className="text-xs text-zinc-500">Geschafft?</label>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelClass}>Geschafft?</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => update("nicht_geschafft", false)}
                   disabled={readOnly}
-                  className={`flex-1 py-2 rounded-lg text-sm border transition ${
+                  className={jaButtonClass(
                     rohdaten.nicht_geschafft === false ||
-                    rohdaten.nicht_geschafft === undefined
-                      ? "bg-emerald-900/60 border-emerald-700 text-emerald-300"
-                      : "border-zinc-700 text-zinc-400"
-                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                      rohdaten.nicht_geschafft === undefined,
+                  )}
                 >
                   Ja
                 </button>
                 <button
                   onClick={() => update("nicht_geschafft", true)}
                   disabled={readOnly}
-                  className={`flex-1 py-2 rounded-lg text-sm border transition ${
-                    rohdaten.nicht_geschafft === true
-                      ? "bg-red-900/60 border-red-700 text-red-300"
-                      : "border-zinc-700 text-zinc-400"
-                  } disabled:opacity-60 disabled:cursor-not-allowed`}
+                  className={neinButtonClass(rohdaten.nicht_geschafft === true)}
                 >
                   Nicht geschafft
                 </button>
@@ -227,10 +230,10 @@ export function ErgebnisFormular({
 
       {/* Zeit-Eingabe (wenn kein Eingabefeld definiert aber Typ=zeit) */}
       {wl.typ === "zeit" && !wl.eingabefelder?.length && (
-        <div className="space-y-1">
-          <label className="text-xs text-zinc-500">Zeit (Sekunden)</label>
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Zeit (Sekunden)</label>
           {readOnly ? (
-            <div className="px-3 py-2.5 text-lg font-mono text-zinc-300">
+            <div className="tnum px-1 py-1 text-lg text-ink">
               {(rohdaten.zeit_sekunden as number) ?? "–"}
             </div>
           ) : (

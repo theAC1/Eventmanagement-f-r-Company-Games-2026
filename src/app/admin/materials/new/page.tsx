@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { CaretLeft } from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { Button, ButtonLink } from "@/components/ui/button";
 
 type GameOption = { id: string; name: string };
 
@@ -14,6 +17,11 @@ const KATEGORIEN = [
   { value: "VERBRAUCH", label: "Verbrauch" },
   { value: "INFRASTRUKTUR", label: "Infrastruktur" },
 ];
+
+const FORM_ID = "new-material-form";
+
+const INPUT_CLS =
+  "w-full rounded-[9px] border border-line-strong bg-sunken px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-action focus:outline-none transition-colors duration-150";
 
 export default function NewMaterialPage() {
   const router = useRouter();
@@ -64,118 +72,130 @@ export default function NewMaterialPage() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div className="flex items-center gap-2 text-sm text-zinc-500">
-        <Link href="/admin/materials" className="hover:text-white transition">Material</Link>
-        <span>/</span>
-        <span className="text-white">Neu</span>
-      </div>
+    <>
+      <TopBar
+        title={
+          <span className="flex items-center gap-2.5">
+            <Link
+              href="/admin/materials"
+              className="text-faint transition-colors duration-150 hover:text-ink"
+              aria-label="Zurück zu Material"
+            >
+              <CaretLeft size={16} weight="bold" />
+            </Link>
+            Neue Position
+          </span>
+        }
+      >
+        <TopBarSpacer />
+        {error && <span className="text-[13px] text-hot-tint">{error}</span>}
+        <ButtonLink href="/admin/materials" variant="ghost">
+          Abbrechen
+        </ButtonLink>
+        <Button type="submit" form={FORM_ID} variant="primary" disabled={saving}>
+          {saving ? "Erstellt..." : "Position erstellen"}
+        </Button>
+      </TopBar>
 
-      <h1 className="text-2xl font-bold tracking-tight">Neues Material</h1>
-
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="border border-zinc-800 rounded-lg p-6 space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Name</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="z.B. Erusbacher Harassen"
-              autoFocus
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Game</label>
-              <select
-                value={form.gameId}
-                onChange={(e) => setForm({ ...form, gameId: e.target.value })}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              >
-                <option value="">Allgemein (kein Game)</option>
-                {games.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Kategorie</label>
-              <select
-                value={form.kategorie}
-                onChange={(e) => setForm({ ...form, kategorie: e.target.value })}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              >
-                {KATEGORIEN.map((k) => (
-                  <option key={k.value} value={k.value}>{k.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Menge</label>
+      <form
+        id={FORM_ID}
+        onSubmit={handleSubmit}
+        className="anim-rise max-w-[720px] space-y-5 px-4 py-5 sm:px-[22px]"
+      >
+        <section className="rounded-[10px] border border-line bg-surface p-3.5 sm:p-5">
+          <h2 className="cg-label mb-4">Grunddaten</h2>
+          <div className="space-y-4">
+            <Field label="Name">
               <input
                 type="text"
-                value={form.menge}
-                onChange={(e) => setForm({ ...form, menge: e.target.value })}
-                placeholder="z.B. 100 + 50 Reserve"
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="z.B. Erusbacher Harassen"
+                autoFocus
+                className={INPUT_CLS}
               />
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Game">
+                <select
+                  value={form.gameId}
+                  onChange={(e) => setForm({ ...form, gameId: e.target.value })}
+                  className={INPUT_CLS}
+                >
+                  <option value="">Allgemein (kein Game)</option>
+                  {games.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Kategorie">
+                <select
+                  value={form.kategorie}
+                  onChange={(e) => setForm({ ...form, kategorie: e.target.value })}
+                  className={INPUT_CLS}
+                >
+                  {KATEGORIEN.map((k) => (
+                    <option key={k.value} value={k.value}>{k.label}</option>
+                  ))}
+                </select>
+              </Field>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Sponsor</label>
-              <input
-                type="text"
-                value={form.sponsor}
-                onChange={(e) => setForm({ ...form, sponsor: e.target.value })}
-                placeholder="z.B. Erusbacher Bier"
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Menge">
+                <input
+                  type="text"
+                  value={form.menge}
+                  onChange={(e) => setForm({ ...form, menge: e.target.value })}
+                  placeholder="z.B. 100 + 50 Reserve"
+                  className={INPUT_CLS}
+                />
+              </Field>
+              <Field label="Sponsor">
+                <input
+                  type="text"
+                  value={form.sponsor}
+                  onChange={(e) => setForm({ ...form, sponsor: e.target.value })}
+                  placeholder="z.B. Erusbacher Bier"
+                  className={INPUT_CLS}
+                />
+              </Field>
+              <Field label="Kosten (CHF)">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.kostenGeschaetzt}
+                  onChange={(e) => setForm({ ...form, kostenGeschaetzt: e.target.value })}
+                  placeholder="Geschätzt"
+                  className={`${INPUT_CLS} tnum`}
+                />
+              </Field>
+            </div>
+
+            <Field label="Beschreibung">
+              <textarea
+                value={form.beschreibung}
+                onChange={(e) => setForm({ ...form, beschreibung: e.target.value })}
+                rows={2}
+                placeholder="Zusätzliche Details..."
+                className={`${INPUT_CLS} resize-none`}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Kosten (CHF)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={form.kostenGeschaetzt}
-                onChange={(e) => setForm({ ...form, kostenGeschaetzt: e.target.value })}
-                placeholder="Geschätzt"
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              />
-            </div>
+            </Field>
           </div>
+        </section>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Beschreibung</label>
-            <textarea
-              value={form.beschreibung}
-              onChange={(e) => setForm({ ...form, beschreibung: e.target.value })}
-              rows={2}
-              placeholder="Zusätzliche Details..."
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none"
-            />
-          </div>
-        </div>
-
-        {error && <p className="text-sm text-red-400">{error}</p>}
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
-          >
-            {saving ? "Erstellt..." : "Material erstellen"}
-          </button>
-          <Link href="/admin/materials" className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
-            Abbrechen
-          </Link>
-        </div>
+        {error && <p className="text-[13px] text-hot-tint">{error}</p>}
       </form>
+    </>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="cg-label block">{label}</label>
+      {children}
     </div>
   );
 }

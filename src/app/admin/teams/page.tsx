@@ -2,12 +2,19 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { Button } from "@/components/ui/button";
 
 type Team = {
   id: string; name: string; nummer: number; farbe: string;
   captainName: string | null; teilnehmerAnzahl: number | null;
   logoUrl: string | null; motto: string | null; qrToken: string;
 };
+
+const GRID_COLS = "36px 1.3fr 150px 90px 1fr 52px 90px";
+
+const INPUT_CLASS =
+  "h-[34px] rounded-[9px] border border-line-strong bg-sunken px-3 text-[13px] text-ink outline-none transition-colors duration-150 placeholder:text-label focus:border-action";
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -41,93 +48,157 @@ export default function TeamsPage() {
     load();
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-sm text-ink-3">
+        Lade...
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Team-Verwaltung</h1>
-          <p className="text-sm text-zinc-500 mt-1">{teams.length} Teams</p>
-        </div>
-        <button onClick={() => { setShowNew(true); setNewNummer(teams.length + 1); }}
-          className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition">
-          + Neues Team
-        </button>
-      </div>
+    <div className="flex flex-col">
+      <TopBar title="Teams">
+        <span className="tnum text-xs text-ink-3">{teams.length} Teams</span>
+        <TopBarSpacer />
+        {showNew ? (
+          <>
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              autoFocus
+              placeholder="Teamname, z.B. Die Löwen"
+              className={`${INPUT_CLASS} w-[170px] sm:w-[210px]`}
+            />
+            <input
+              type="number"
+              value={newNummer}
+              onChange={e => setNewNummer(parseInt(e.target.value) || 1)}
+              className={`${INPUT_CLASS} tnum w-[64px]`}
+              aria-label="Team-Nummer"
+            />
+            <Button variant="primary" onClick={createTeam}>
+              Erstellen
+            </Button>
+            <button
+              onClick={() => setShowNew(false)}
+              className="text-[13px] font-medium text-ink-3 transition-colors duration-150 hover:text-ink"
+            >
+              Abbrechen
+            </button>
+          </>
+        ) : (
+          <Button
+            variant="primary"
+            onClick={() => { setShowNew(true); setNewNummer(teams.length + 1); }}
+          >
+            + Neues Team
+          </Button>
+        )}
+      </TopBar>
 
-      {/* Neues Team Inline */}
-      {showNew && (
-        <div className="border border-zinc-800 rounded-lg p-4 flex items-end gap-3">
-          <div className="space-y-1 flex-1">
-            <label className="text-xs text-zinc-500">Teamname</label>
-            <input type="text" value={newName} onChange={e => setNewName(e.target.value)} autoFocus
-              placeholder="z.B. Die Löwen"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-          </div>
-          <div className="space-y-1 w-20">
-            <label className="text-xs text-zinc-500">Nr.</label>
-            <input type="number" value={newNummer} onChange={e => setNewNummer(parseInt(e.target.value) || 1)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-          </div>
-          <button onClick={createTeam}
-            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition">
-            Erstellen
-          </button>
-          <button onClick={() => setShowNew(false)}
-            className="px-3 py-2 text-sm text-zinc-500 hover:text-white transition">
-            Abbrechen
-          </button>
-        </div>
-      )}
-
-      {/* Team-Tabelle */}
       {teams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-32 text-zinc-500 gap-2">
-          <p>Noch keine Teams angelegt</p>
+        <div className="px-[22px] py-12 text-center text-sm text-ink-3">
+          Noch keine Teams angelegt
         </div>
       ) : (
-        <div className="border border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-900/50 text-zinc-400 text-left">
-                <th className="px-4 py-3 font-medium w-12">#</th>
-                <th className="px-4 py-3 font-medium">Team</th>
-                <th className="px-4 py-3 font-medium">Captain</th>
-                <th className="px-4 py-3 font-medium text-right">Teilnehmer</th>
-                <th className="px-4 py-3 font-medium">Motto</th>
-                <th className="px-4 py-3 font-medium w-20">Farbe</th>
-                <th className="px-4 py-3 font-medium w-20"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {teams.map(t => (
-                <tr key={t.id} className="hover:bg-zinc-900/40 transition-colors">
-                  <td className="px-4 py-3 text-zinc-500 tabular-nums">{t.nummer}</td>
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/teams/${t.id}`}
-                      className="flex items-center gap-2 font-medium text-white hover:text-blue-400 transition">
-                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: t.farbe }} />
-                      {t.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">{t.captainName ?? "–"}</td>
-                  <td className="px-4 py-3 text-right text-zinc-400 tabular-nums">{t.teilnehmerAnzahl ?? "–"}</td>
-                  <td className="px-4 py-3 text-zinc-500 truncate max-w-[200px]">{t.motto ?? "–"}</td>
-                  <td className="px-4 py-3">
-                    <div className="w-6 h-6 rounded" style={{ backgroundColor: t.farbe }} />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => deleteTeam(t.id)}
-                      className="text-xs text-zinc-600 hover:text-red-400 transition">
+        <>
+          {/* Tabellenkopf (ab lg) */}
+          <div
+            className="hidden border-b border-line bg-sunken px-[22px] py-[11px] lg:grid"
+            style={{ gridTemplateColumns: GRID_COLS, gap: "14px" }}
+          >
+            <span className="cg-label tracking-[0.1em]">#</span>
+            <span className="cg-label tracking-[0.1em]">Team</span>
+            <span className="cg-label tracking-[0.1em]">Captain</span>
+            <span className="cg-label text-right tracking-[0.1em]">Teilnehmer</span>
+            <span className="cg-label tracking-[0.1em]">Motto</span>
+            <span className="cg-label tracking-[0.1em]">Farbe</span>
+            <span className="cg-label tracking-[0.1em]" aria-hidden />
+          </div>
+
+          {/* Zeilen / Karten */}
+          <div className="max-lg:space-y-3 max-lg:p-4">
+            {teams.map(t => (
+              <div
+                key={t.id}
+                className="transition-colors duration-150 hover:bg-sunken/60 max-lg:rounded-[10px] max-lg:border max-lg:border-line max-lg:bg-surface lg:border-b lg:border-line-soft"
+              >
+                {/* Desktop-Zeile */}
+                <div
+                  className="hidden h-[62px] items-center px-[22px] lg:grid"
+                  style={{ gridTemplateColumns: GRID_COLS, gap: "14px" }}
+                >
+                  <span className="tnum text-xs font-semibold text-ink-3">{t.nummer}</span>
+                  <Link
+                    href={`/admin/teams/${t.id}`}
+                    className="flex min-w-0 items-center gap-2.5 text-sm font-medium text-ink transition-colors duration-150 hover:text-action"
+                  >
+                    <span
+                      className="h-2 w-2 flex-none rounded-full"
+                      style={{ backgroundColor: t.farbe }}
+                    />
+                    <span className="truncate">{t.name}</span>
+                  </Link>
+                  <span className="truncate text-xs text-ink-3">{t.captainName ?? "–"}</span>
+                  <span className="tnum text-right text-xs text-ink-3">
+                    {t.teilnehmerAnzahl ?? "–"}
+                  </span>
+                  <span className="truncate text-xs text-ink-3">{t.motto ?? "–"}</span>
+                  <span
+                    className="h-5 w-5 rounded-[5px] border border-line"
+                    style={{ backgroundColor: t.farbe }}
+                  />
+                  <span className="text-right">
+                    <button
+                      onClick={() => deleteTeam(t.id)}
+                      className="rounded-[7px] border border-[var(--hot-border)] px-2.5 py-1 text-[11px] font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim"
+                    >
                       Löschen
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </span>
+                </div>
+
+                {/* Mobile-Karte */}
+                <div className="flex flex-col gap-2.5 p-4 lg:hidden">
+                  <div className="flex items-center gap-2.5">
+                    <span className="tnum text-xs font-semibold text-ink-3">{t.nummer}</span>
+                    <Link
+                      href={`/admin/teams/${t.id}`}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-ink"
+                    >
+                      <span
+                        className="h-2 w-2 flex-none rounded-full"
+                        style={{ backgroundColor: t.farbe }}
+                      />
+                      <span className="truncate">{t.name}</span>
+                    </Link>
+                    <span
+                      className="h-5 w-5 flex-none rounded-[5px] border border-line"
+                      style={{ backgroundColor: t.farbe }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-3">
+                    <span>{t.captainName ?? "Kein Captain"}</span>
+                    <span className="tnum">{t.teilnehmerAnzahl ?? "–"} Teilnehmer</span>
+                  </div>
+                  {t.motto && (
+                    <p className="truncate text-[11px] text-ink-3">{t.motto}</p>
+                  )}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => deleteTeam(t.id)}
+                      className="rounded-[7px] border border-[var(--hot-border)] px-2.5 py-1 text-[11px] font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim"
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

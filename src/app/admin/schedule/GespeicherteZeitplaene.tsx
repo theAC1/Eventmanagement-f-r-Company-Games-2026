@@ -1,3 +1,5 @@
+import { StatusPill } from "@/components/ui/pills";
+import { Button } from "@/components/ui/button";
 import { SavedConfig } from "./types";
 
 type GespeicherteZeitplaeneProps = {
@@ -18,55 +20,41 @@ export function GespeicherteZeitplaene({
   if (configs.length === 0) return null;
 
   return (
-    <div className="border border-zinc-800 rounded-lg p-4 space-y-3">
-      <h3 className="text-sm font-medium text-zinc-400">Gespeicherte Zeitplaene</h3>
+    <section className="space-y-2.5">
+      <h3 className="cg-label">Gespeicherte Zeitpl&auml;ne</h3>
       <div className="space-y-2">
         {configs.map((c) => (
           <div
             key={c.id}
-            className={`flex items-center justify-between px-3 py-2 rounded-lg border transition ${
+            className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border bg-surface px-3.5 py-2.5 transition-colors duration-150 ${
               loadedConfigId === c.id
-                ? "border-blue-700 bg-blue-950/30"
-                : c.istAktiv
-                  ? "border-emerald-800 bg-emerald-950/20"
-                  : "border-zinc-800 hover:border-zinc-700"
+                ? "border-action"
+                : "border-line hover:border-line-strong"
             }`}
           >
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => onLoad(c.id)}
-                className="text-sm font-medium hover:text-blue-400 transition"
-              >
-                {c.name}
-              </button>
-              <span className="text-xs text-zinc-500">
-                {c.anzahlTeams} Teams &middot; {c._count.slots} Slots
-              </span>
-              {c.istAktiv && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300">
-                  Aktiv
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {!c.istAktiv && (
-                <button
-                  onClick={() => onSetActive(c.id)}
-                  className="text-xs text-zinc-500 hover:text-emerald-400 transition"
-                >
-                  Aktivieren
-                </button>
-              )}
-              <button
-                onClick={() => onDelete(c.id)}
-                className="text-xs text-zinc-600 hover:text-red-400 transition"
-              >
-                Loeschen
-              </button>
-            </div>
+            <button
+              onClick={() => onLoad(c.id)}
+              className="text-sm font-medium text-ink transition-colors duration-150 hover:text-action"
+            >
+              {c.name}
+            </button>
+            <span className="text-[11px] text-ink-3">
+              <span className="tnum">{c.anzahlTeams}</span> Teams &middot;{" "}
+              <span className="tnum">{c._count.slots}</span> Slots
+            </span>
+            {c.istAktiv && <StatusPill tone="done">Aktiv</StatusPill>}
+            <span className="flex-1" aria-hidden />
+            {!c.istAktiv && (
+              <Button variant="ghost" onClick={() => onSetActive(c.id)}>
+                Aktivieren
+              </Button>
+            )}
+            <Button variant="danger-ghost" onClick={() => onDelete(c.id)}>
+              L&ouml;schen
+            </Button>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

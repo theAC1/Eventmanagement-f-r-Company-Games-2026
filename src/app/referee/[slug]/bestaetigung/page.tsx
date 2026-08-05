@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, CheckCircle, CloudArrowUp } from "@phosphor-icons/react";
 import { enqueueErgebnis } from "@/lib/offline-queue";
 import { KORREKTUR_FENSTER_MS } from "@/lib/ergebnis-sperre";
+import { ProgressBar } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 
 // ─── Types ───
 
@@ -312,9 +315,9 @@ export default function BestaetigungPage() {
 
   if (error && !payload) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <p className="text-red-400 text-sm">{error}</p>
-        <Link href="/referee" className="text-sm text-zinc-400 hover:text-white transition">
+      <div className="mx-auto flex h-64 w-full max-w-md flex-col items-center justify-center gap-3">
+        <p className="text-sm text-hot-tint">{error}</p>
+        <Link href="/referee" className="text-sm text-action transition-colors duration-150 hover:text-ink">
           Zurück zur Übersicht
         </Link>
       </div>
@@ -323,7 +326,7 @@ export default function BestaetigungPage() {
 
   if (!payload) {
     return (
-      <div className="flex items-center justify-center h-64 text-zinc-500">
+      <div className="mx-auto flex h-64 w-full max-w-md items-center justify-center text-sm text-ink-3">
         Lade...
       </div>
     );
@@ -333,26 +336,21 @@ export default function BestaetigungPage() {
 
   if (queued) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-        <div className="w-20 h-20 rounded-full bg-amber-900/40 border-2 border-amber-600 flex items-center justify-center">
-          <svg className="w-10 h-10 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
-          </svg>
+      <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center gap-6">
+        <div className="anim-pop flex h-20 w-20 items-center justify-center rounded-full border-2 border-[var(--warn-border)] bg-warn-dim">
+          <CloudArrowUp size={40} weight="bold" className="text-warn" />
         </div>
-        <div className="text-center max-w-sm">
-          <h2 className="text-2xl font-bold">Ergebnis zwischengespeichert</h2>
-          <p className="text-sm text-zinc-400 mt-2">
+        <div className="max-w-sm text-center">
+          <h2 className="text-[22px] font-semibold tracking-tight">Zwischengespeichert</h2>
+          <p className="mt-2 text-sm leading-[1.45] text-ink-3">
             Keine Verbindung zum Server. Das Ergebnis für {payload?.gameName} wird
             automatisch übermittelt, sobald wieder Empfang besteht — du kannst
             normal weiterarbeiten.
           </p>
         </div>
-        <button
-          onClick={() => router.push("/referee")}
-          className="px-8 py-3 bg-white text-black font-semibold rounded-lg hover:bg-zinc-200 transition"
-        >
+        <Button variant="cta" onClick={() => router.push("/referee")} className="w-full max-w-xs">
           Zurück zur Übersicht
-        </button>
+        </Button>
       </div>
     );
   }
@@ -361,24 +359,17 @@ export default function BestaetigungPage() {
 
   if (done) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-        <div className="w-20 h-20 rounded-full bg-emerald-900/40 border-2 border-emerald-600 flex items-center justify-center">
-          <svg className="w-10 h-10 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
+      <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center gap-6">
+        <CheckCircle size={80} weight="fill" className="anim-pop text-done" />
         <div className="text-center">
-          <h2 className="text-2xl font-bold">Partie abgeschlossen</h2>
-          <p className="text-sm text-zinc-400 mt-2">
+          <h2 className="text-[22px] font-semibold tracking-tight">Partie abgeschlossen</h2>
+          <p className="mt-2 text-sm text-ink-3">
             {payload.gameName} — Ergebnis verifiziert
           </p>
         </div>
-        <button
-          onClick={() => router.push("/referee")}
-          className="px-8 py-3 bg-white text-black font-semibold rounded-lg hover:bg-zinc-200 transition"
-        >
+        <Button variant="cta" onClick={() => router.push("/referee")} className="w-full max-w-xs">
           Zurück zur Übersicht
-        </button>
+        </Button>
       </div>
     );
   }
@@ -388,28 +379,40 @@ export default function BestaetigungPage() {
   // ─── Render ───
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-[18px] pb-12">
       {/* Header */}
       <div>
         <button
           onClick={() => router.back()}
-          className="text-xs text-zinc-500 hover:text-white transition"
+          className="inline-flex items-center gap-1.5 text-[12px] text-ink-3 transition-colors duration-150 hover:text-ink"
         >
-          &larr; Zurück
+          <ArrowLeft size={13} weight="bold" />
+          Zurück
         </button>
-        <h1 className="text-2xl font-bold tracking-tight mt-2">
+        <h1 className="mt-2.5 text-[22px] font-semibold tracking-tight">
           {step === 1 ? "Ergebnis prüfen" : "Ergebnis bestätigen"}
         </h1>
-        <p className="text-sm text-zinc-400">{payload.gameName}</p>
+        <p className="mt-1 text-[13px] text-ink-3">{payload.gameName}</p>
       </div>
 
-      {/* Step indicator */}
-      <div className="flex gap-2">
-        <div className={`flex-1 h-1 rounded-full ${step >= 1 ? "bg-white" : "bg-zinc-800"}`} />
-        <div className={`flex-1 h-1 rounded-full ${step >= 2 ? "bg-emerald-500" : "bg-zinc-800"}`} />
+      {/* 2-Schritt-Fortschritt */}
+      <div className="flex flex-col gap-1.5">
+        <ProgressBar
+          pct={step === 1 ? 50 : 100}
+          color={step === 1 ? "var(--action)" : "var(--done)"}
+          height={4}
+        />
+        <div className="flex justify-between text-[11px]">
+          <span className={step === 1 ? "font-semibold text-ink-2" : "text-label"}>
+            1 · Prüfen
+          </span>
+          <span className={step === 2 ? "font-semibold text-ink-2" : "text-label"}>
+            2 · Bestätigen
+          </span>
+        </div>
       </div>
 
-      {/* Entries summary */}
+      {/* Punkte-Vorschau pro Team */}
       {payload.entries.map((entry) => {
         const punkte = wl ? berechneGamePunkte(entry.rohdaten, wl) : null;
         const details = formatRohdaten(entry.rohdaten, wl);
@@ -417,24 +420,28 @@ export default function BestaetigungPage() {
         return (
           <div
             key={entry.ergebnisId}
-            className="border border-zinc-800 rounded-lg p-4 space-y-3"
+            className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4"
           >
-            <div className="flex items-center justify-between">
-              <p className="font-medium">{entry.teamName}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-medium text-ink">{entry.teamName}</p>
               {punkte !== null && (
-                <span className="text-lg font-mono font-bold">
+                <span className="tnum text-[22px] font-bold text-ink">
                   {punkte === 99999 ? "DNF" : punkte.toFixed(1)}
-                  {wl?.einheit ? ` ${wl.einheit}` : " P"}
+                  {punkte !== 99999 && (
+                    <span className="ml-1 text-[13px] font-medium text-ink-3">
+                      {wl?.einheit ?? "P"}
+                    </span>
+                  )}
                 </span>
               )}
             </div>
 
             {details.length > 0 && (
-              <div className="space-y-1">
+              <div className="flex flex-col gap-1.5 border-t border-line-soft pt-3">
                 {details.map((d, i) => (
                   <div key={i} className="flex justify-between text-sm">
-                    <span className="text-zinc-500">{d.label}</span>
-                    <span className="font-mono">{d.value}</span>
+                    <span className="capitalize text-ink-3">{d.label}</span>
+                    <span className="tnum text-ink">{d.value}</span>
                   </div>
                 ))}
               </div>
@@ -444,33 +451,33 @@ export default function BestaetigungPage() {
       })}
 
       {/* Error */}
-      {error && (
-        <p className="text-sm text-red-400 text-center">{error}</p>
-      )}
+      {error && <p className="text-center text-sm text-hot-tint">{error}</p>}
 
       {/* Step 1: Save button */}
       {step === 1 && (
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-4 bg-white text-black text-lg font-semibold rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
-        >
+        <Button variant="cta" onClick={handleSave} disabled={saving} className="h-16 w-full rounded-[14px]">
           {saving ? "Speichert..." : "Speichern"}
-        </button>
+        </Button>
       )}
 
       {/* Step 2: Verify button */}
       {step === 2 && (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {/* Korrektur-Countdown */}
           {eingetragenUm !== null && (
-            <div className={`border rounded-lg p-4 ${korrekturOffen ? "border-amber-700/50 bg-amber-950/20" : "border-zinc-800 bg-zinc-900/50"}`}>
+            <div
+              className={`rounded-xl border p-4 ${
+                korrekturOffen
+                  ? "border-[var(--warn-border)] bg-warn-dim/60"
+                  : "border-line bg-surface"
+              }`}
+            >
               {korrekturOffen ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-center">
-                    <span className="text-zinc-400">Noch </span>
-                    <span className="font-mono font-bold text-amber-400 tabular-nums">{formatRest(restMs)}</span>
-                    <span className="text-zinc-400"> zum Korrigieren</span>
+                <div className="flex flex-col gap-3">
+                  <p className="text-center text-sm text-ink-2">
+                    Noch{" "}
+                    <span className="tnum font-bold text-warn">{formatRest(restMs)}</span>{" "}
+                    zum Korrigieren
                   </p>
                   <button
                     onClick={() => {
@@ -481,32 +488,33 @@ export default function BestaetigungPage() {
                       router.push(`/referee/${slug}/live${query ? `?${query}` : ""}`);
                     }}
                     disabled={savedIds.length === 0}
-                    className="w-full py-2.5 border border-amber-700/60 text-amber-300 text-sm font-medium rounded-lg hover:bg-amber-900/30 transition disabled:opacity-40"
+                    className="min-h-12 w-full rounded-[9px] border border-[var(--warn-border)] text-sm font-medium text-warn transition-colors duration-150 hover:bg-warn-dim disabled:pointer-events-none disabled:opacity-40"
                   >
                     Korrigieren
                   </button>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-400 text-center">
+                <p className="text-center text-sm text-ink-3">
                   Die Korrekturfrist ist abgelaufen. Ab jetzt kann nur noch ein Admin das Ergebnis korrigieren.
                 </p>
               )}
             </div>
           )}
 
-          <div className="border border-zinc-800 rounded-lg p-4 bg-zinc-900/50">
-            <p className="text-sm text-zinc-300 text-center">
+          <div className="rounded-xl border border-line bg-surface p-4">
+            <p className="text-center text-sm text-ink-2">
               Hiermit bestätige ich die Richtigkeit der Ergebnisse.
             </p>
           </div>
 
-          <button
+          <Button
+            variant="success-outline"
             onClick={handleVerify}
             disabled={verifying}
-            className="w-full py-4 bg-emerald-600 text-white text-lg font-semibold rounded-lg hover:bg-emerald-500 transition disabled:opacity-50"
+            className="w-full"
           >
             {verifying ? "Wird bestätigt..." : "Bestätigen"}
-          </button>
+          </Button>
         </div>
       )}
     </div>

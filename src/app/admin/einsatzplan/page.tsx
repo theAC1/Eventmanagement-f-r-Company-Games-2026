@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Warning, X } from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { StatusPill } from "@/components/ui/pills";
 
 type Person = { id: string; name: string; rolle: string };
 
@@ -103,67 +106,91 @@ export default function EinsatzplanPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-zinc-500">
-        Lade Einsatzplan...
+      <div className="flex flex-col">
+        <TopBar title="Einsatzplan" />
+        <div className="flex h-64 items-center justify-center text-sm text-ink-3">
+          Lade Einsatzplan...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Einsatzplan</h1>
-          {planConfig && (
-            <p className="text-sm text-zinc-500 mt-1">
-              Zeitplan: <span className="text-zinc-300">{planConfig.name}</span>
-              {planConfig.istAktiv ? (
-                <span className="ml-2 text-xs px-2 py-0.5 rounded-full border border-emerald-800 bg-emerald-950/40 text-emerald-400">Aktiv</span>
-              ) : (
-                <span className="ml-2 text-xs px-2 py-0.5 rounded-full border border-amber-800 bg-amber-950/40 text-amber-400">
-                  Kein aktiver Zeitplan — zeigt zuletzt erstellten
-                </span>
-              )}
-            </p>
-          )}
-        </div>
-        {error && <span className="text-sm text-red-400">{error}</span>}
-      </div>
+    <div className="flex flex-col">
+      <TopBar title="Einsatzplan">
+        <TopBarSpacer />
+        {error && <span className="text-sm text-hot-tint">{error}</span>}
+      </TopBar>
 
-      {!planConfig && (
-        <div className="border border-zinc-800 rounded-lg p-8 text-center text-zinc-500 text-sm">
-          Kein Zeitplan vorhanden. Erstelle zuerst einen Zeitplan unter „Zeitplan“.
-        </div>
-      )}
-
-      {planConfig && groups.length === 0 && (
-        <div className="border border-zinc-800 rounded-lg p-8 text-center text-zinc-500 text-sm">
-          Keine Zeitplan-Slots mit Games in diesem Zeitplan gefunden.
-        </div>
-      )}
-
-      {groups.map(([gameId, group]) => (
-        <section key={gameId} className="border border-zinc-800 rounded-lg overflow-hidden">
-          <div className="px-4 py-3 bg-zinc-900/60 border-b border-zinc-800 flex items-center justify-between">
-            <h2 className="font-semibold">{group.gameName}</h2>
-            <span className="text-xs text-zinc-500">
-              {group.slots[0]?.game?.schiedsrichterAnzahl ?? 1} Schiedsrichter pro Slot benötigt
+      <div className="space-y-5 px-4 py-6 sm:px-[22px]">
+        {planConfig && (
+          <div
+            className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-line px-3.5 py-2.5 ${
+              planConfig.istAktiv ? "bg-done-dim" : "bg-neutral-dim"
+            }`}
+          >
+            <span className="text-[13px] text-ink-3">Zeitplan</span>
+            <span className="text-[13px] font-semibold text-ink">
+              {planConfig.name}
             </span>
+            {planConfig.istAktiv ? (
+              <StatusPill tone="done">Aktiv</StatusPill>
+            ) : (
+              <StatusPill tone="neutral">
+                Kein aktiver Zeitplan — zeigt zuletzt erstellten
+              </StatusPill>
+            )}
           </div>
-          <div className="divide-y divide-zinc-800/70">
-            {group.slots.map((slot) => (
-              <SlotRow
-                key={slot.id}
-                slot={slot}
-                personen={personen}
-                empfohlen={gamePersonMap.get(gameId) ?? new Set()}
-                saving={savingSlot === slot.id}
-                onAssign={(ids) => handleAssign(slot, ids)}
-              />
-            ))}
+        )}
+
+        {!planConfig && (
+          <div className="rounded-[10px] border border-line bg-surface p-8 text-center text-sm text-ink-3">
+            Kein Zeitplan vorhanden. Erstelle zuerst einen Zeitplan unter
+            „Zeitplan“.
           </div>
-        </section>
-      ))}
+        )}
+
+        {planConfig && groups.length === 0 && (
+          <div className="rounded-[10px] border border-line bg-surface p-8 text-center text-sm text-ink-3">
+            Keine Zeitplan-Slots mit Games in diesem Zeitplan gefunden.
+          </div>
+        )}
+
+        {groups.map(([gameId, group]) => (
+          <section
+            key={gameId}
+            className="overflow-hidden rounded-[10px] border border-line bg-surface"
+          >
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-line px-3.5 py-2.5">
+              <h2 className="text-[13px] font-semibold text-ink">
+                {group.gameName}
+              </h2>
+              <span className="tnum text-[11px] text-label">
+                {group.slots.length} Slots
+              </span>
+              <span className="flex-1" aria-hidden />
+              <span className="text-[11px] text-ink-3">
+                <span className="tnum">
+                  {group.slots[0]?.game?.schiedsrichterAnzahl ?? 1}
+                </span>{" "}
+                Schiedsrichter pro Slot ben&ouml;tigt
+              </span>
+            </div>
+            <div className="divide-y divide-line-soft">
+              {group.slots.map((slot) => (
+                <SlotRow
+                  key={slot.id}
+                  slot={slot}
+                  personen={personen}
+                  empfohlen={gamePersonMap.get(gameId) ?? new Set()}
+                  saving={savingSlot === slot.id}
+                  onAssign={(ids) => handleAssign(slot, ids)}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -184,42 +211,46 @@ function SlotRow({
   const assignedIds = slot.personen.map((p) => p.person.id);
   const schiriMin = slot.game?.schiedsrichterAnzahl ?? 1;
   const schiriCount = slot.personen.filter((p) => p.person.rolle === "SCHIEDSRICHTER").length;
+  const helferCount = slot.personen.filter((p) => p.person.rolle !== "SCHIEDSRICHTER").length;
   const unterbesetzt = schiriCount < schiriMin;
 
   return (
-    <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
-      <div className="w-40 shrink-0 text-sm">
-        <div className="font-medium">
+    <div className="flex flex-col gap-3 px-3.5 py-3 sm:flex-row sm:items-start">
+      <div className="flex flex-wrap items-baseline gap-x-3 sm:w-36 sm:shrink-0 sm:flex-col sm:gap-y-0.5">
+        <span className="tnum text-[13px] font-medium text-ink">
           {slot.startZeit}–{slot.endZeit}
-        </div>
-        <div className="text-xs text-zinc-500">Runde {slot.runde}</div>
+        </span>
+        <span className="tnum text-[11px] text-ink-3">Runde {slot.runde}</span>
       </div>
-      <div className="w-56 shrink-0 text-xs text-zinc-400">
+      <div className="text-xs text-ink-2 sm:w-52 sm:shrink-0 sm:pt-0.5">
         {slot.teams.map((t) => t.team.name).join(" vs. ") || "–"}
       </div>
       <div className="flex-1 space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full border ${
-              unterbesetzt
-                ? "border-amber-700 bg-amber-900/40 text-amber-300"
-                : "border-emerald-800 bg-emerald-950/40 text-emerald-400"
-            }`}
-          >
-            {schiriCount}/{schiriMin} Schiedsrichter
-          </span>
-          {slot.personen
-            .filter((p) => p.person.rolle !== "SCHIEDSRICHTER")
-            .length > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400">
-              {slot.personen.filter((p) => p.person.rolle !== "SCHIEDSRICHTER").length} Helfer
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill tone={unterbesetzt ? "warn" : "done"}>
+            <span className="tnum">
+              {schiriCount}/{schiriMin}
             </span>
+            <span className="ml-1">Schiedsrichter</span>
+          </StatusPill>
+          {helferCount > 0 && (
+            <StatusPill tone="neutral">
+              <span className="tnum">{helferCount}</span>
+              <span className="ml-1">Helfer</span>
+            </StatusPill>
           )}
-          {saving && <span className="text-xs text-zinc-500">Speichert...</span>}
+          {saving && (
+            <span className="text-[11px] text-ink-3">Speichert...</span>
+          )}
         </div>
         {unterbesetzt && (
-          <div className="text-xs text-amber-400 bg-amber-950/30 border border-amber-900/50 rounded-md px-2.5 py-1.5">
-            Unterbesetzt: mindestens {schiriMin} Schiedsrichter benötigt
+          <div className="flex items-center gap-2 rounded-[10px] border border-[var(--warn-border)] bg-warn-dim px-3 py-2 text-xs text-ink-2">
+            <Warning size={14} weight="bold" className="shrink-0 text-warn" />
+            <span>
+              Unterbesetzt: mindestens{" "}
+              <span className="tnum">{schiriMin}</span> Schiedsrichter
+              ben&ouml;tigt
+            </span>
           </div>
         )}
         <PersonMultiSelect
@@ -281,27 +312,29 @@ function PersonMultiSelect({
   return (
     <div ref={ref} className="relative">
       <div
-        className={`flex flex-wrap items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 min-h-[38px] ${
-          disabled ? "opacity-60 pointer-events-none" : ""
+        className={`flex min-h-[38px] cursor-text flex-wrap items-center gap-1.5 rounded-[9px] border border-line-strong bg-sunken px-2 py-1.5 transition-colors duration-150 focus-within:border-action ${
+          disabled ? "pointer-events-none opacity-60" : ""
         }`}
         onClick={() => setOpen(true)}
       >
         {selected.map((p) => (
           <span
             key={p.id}
-            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700"
+            className="inline-flex h-7 items-center gap-1.5 rounded-full bg-action-dim px-2.5 text-xs font-medium text-action-tint"
           >
             {p.name}
-            <span className="text-[10px] text-zinc-500 uppercase">{p.rolle === "SCHIEDSRICHTER" ? "SR" : "H"}</span>
+            <span className="text-[10px] uppercase tracking-[0.06em] opacity-70">
+              {p.rolle === "SCHIEDSRICHTER" ? "SR" : "H"}
+            </span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 remove(p.id);
               }}
-              className="text-zinc-500 hover:text-red-400 ml-0.5"
+              className="text-action-tint transition-colors duration-150 hover:text-hot-tint"
               aria-label={`${p.name} entfernen`}
             >
-              ×
+              <X size={12} weight="bold" />
             </button>
           </span>
         ))}
@@ -314,25 +347,25 @@ function PersonMultiSelect({
           }}
           onFocus={() => setOpen(true)}
           placeholder={selected.length === 0 ? "Person zuweisen..." : ""}
-          className="flex-1 min-w-[120px] bg-transparent text-sm focus:outline-none placeholder:text-zinc-600"
+          className="min-w-[120px] flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-faint"
         />
       </div>
       {open && sorted.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl">
+        <div className="anim-pop absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-[10px] border border-line bg-surface shadow-[var(--shadow-pop)]">
           {sorted.map((p) => (
             <button
               key={p.id}
               onClick={() => add(p.id)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-800 flex items-center justify-between"
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-ink transition-colors duration-150 hover:bg-sunken"
             >
               <span>
                 {p.name}
-                <span className="ml-2 text-[10px] text-zinc-500 uppercase">
+                <span className="ml-2 text-[10px] uppercase tracking-[0.06em] text-ink-3">
                   {p.rolle === "SCHIEDSRICHTER" ? "Schiedsrichter" : "Helfer"}
                 </span>
               </span>
               {empfohlen.has(p.id) && (
-                <span className="text-[10px] text-emerald-400 border border-emerald-800 bg-emerald-950/40 rounded-full px-1.5 py-0.5">
+                <span className="shrink-0 rounded-full bg-done-dim px-2 py-0.5 text-[10px] font-semibold text-done-tint">
                   Empfohlen
                 </span>
               )}
@@ -341,7 +374,7 @@ function PersonMultiSelect({
         </div>
       )}
       {open && sorted.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl px-3 py-2 text-sm text-zinc-500">
+        <div className="anim-pop absolute z-20 mt-1 w-full rounded-[10px] border border-line bg-surface px-3 py-2 text-sm text-ink-3 shadow-[var(--shadow-pop)]">
           Keine Personen gefunden
         </div>
       )}

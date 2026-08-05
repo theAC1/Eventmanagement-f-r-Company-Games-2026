@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowSquareOut, DownloadSimple } from "@phosphor-icons/react";
+import { TopBar, TopBarDivider, TopBarSpacer } from "@/components/ui/top-bar";
+import { HotPill, StatusPill } from "@/components/ui/pills";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { GamedayControls } from "./components/gameday-controls";
 import { TabBar } from "./components/tab-bar";
 import { UebersichtTab } from "./components/uebersicht-tab";
+import { ZeitachseTab } from "./components/zeitachse-tab";
 import { AktivitaetTab } from "./components/aktivitaet-tab";
 import { KorrekturenTab } from "./components/korrekturen-tab";
 import { DemoSeed } from "./components/demo-seed";
@@ -28,6 +33,68 @@ type TeamInfo = {
   id: string; name: string; nummer: number;
 };
 
+/** Live-Uhr in der Topbar — Aktualisierung pro Minute reicht (Polling läuft separat). */
+function useClock(): string {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+  return now.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+}
+
+function ModusPill({ modus }: { modus: string }) {
+  if (modus === "HOT") return <HotPill />;
+  if (modus === "TEST") return <StatusPill tone="action">TEST</StatusPill>;
+  return <StatusPill tone="neutral">INAKTIV</StatusPill>;
+}
+
+function ExportMenu() {
+  return (
+    <div className="group relative">
+      <Button variant="ghost" aria-haspopup="menu">
+        <DownloadSimple size={14} weight="bold" />
+        Export
+      </Button>
+      <div
+        role="menu"
+        className="invisible absolute right-0 top-full z-50 mt-1 w-48 rounded-[10px] border border-line bg-surface py-1 opacity-0 transition-all group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+        style={{ boxShadow: "var(--shadow-pop)" }}
+      >
+        <button
+          type="button"
+          onClick={() => window.open("/api/export/rangliste", "_blank")}
+          className="w-full px-3 py-2 text-left text-[13px] text-ink-2 transition-colors duration-150 hover:bg-sunken"
+        >
+          Rangliste CSV
+        </button>
+        <button
+          type="button"
+          onClick={() => window.open("/api/export/ergebnisse", "_blank")}
+          className="w-full px-3 py-2 text-left text-[13px] text-ink-2 transition-colors duration-150 hover:bg-sunken"
+        >
+          Ergebnisse CSV
+        </button>
+        <button
+          type="button"
+          onClick={() => window.open("/api/export/teams", "_blank")}
+          className="w-full px-3 py-2 text-left text-[13px] text-ink-2 transition-colors duration-150 hover:bg-sunken"
+        >
+          Teams CSV
+        </button>
+        <div className="my-1 border-t border-line" />
+        <button
+          type="button"
+          onClick={() => window.open("/admin/gameday/print", "_blank")}
+          className="w-full px-3 py-2 text-left text-[13px] text-ink-3 transition-colors duration-150 hover:bg-sunken"
+        >
+          Druckansicht
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function GamedayDashboard() {
   const [activeTab, setActiveTab] = useState("uebersicht");
   const [rangliste, setRangliste] = useState<RanglisteEntry[]>([]);
@@ -36,9 +103,10 @@ export default function GamedayDashboard() {
   const [teams, setTeams] = useState<TeamInfo[]>([]);
   const [gamedayModus, setGamedayModus] = useState<string>("INAKTIV");
   const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [aktivitaetGameFilter, setAktivitaetGameFilter] = useState<string>("");
   const activeTabRef = useRef(activeTab);
+  const clock = useClock();
 
   useEffect(() => {
     activeTabRef.current = activeTab;
@@ -77,7 +145,6 @@ export default function GamedayDashboard() {
         );
         setTeams(Array.isArray(t) ? t : []);
         setGamedayModus(gd.modus ?? "INAKTIV");
-        setLastUpdate(new Date());
         setFetchError(null);
         setLoading(false);
       })
@@ -98,45 +165,72 @@ export default function GamedayDashboard() {
     return () => clearInterval(interval);
   }, [loadData]);
 
+  /** Aus der Zeitachse heraus: Aktivität-Tab mit Game-Filter öffnen. */
+  const handleInspectGame = useCallback((gameId: string) => {
+    setAktivitaetGameFilter(gameId);
+    setActiveTab("aktivitaet");
+  }, []);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-zinc-500">
-        Lade Dashboard...
+      <div className="flex h-64 items-center justify-center text-sm text-ink-3">
+        Lade Leitstand…
       </div>
     );
   }
 
   if (fetchError && rangliste.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <p className="text-red-400 text-sm">{fetchError}</p>
-        <button
-          onClick={loadData}
-          className="px-4 py-2 text-sm border border-zinc-700 rounded-lg hover:border-zinc-500 transition"
-        >
+      <div className="flex h-64 flex-col items-center justify-center gap-3">
+        <p className="text-sm text-hot-tint">{fetchError}</p>
+        <Button variant="ghost" onClick={loadData}>
           Erneut versuchen
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Gameday Live</h1>
+    <div className="flex flex-col">
+      <TopBar title="Leitstand">
+        <ModusPill modus={gamedayModus} />
+        <span className="hidden text-xs text-ink-3 md:block">
+          <span className="tnum">{games.length}</span> Stationen ·{" "}
+          <span className="tnum">{teams.length}</span> Teams
+        </span>
+        <TopBarSpacer />
+        <span className="tnum text-[20px] font-semibold tracking-[0.02em] text-ink">
+          {clock}
+        </span>
+        <span className="tnum text-[11px] text-label">AUTO 5s</span>
+        <TopBarDivider />
+        <ExportMenu />
+        <ButtonLink variant="ghost" href="/scoreboard" target="_blank">
+          <ArrowSquareOut size={14} weight="bold" />
+          Scoreboard
+        </ButtonLink>
+      </TopBar>
+
+      <div className="overflow-x-auto border-b border-line px-4 py-2.5 sm:px-[22px]">
+        <TabBar
+          activeTab={activeTab}
+          onChange={(tab) => {
+            // Manueller Tab-Wechsel setzt einen allfälligen Zeitachse-Filter zurück
+            if (tab === "aktivitaet") setAktivitaetGameFilter("");
+            setActiveTab(tab);
+          }}
+        />
       </div>
 
       <GamedayControls onStatusChange={loadData} />
 
       <DemoSeed onSeeded={loadData} />
 
-      <TabBar activeTab={activeTab} onChange={setActiveTab} />
-
       {activeTab === "uebersicht" && gamedayModus === "INAKTIV" && (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-8 text-center">
-          <p className="text-sm text-zinc-500">
+        <div className="px-4 py-10 sm:px-[22px]">
+          <div className="rounded-[10px] border border-line bg-surface px-4 py-8 text-center text-sm text-ink-3">
             Starte einen Gameday um Ergebnisse zu erfassen
-          </p>
+          </div>
         </div>
       )}
 
@@ -145,14 +239,25 @@ export default function GamedayDashboard() {
           rangliste={rangliste}
           ergebnisse={ergebnisse}
           games={games}
-          lastUpdate={lastUpdate}
           fetchError={fetchError}
           onRetry={loadData}
         />
       )}
 
+      {activeTab === "zeitachse" && (
+        <ZeitachseTab
+          games={games}
+          ergebnisse={ergebnisse}
+          onInspectGame={handleInspectGame}
+        />
+      )}
+
       {activeTab === "aktivitaet" && (
-        <AktivitaetTab games={games} teams={teams} />
+        <AktivitaetTab
+          games={games}
+          teams={teams}
+          initialGameFilter={aktivitaetGameFilter}
+        />
       )}
 
       {activeTab === "korrekturen" && (

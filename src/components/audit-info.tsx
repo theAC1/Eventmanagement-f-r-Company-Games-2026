@@ -25,17 +25,17 @@ export function AuditInfo({ createdBy, updatedBy, createdAt, updatedAt }: AuditI
   if (!createdBy && !updatedBy) return null;
 
   return (
-    <div className="flex items-center gap-4 text-xs text-zinc-500">
+    <div className="flex items-center gap-4 text-xs text-ink-3">
       {createdBy && (
         <span>
-          Erstellt von <span className="text-zinc-400">{createdBy.name}</span>
-          {createdAt && <span className="ml-1">{formatDate(createdAt)}</span>}
+          Erstellt von <span className="text-ink-2">{createdBy.name}</span>
+          {createdAt && <span className="tnum ml-1">{formatDate(createdAt)}</span>}
         </span>
       )}
       {updatedBy && (
         <span>
-          Bearbeitet von <span className="text-zinc-400">{updatedBy.name}</span>
-          {updatedAt && <span className="ml-1">{formatDate(updatedAt)}</span>}
+          Bearbeitet von <span className="text-ink-2">{updatedBy.name}</span>
+          {updatedAt && <span className="tnum ml-1">{formatDate(updatedAt)}</span>}
         </span>
       )}
     </div>

@@ -1,3 +1,6 @@
+import { CheckCircle } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
+
 type SpeichernLeisteProps = {
   saveName: string;
   loading: boolean;
@@ -18,30 +21,32 @@ export function SpeichernLeiste({
   onSaveAsNew,
 }: SpeichernLeisteProps) {
   return (
-    <div className="flex items-center gap-3 border border-zinc-800 rounded-lg p-4">
+    <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-line bg-surface p-3.5">
       <input
         type="text"
         value={saveName}
         onChange={(e) => onSaveNameChange(e.target.value)}
-        placeholder="Name fuer diesen Zeitplan..."
-        className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+        placeholder="Name f&uuml;r diesen Zeitplan..."
+        className="h-[38px] min-w-[200px] flex-1 rounded-[9px] border border-line-strong bg-sunken px-3 text-sm text-ink outline-none transition-colors duration-150 placeholder:text-faint focus:border-action"
       />
-      <button
+      <Button
+        variant="primary"
         onClick={onSave}
         disabled={!saveName.trim() || loading}
-        className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
       >
         {loadedConfigId ? "Aktualisieren" : "Speichern"}
-      </button>
+      </Button>
       {loadedConfigId && (
-        <button
-          onClick={onSaveAsNew}
-          className="px-3 py-2 text-xs text-zinc-500 hover:text-white transition"
-        >
+        <Button variant="ghost" onClick={onSaveAsNew}>
           Als neu speichern
-        </button>
+        </Button>
       )}
-      {saveMsg && <span className="text-sm text-emerald-400">{saveMsg}</span>}
+      {saveMsg && (
+        <span className="flex items-center gap-1.5 text-[13px] text-done-tint">
+          <CheckCircle size={15} weight="bold" />
+          {saveMsg}
+        </span>
+      )}
     </div>
   );
 }

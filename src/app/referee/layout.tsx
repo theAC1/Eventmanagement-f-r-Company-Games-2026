@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function RefereeLayout({
   children,
@@ -6,25 +7,23 @@ export default function RefereeLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between">
+    <div className="min-h-screen bg-bg text-ink">
+      <header className="sticky top-0 z-50 border-b border-line bg-bg/95 backdrop-blur">
+        <div className="flex h-[52px] items-center justify-between px-[18px]">
           <Link
             href="/referee"
-            className="flex items-center gap-2 hover:opacity-80 transition"
+            className="flex items-center gap-2.5 transition-opacity duration-150 hover:opacity-80"
           >
-            <img src="/images/logo.png" alt="CG26" className="h-6 w-auto" />
-            <span className="text-sm font-semibold tracking-tight">Schiedsrichter</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/logo.png" alt="CG26" className="h-[26px] w-auto" />
+            <span className="text-[15px] font-semibold tracking-tight">
+              Schiedsrichter
+            </span>
           </Link>
-          <Link
-            href="/"
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition"
-          >
-            Startseite
-          </Link>
+          <ThemeToggle />
         </div>
       </header>
-      <main className="max-w-3xl mx-auto px-4 py-6">{children}</main>
+      <main className="px-[18px] py-5">{children}</main>
     </div>
   );
 }

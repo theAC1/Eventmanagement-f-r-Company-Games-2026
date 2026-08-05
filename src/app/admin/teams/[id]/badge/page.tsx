@@ -1,8 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft } from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { Button } from "@/components/ui/button";
 
 type Team = {
   id: string; name: string; nummer: number; farbe: string;
@@ -67,44 +70,60 @@ export default function BadgePage() {
       .catch(() => handlePrint());
   };
 
-  if (loading || !team) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
+  if (loading || !team) {
+    return (
+      <div className="flex h-64 items-center justify-center text-sm text-ink-3">
+        Lade...
+      </div>
+    );
+  }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   const teamsToPrint = printAll ? allTeams : [team];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-zinc-500">
-          <Link href="/admin/teams" className="hover:text-white transition">Teams</Link>
-          <span>/</span>
-          <Link href={`/admin/teams/${team.id}`} className="hover:text-white transition">{team.name}</Link>
-          <span>/</span>
-          <span className="text-white">Badge</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-xs text-zinc-400">
-            <input type="checkbox" checked={printAll} onChange={e => setPrintAll(e.target.checked)}
-              className="rounded" />
-            Alle Teams
-          </label>
-          <button onClick={handleExportPng}
-            className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition">
-            PNG Export
-          </button>
-          <button onClick={handlePrint}
-            className="px-4 py-2 border border-zinc-700 text-sm rounded-lg hover:bg-zinc-800 transition">
-            Drucken
-          </button>
-        </div>
-      </div>
+    <div className="flex flex-col">
+      <TopBar
+        title={
+          <span className="flex items-center gap-2.5">
+            <Link
+              href={`/admin/teams/${team.id}`}
+              aria-label={`Zurück zu ${team.name}`}
+              className="text-faint transition-colors duration-150 hover:text-ink"
+            >
+              <ArrowLeft size={18} weight="bold" />
+            </Link>
+            Badge
+          </span>
+        }
+      >
+        <span className="text-xs text-ink-3">{team.name}</span>
+        <TopBarSpacer />
+        <label className="flex items-center gap-2 text-xs font-medium text-ink-3">
+          <input
+            type="checkbox"
+            checked={printAll}
+            onChange={e => setPrintAll(e.target.checked)}
+            className="h-4 w-4 rounded border-line-key accent-[var(--action)]"
+          />
+          Alle Teams
+        </label>
+        <Button variant="primary" onClick={handleExportPng}>
+          PNG Export
+        </Button>
+        <Button variant="ghost" onClick={handlePrint}>
+          Drucken
+        </Button>
+      </TopBar>
 
-      {/* Badge Preview(s) */}
-      <div ref={badgeRef} className="flex flex-wrap justify-center gap-8">
-        {teamsToPrint.map(t => (
-          <BadgeCard key={t.id} team={t} portalUrl={`${origin}/team/${t.qrToken}`} />
-        ))}
+      {/* Badge Preview(s) — Badges bleiben bewusst dunkel (Druckvorlage) */}
+      <div className="px-4 py-6 sm:px-[22px]">
+        <div ref={badgeRef} className="flex flex-wrap justify-center gap-8">
+          {teamsToPrint.map(t => (
+            <BadgeCard key={t.id} team={t} portalUrl={`${origin}/team/${t.qrToken}`} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -115,7 +134,7 @@ function BadgeCard({ team, portalUrl }: {
   portalUrl: string;
 }) {
   return (
-    <div style={{ width: "380px", backgroundColor: "#0a0a0a", borderRadius: "16px", overflow: "hidden", pageBreakInside: "avoid" }}>
+    <div style={{ width: "380px", backgroundColor: "#0A111C", borderRadius: "16px", overflow: "hidden", pageBreakInside: "avoid" }}>
       {/* Farb-Header */}
       <div style={{ height: "6px", backgroundColor: team.farbe }} />
 
@@ -137,8 +156,8 @@ function BadgeCard({ team, portalUrl }: {
             </div>
           )}
           <div style={{ fontSize: "22px", fontWeight: "bold", color: "white" }}>{team.name}</div>
-          <div style={{ fontSize: "14px", color: "#71717a" }}>#{team.nummer}</div>
-          {team.motto && <div style={{ fontSize: "12px", color: "#52525b", fontStyle: "italic", marginTop: "4px" }}>{team.motto}</div>}
+          <div style={{ fontSize: "14px", color: "#8598B4" }}>#{team.nummer}</div>
+          {team.motto && <div style={{ fontSize: "12px", color: "#7C90AE", fontStyle: "italic", marginTop: "4px" }}>{team.motto}</div>}
         </div>
 
         {/* Einziger QR-Code: Team-Portal (Schiri-Scanner erkennt ihn auch beim Check-in) */}
@@ -151,21 +170,21 @@ function BadgeCard({ team, portalUrl }: {
               crossOrigin="anonymous" />
           </div>
           <div style={{
-            marginTop: "8px", fontSize: "11px", fontWeight: "600", color: "#22c55e",
+            marginTop: "8px", fontSize: "11px", fontWeight: "600", color: "#34C77B",
             textTransform: "uppercase", letterSpacing: "0.05em",
           }}>
             Team-QR scannen
           </div>
-          <div style={{ fontSize: "9px", color: "#52525b" }}>Zeitplan &middot; Punkte &middot; Lageplan &middot; Check-in</div>
+          <div style={{ fontSize: "9px", color: "#7C90AE" }}>Zeitplan &middot; Punkte &middot; Lageplan &middot; Check-in</div>
         </div>
 
         {/* Backup-Token (manuelle Eingabe durch Schiedsrichter) */}
         <div style={{ textAlign: "center" }}>
           <div style={{
-            display: "inline-block", backgroundColor: "#18181b", border: "1px solid #27272a",
+            display: "inline-block", backgroundColor: "#101B2B", border: "1px solid #1D2C44",
             borderRadius: "8px", padding: "6px 20px",
           }}>
-            <div style={{ fontSize: "9px", color: "#52525b", marginBottom: "2px" }}>BACKUP CODE</div>
+            <div style={{ fontSize: "9px", color: "#7C90AE", marginBottom: "2px" }}>BACKUP CODE</div>
             <div style={{
               fontSize: "28px", fontWeight: "bold", color: "white", fontFamily: "monospace",
               letterSpacing: "0.2em",
@@ -177,8 +196,8 @@ function BadgeCard({ team, portalUrl }: {
 
         {/* Footer */}
         <div style={{
-          textAlign: "center", paddingTop: "8px", borderTop: "1px solid #27272a",
-          fontSize: "10px", color: "#52525b", fontWeight: "600",
+          textAlign: "center", paddingTop: "8px", borderTop: "1px solid #1D2C44",
+          fontSize: "10px", color: "#7C90AE", fontWeight: "600",
           textTransform: "uppercase", letterSpacing: "0.1em",
         }}>
           Company Games 2026

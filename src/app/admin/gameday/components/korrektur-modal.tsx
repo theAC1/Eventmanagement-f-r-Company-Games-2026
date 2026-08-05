@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { ErgebnisFormular } from "@/components/ergebnis-formular";
+import { StatusBadge } from "@/components/status-badge";
+import { Button } from "@/components/ui/button";
 
 type KorrekturModalProps = {
   ergebnis: {
@@ -54,23 +56,30 @@ export function KorrekturModal({ ergebnis, onClose }: KorrekturModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0"
+        style={{ background: "var(--scrim)" }}
         onClick={() => onClose()}
       />
 
       {/* Modal card */}
-      <div className="relative bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto mx-4 p-6 space-y-5">
+      <div
+        className="anim-pop relative flex max-h-[80vh] w-full max-w-lg flex-col gap-5 overflow-y-auto rounded-[14px] border border-line bg-surface p-6"
+        style={{ boxShadow: "var(--shadow-pop)" }}
+      >
         {/* Header */}
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Korrektur</h2>
-          <p className="text-sm text-zinc-400">
-            {ergebnis.game.name} — {ergebnis.team.name} #{ergebnis.team.nummer}
-          </p>
-          <p className="text-xs text-zinc-500">
-            Status: {ergebnis.status}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">
+              Korrektur
+            </h2>
+            <StatusBadge status={ergebnis.status} />
+          </div>
+          <p className="text-sm text-ink-3">
+            {ergebnis.game.name} — {ergebnis.team.name}{" "}
+            <span className="tnum">#{ergebnis.team.nummer}</span>
           </p>
         </div>
 
@@ -85,39 +94,30 @@ export function KorrekturModal({ ergebnis, onClose }: KorrekturModalProps) {
         />
 
         {/* Grund */}
-        <div className="space-y-1">
-          <label className="text-xs text-zinc-500">
+        <div className="flex flex-col gap-1">
+          <label className="cg-label">
             Grund der Korrektur (optional)
           </label>
           <textarea
             value={grund}
             onChange={(e) => setGrund(e.target.value)}
             rows={2}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none"
+            className="w-full resize-none rounded-[9px] border border-line-strong bg-sunken px-3 py-2 text-sm text-ink focus:border-action focus:outline-none"
             placeholder="z.B. Fehlmessung korrigiert..."
           />
         </div>
 
         {/* Error */}
-        {error && (
-          <p className="text-sm text-red-400">{error}</p>
-        )}
+        {error && <p className="text-sm text-hot-tint">{error}</p>}
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            onClick={() => onClose()}
-            className="px-4 py-2 text-sm border border-zinc-700 rounded-lg hover:border-zinc-500 transition"
-          >
+        <div className="flex justify-end gap-2.5 pt-1">
+          <Button variant="ghost" onClick={() => onClose()}>
             Abbrechen
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 text-sm bg-white text-black rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
-          >
-            {saving ? "Speichern..." : "Korrektur speichern"}
-          </button>
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
+            {saving ? "Speichern…" : "Korrektur speichern"}
+          </Button>
         </div>
       </div>
     </div>

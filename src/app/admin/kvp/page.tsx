@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { X } from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { StatusPill, type PillTone } from "@/components/ui/pills";
 
 type KvpEintrag = {
   id: string;
@@ -13,19 +16,54 @@ type KvpEintrag = {
   createdAt: string;
 };
 
-const TYP_CONFIG = {
-  BUG: { label: "Bug", emoji: "🐛", badge: "bg-red-950/60 text-red-300 border-red-800" },
-  WUNSCHFUNKTION: { label: "Wunsch", emoji: "✨", badge: "bg-blue-950/60 text-blue-300 border-blue-800" },
-  IDEE: { label: "Idee", emoji: "💡", badge: "bg-amber-950/60 text-amber-300 border-amber-800" },
+const TYP_CONFIG: Record<KvpEintrag["typ"], { label: string; tone: PillTone }> = {
+  BUG: { label: "Bug", tone: "hot" },
+  WUNSCHFUNKTION: { label: "Wunsch", tone: "action" },
+  IDEE: { label: "Idee", tone: "warn" },
 };
 
-const STATUS_CONFIG = {
-  OFFEN: { label: "Offen", color: "bg-zinc-800 text-zinc-300" },
-  IN_BEARBEITUNG: { label: "In Bearbeitung", color: "bg-blue-900/60 text-blue-300" },
-  ERLEDIGT: { label: "Erledigt", color: "bg-emerald-900/60 text-emerald-300" },
+const STATUS_CONFIG: Record<
+  KvpEintrag["status"],
+  { label: string; style: { color: string; background: string } }
+> = {
+  OFFEN: {
+    label: "Offen",
+    style: { color: "var(--ink-3)", background: "var(--neutral-dim)" },
+  },
+  IN_BEARBEITUNG: {
+    label: "In Bearbeitung",
+    style: { color: "var(--action-tint)", background: "var(--action-dim)" },
+  },
+  ERLEDIGT: {
+    label: "Erledigt",
+    style: { color: "var(--done-tint)", background: "var(--done-dim)" },
+  },
 };
 
 const STATUS_SEQUENCE: KvpEintrag["status"][] = ["OFFEN", "IN_BEARBEITUNG", "ERLEDIGT"];
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-[30px] rounded-full px-3 text-xs transition-colors duration-150 ${
+        active
+          ? "border border-ink bg-ink font-semibold text-bg"
+          : "border border-line-strong font-medium text-ink-3 hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function KvpPage() {
   const [eintraege, setEintraege] = useState<KvpEintrag[]>([]);
@@ -91,48 +129,48 @@ export default function KvpPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">KVP — Feedback & Verbesserungen</h1>
-        <p className="text-sm text-zinc-500 mt-1">
+    <div className="flex flex-col">
+      <TopBar title="KVP">
+        <span className="tnum text-xs text-ink-3">
           {counts.total} Einträge · {counts.offen} offen · {counts.inBearbeitung} in Bearbeitung · {counts.erledigt} erledigt
-        </p>
-      </div>
+        </span>
+        <TopBarSpacer />
+      </TopBar>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <select
-          value={filterTyp}
-          onChange={(e) => setFilterTyp(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
-        >
-          <option value="">Alle Typen</option>
-          {(Object.entries(TYP_CONFIG) as [keyof typeof TYP_CONFIG, typeof TYP_CONFIG[keyof typeof TYP_CONFIG]][]).map(([k, v]) => (
-            <option key={k} value={k}>{v.emoji} {v.label}</option>
-          ))}
-        </select>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
-        >
-          <option value="">Alle Status</option>
-          {(Object.entries(STATUS_CONFIG) as [keyof typeof STATUS_CONFIG, typeof STATUS_CONFIG[keyof typeof STATUS_CONFIG]][]).map(([k, v]) => (
-            <option key={k} value={k}>{v.label}</option>
-          ))}
-        </select>
+      {/* Filter-Chips */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3.5 sm:px-[22px]">
+        <FilterChip active={filterTyp === ""} onClick={() => setFilterTyp("")}>
+          Alle Typen
+        </FilterChip>
+        {(Object.keys(TYP_CONFIG) as KvpEintrag["typ"][]).map((typ) => (
+          <FilterChip key={typ} active={filterTyp === typ} onClick={() => setFilterTyp(typ)}>
+            {TYP_CONFIG[typ].label}
+          </FilterChip>
+        ))}
+        <span className="mx-1 hidden h-6 w-px bg-line sm:block" aria-hidden />
+        <FilterChip active={filterStatus === ""} onClick={() => setFilterStatus("")}>
+          Alle Status
+        </FilterChip>
+        {(Object.keys(STATUS_CONFIG) as KvpEintrag["status"][]).map((status) => (
+          <FilterChip
+            key={status}
+            active={filterStatus === status}
+            onClick={() => setFilterStatus(status)}
+          >
+            {STATUS_CONFIG[status].label}
+          </FilterChip>
+        ))}
       </div>
 
       {/* Einträge */}
       {loading ? (
-        <div className="flex items-center justify-center h-40 text-zinc-500">Lade…</div>
+        <div className="flex h-40 items-center justify-center text-sm text-ink-3">Lade…</div>
       ) : eintraege.length === 0 ? (
-        <div className="flex items-center justify-center h-40 text-zinc-500">
+        <div className="flex h-40 items-center justify-center text-sm text-ink-3">
           Keine Einträge vorhanden.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 px-4 py-4 sm:px-[22px]">
           {eintraege.map((e) => {
             const typ = TYP_CONFIG[e.typ];
             const status = STATUS_CONFIG[e.status];
@@ -140,54 +178,53 @@ export default function KvpPage() {
             return (
               <div
                 key={e.id}
-                className="border border-zinc-800 rounded-xl p-4 space-y-3 hover:border-zinc-700 transition"
+                className="space-y-3 rounded-[10px] border border-line bg-surface p-4 transition-colors duration-150 hover:border-line-strong"
               >
                 {/* Top row */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span
-                      className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium ${typ.badge}`}
-                    >
-                      {typ.emoji} {typ.label}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusPill tone={typ.tone}>{typ.label}</StatusPill>
                     <button
                       onClick={() => cycleStatus(e)}
                       disabled={isUpdating}
                       title="Status wechseln"
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium transition hover:opacity-80 disabled:opacity-50 cursor-pointer ${status.color}`}
+                      className="inline-flex cursor-pointer items-center rounded-full px-[9px] py-1 text-[11px] font-semibold tracking-[0.04em] transition-opacity duration-150 hover:opacity-80 disabled:opacity-50"
+                      style={status.style}
                     >
                       {isUpdating ? "…" : status.label}
                     </button>
                   </div>
                   <button
                     onClick={() => handleDelete(e)}
-                    className="text-zinc-600 hover:text-red-400 transition text-sm flex-shrink-0"
+                    className="flex-shrink-0 rounded-[7px] border border-[var(--hot-border)] p-1 text-hot-tint transition-colors duration-150 hover:bg-hot-dim"
                     title="Löschen"
                     aria-label="Eintrag löschen"
                   >
-                    ✕
+                    <X size={12} weight="bold" />
                   </button>
                 </div>
 
                 {/* Titel */}
-                <p className="font-medium text-sm">{e.titel}</p>
+                <p className="text-sm font-medium text-ink">{e.titel}</p>
 
                 {/* Beschreibung */}
-                <p className="text-sm text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-3">
                   {e.beschreibung}
                 </p>
 
                 {/* Footer */}
-                <div className="flex items-center gap-3 text-xs text-zinc-600 pt-1 border-t border-zinc-800/60">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line-soft pt-2 text-[11px] text-label">
                   {e.seite && (
-                    <span className="font-mono truncate max-w-[200px]" title={e.seite}>
-                      {e.seite}
-                    </span>
+                    <>
+                      <span className="tnum max-w-[200px] truncate" title={e.seite}>
+                        {e.seite}
+                      </span>
+                      <span>·</span>
+                    </>
                   )}
-                  <span>·</span>
                   <span>{e.eingetragenVon?.name ?? "Unbekannt"}</span>
                   <span>·</span>
-                  <span>
+                  <span className="tnum">
                     {new Date(e.createdAt).toLocaleDateString("de-CH", {
                       day: "2-digit",
                       month: "2-digit",

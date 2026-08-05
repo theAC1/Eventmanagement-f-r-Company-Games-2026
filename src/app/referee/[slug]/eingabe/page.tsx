@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import jsQR from "jsqr";
+import { ArrowLeft, Warning } from "@phosphor-icons/react";
 import { ErgebnisFormular } from "@/components/ergebnis-formular";
 import { parseQrToken, resolveScanResult, applyScannedTeam } from "@/lib/qr-scan";
 
@@ -42,6 +43,9 @@ type ConflictEntry = {
 type BarcodeDetectorLike = {
   detect: (video: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
 };
+
+const selectClass =
+  "h-12 flex-1 min-w-0 rounded-[9px] border border-line-strong bg-sunken px-3 text-sm text-ink focus:border-action focus:outline-none";
 
 export default function EingabePage() {
   const params = useParams();
@@ -315,44 +319,69 @@ export default function EingabePage() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
+  if (loading) {
+    return (
+      <div className="mx-auto flex h-64 w-full max-w-md items-center justify-center text-sm text-ink-3">
+        Lade...
+      </div>
+    );
+  }
   if (error && !game) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <p className="text-red-400 text-sm">{error}</p>
-        <button onClick={() => window.location.reload()} className="px-4 py-2 text-sm border border-zinc-700 rounded-lg hover:border-zinc-500 transition">
+      <div className="mx-auto flex h-64 w-full max-w-md flex-col items-center justify-center gap-3">
+        <p className="text-sm text-hot-tint">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="min-h-12 rounded-[9px] border border-line-strong px-4 text-sm font-medium text-ink-2 transition-colors duration-150 hover:border-action hover:text-ink"
+        >
           Erneut versuchen
         </button>
       </div>
     );
   }
-  if (!game) return <div className="text-red-400 text-center py-12">Game nicht gefunden</div>;
+  if (!game) {
+    return (
+      <div className="mx-auto w-full max-w-md py-12 text-center text-sm text-hot-tint">
+        Game nicht gefunden
+      </div>
+    );
+  }
 
   const wl = game.wertungslogik;
   const isDuell = game.modus === "DUELL" && game.teamsProSlot >= 2;
 
+  const scanButtonClass = (aktiv: boolean) =>
+    `shrink-0 min-h-12 rounded-[9px] border px-3 text-xs font-medium transition-colors duration-150 ${
+      aktiv
+        ? "border-action bg-action-dim text-action-tint"
+        : "border-line-strong text-ink-2 hover:border-action hover:text-ink"
+    }`;
+
   return (
-    <div className="space-y-6 pb-12">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-[18px] pb-12 lg:max-w-2xl">
+      {/* Header */}
       <div>
-        <Link href={`/referee/${slug}`} className="text-xs text-zinc-500 hover:text-white transition">
-          &larr; {game.name}
+        <Link
+          href={`/referee/${slug}`}
+          className="inline-flex items-center gap-1.5 text-[12px] text-ink-3 transition-colors duration-150 hover:text-ink"
+        >
+          <ArrowLeft size={13} weight="bold" />
+          {game.name}
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight mt-2">Ergebnis eintragen</h1>
-        <p className="text-sm text-zinc-400">{game.name}</p>
+        <h1 className="mt-2.5 text-[22px] font-semibold tracking-tight">Ergebnis eintragen</h1>
+        <p className="mt-1 text-[13px] text-ink-3">{game.name}</p>
       </div>
 
       {/* Team-Auswahl */}
-      <section className="border border-zinc-800 rounded-lg p-4 space-y-4">
-        <div className={isDuell ? "grid grid-cols-2 gap-4" : ""}>
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              {isDuell ? "Team A" : "Team"}
-            </label>
+      <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
+        <div className={isDuell ? "grid grid-cols-1 gap-4 sm:grid-cols-2" : ""}>
+          <div className="flex flex-col gap-1.5">
+            <label className="cg-label text-label">{isDuell ? "Team A" : "Team"}</label>
             <div className="flex gap-2">
               <select
                 value={selectedTeamId}
                 onChange={(e) => setSelectedTeamId(e.target.value)}
-                className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-500"
+                className={selectClass}
               >
                 <option value="">Team wählen...</option>
                 {teams
@@ -366,26 +395,20 @@ export default function EingabePage() {
               <button
                 type="button"
                 onClick={() => (scanTarget === "A" ? stopScanner() : startScanner("A"))}
-                className={`shrink-0 px-3 py-2.5 text-xs font-medium border rounded-lg transition ${
-                  scanTarget === "A"
-                    ? "bg-zinc-800 border-zinc-600 text-white"
-                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
-                }`}
+                className={scanButtonClass(scanTarget === "A")}
               >
                 {scanTarget === "A" ? "Abbrechen" : "QR scannen"}
               </button>
             </div>
           </div>
           {isDuell && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                Team B
-              </label>
+            <div className="flex flex-col gap-1.5">
+              <label className="cg-label text-label">Team B</label>
               <div className="flex gap-2">
                 <select
                   value={selectedTeamId2}
                   onChange={(e) => setSelectedTeamId2(e.target.value)}
-                  className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-zinc-500"
+                  className={selectClass}
                 >
                   <option value="">Team wählen...</option>
                   {teams
@@ -399,11 +422,7 @@ export default function EingabePage() {
                 <button
                   type="button"
                   onClick={() => (scanTarget === "B" ? stopScanner() : startScanner("B"))}
-                  className={`shrink-0 px-3 py-2.5 text-xs font-medium border rounded-lg transition ${
-                    scanTarget === "B"
-                      ? "bg-zinc-800 border-zinc-600 text-white"
-                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
-                  }`}
+                  className={scanButtonClass(scanTarget === "B")}
                 >
                   {scanTarget === "B" ? "Abbrechen" : "QR scannen"}
                 </button>
@@ -414,26 +433,26 @@ export default function EingabePage() {
 
         {/* QR-Scanner */}
         {scanTarget && (
-          <div className="space-y-2">
-            <div className="relative rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "4/3" }}>
-              <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+          <div className="flex flex-col gap-2">
+            <div className="relative overflow-hidden rounded-xl border border-line bg-black" style={{ aspectRatio: "4/3" }}>
+              <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
               {scanning && (
-                <div className="absolute inset-0 border-2 border-amber-500/30 rounded-lg pointer-events-none">
-                  <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-amber-500/50 animate-pulse" />
+                <div className="pointer-events-none absolute inset-0 rounded-xl border-2 border-warn/30">
+                  <div className="absolute left-4 right-4 top-1/2 h-0.5 animate-pulse bg-warn/50" />
                 </div>
               )}
             </div>
-            <p className="text-xs text-zinc-600 text-center">
+            <p className="text-center text-[12px] text-ink-3">
               Team-QR-Code auf dem Badge scannen{isDuell ? ` (Team ${scanTarget})` : ""}
             </p>
           </div>
         )}
-        {scanError && <p className="text-sm text-red-400 text-center">{scanError}</p>}
+        {scanError && <p className="text-center text-sm text-hot-tint">{scanError}</p>}
       </section>
 
       {/* Ergebnis-Formular */}
       {isDuell ? (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ErgebnisFormular
             label={teams.find((t) => t.id === selectedTeamId)?.name ?? "Team A"}
             wertungslogik={wl}
@@ -463,37 +482,39 @@ export default function EingabePage() {
         <button
           onClick={handleSave}
           disabled={saving || !selectedTeamId}
-          className="px-6 py-3 bg-white text-black text-sm font-semibold rounded-lg hover:bg-zinc-200 transition disabled:opacity-50"
+          className="min-h-12 rounded-[9px] bg-action px-6 text-sm font-semibold text-on-action transition-colors duration-150 hover:bg-action-hover disabled:pointer-events-none disabled:opacity-50"
         >
           {saving ? "Speichert..." : "Ergebnis speichern"}
         </button>
-        {success && <span className="text-sm text-emerald-400">{success}</span>}
-        {error && !conflict && <span className="text-sm text-red-400">{error}</span>}
+        {success && <span className="text-sm text-done-tint">{success}</span>}
+        {error && !conflict && <span className="text-sm text-hot-tint">{error}</span>}
       </div>
 
       {conflict && (
-        <section className="border border-amber-600/50 bg-amber-950/20 rounded-lg p-4 space-y-3">
-          <div className="flex items-start gap-2">
-            <span className="text-amber-400 text-lg leading-none">⚠</span>
+        <section className="flex flex-col gap-3 rounded-xl border border-[var(--warn-border)] bg-warn-dim/60 p-4">
+          <div className="flex items-start gap-2.5">
+            <Warning size={18} weight="bold" className="mt-0.5 shrink-0 text-warn" />
             <div>
-              <p className="text-sm font-semibold text-amber-300">{error}</p>
-              <p className="text-xs text-amber-400/80 mt-1">
+              <p className="text-sm font-semibold text-ink">{error}</p>
+              <p className="mt-1 text-[12px] leading-[1.45] text-ink-2">
                 Deine Eingabe wurde nicht gespeichert. Es besteht bereits ein Ergebnis für dieses Match.
               </p>
             </div>
           </div>
 
           {conflict.length > 0 && showConflict && (
-            <div className="space-y-2 border-t border-amber-600/30 pt-3">
+            <div className="flex flex-col gap-2 border-t border-[var(--warn-border)] pt-3">
               {conflict.map((c) => (
-                <div key={c.id} className="text-xs text-zinc-300 bg-zinc-900/60 rounded-lg p-3">
+                <div key={c.id} className="rounded-[9px] bg-surface p-3 text-xs text-ink-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium">
+                    <span className="font-medium text-ink">
                       {c.team ? `#${c.team.nummer} ${c.team.name}` : "Team"}
                     </span>
-                    <span className="text-zinc-500">{c.gamePunkte} Punkte · {c.status}</span>
+                    <span className="tnum text-ink-3">
+                      {c.gamePunkte} Punkte · {c.status}
+                    </span>
                   </div>
-                  <p className="text-zinc-500 mt-1">
+                  <p className="mt-1 text-ink-3">
                     Eingetragen von {c.eingetragenVon?.name ?? "unbekannt"}
                     {c.eingetragenUm ? ` am ${new Date(c.eingetragenUm).toLocaleString("de-DE")}` : ""}
                   </p>
@@ -506,14 +527,14 @@ export default function EingabePage() {
             {conflict.length > 0 && (
               <button
                 onClick={() => setShowConflict((v) => !v)}
-                className="px-4 py-2 text-xs border border-amber-600/50 rounded-lg text-amber-300 hover:bg-amber-950/40 transition"
+                className="min-h-12 rounded-[9px] border border-[var(--warn-border)] px-4 text-xs font-medium text-warn transition-colors duration-150 hover:bg-warn-dim"
               >
                 {showConflict ? "Ausblenden" : "Vorhandenes Ergebnis anzeigen"}
               </button>
             )}
             <Link
               href={`/referee/${slug}/live`}
-              className="px-4 py-2 text-xs border border-zinc-700 rounded-lg text-zinc-300 hover:border-zinc-500 transition"
+              className="inline-flex min-h-12 items-center rounded-[9px] border border-line-strong px-4 text-xs font-medium text-ink-2 transition-colors duration-150 hover:border-action hover:text-ink"
             >
               Zu den Ergebnissen
             </Link>

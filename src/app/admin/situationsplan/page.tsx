@@ -3,6 +3,22 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { GridStack, type GridStackNode } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
+import {
+  ArrowClockwise,
+  Car,
+  DownloadSimple,
+  Drop,
+  Eye,
+  FirstAidKit,
+  Lightning,
+  Lock,
+  MapPin,
+  PersonSimpleWalk,
+  Users,
+  type Icon,
+} from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { Button } from "@/components/ui/button";
 
 type GameInfo = {
   id: string; name: string; slug: string; modus: string;
@@ -33,20 +49,26 @@ type Plan = {
   infrastruktur: InfraElement[];
 };
 
-const INFRA_ICONS: Record<string, string> = {
-  STROM: "⚡", WASSER: "💧", WEG: "🚶", PARKPLATZ: "🅿️",
-  ZUSCHAUER: "👥", SANITAER: "🚻", SONSTIGES: "📍",
+const INFRA_META: Record<string, { icon: Icon; cls: string; label: string }> = {
+  STROM: { icon: Lightning, cls: "text-warn", label: "Strom" },
+  WASSER: { icon: Drop, cls: "text-action-tint", label: "Wasser" },
+  WEG: { icon: PersonSimpleWalk, cls: "text-ink-2", label: "Weg" },
+  PARKPLATZ: { icon: Car, cls: "text-ink-3", label: "Parkplatz" },
+  ZUSCHAUER: { icon: Users, cls: "text-ink-2", label: "Zuschauer" },
+  SANITAER: { icon: FirstAidKit, cls: "text-hot-tint", label: "Sanitär" },
+  SONSTIGES: { icon: MapPin, cls: "text-ink-3", label: "Sonstiges" },
 };
+const infraMeta = (typ: string) => INFRA_META[typ] ?? INFRA_META.SONSTIGES;
 
 const MODUS_BG: Record<string, string> = {
-  SOLO: "rgba(6,78,59,0.75)", DUELL: "rgba(30,58,138,0.75)",
+  SOLO: "var(--solo)", DUELL: "var(--duell)",
 };
 const MODUS_BORDER: Record<string, string> = {
-  SOLO: "rgba(16,185,129,0.8)", DUELL: "rgba(59,130,246,0.8)",
+  SOLO: "var(--solo-border)", DUELL: "var(--duell-border)",
 };
 const MODUS_TW: Record<string, string> = {
-  SOLO: "bg-emerald-900/80 border-emerald-600 text-emerald-200",
-  DUELL: "bg-blue-900/80 border-blue-600 text-blue-200",
+  SOLO: "bg-done-dim text-done-tint hover:bg-done-dim-strong",
+  DUELL: "bg-action-dim text-action-tint hover:bg-action-dim-strong",
 };
 
 // ─── Touch-Drag Fix ───
@@ -197,16 +219,23 @@ function MapGrid({ games, customs, mpp, selected, onSelect, onSave }: MapGridPro
         gs-h={g.h}
       >
         <div
-          className={`grid-stack-item-content flex items-center justify-center text-xs font-bold text-white/90 rounded-sm backdrop-blur-[2px] ${isSel ? "ring-2 ring-white/70" : "hover:ring-1 hover:ring-white/40"}`}
+          className={`grid-stack-item-content tnum flex items-center justify-center rounded-[4px] text-[13px] font-bold backdrop-blur-[2px] ${isSel ? "" : "hover:ring-1 hover:ring-white/40"}`}
           onClick={(e) => { e.stopPropagation(); onSelect(type, id); }}
           style={{
             backgroundColor: bg,
-            border: `1.5px solid ${border}`,
+            border: isSel ? "2px solid #F2F8FF" : `1.5px solid ${border}`,
+            boxShadow: isSel ? "0 0 0 4px var(--action-ring)" : undefined,
+            color: "#F2F8FF",
             opacity: oeffentlich ? 1 : 0.5,
             transform: r45 ? `rotate(${rotation}deg)` : undefined,
           }}
         >
           {label}
+          {!oeffentlich && (
+            <span className="pointer-events-none absolute inset-x-0 bottom-[2px] text-center text-[8px] font-semibold tracking-[0.1em] opacity-80">
+              OKW
+            </span>
+          )}
         </div>
       </div>
     );
@@ -235,6 +264,10 @@ function MapGrid({ games, customs, mpp, selected, onSelect, onSave }: MapGridPro
 }
 
 type CreateForm = { label: string; nummer: string; farbe: string; laengeM: number; breiteM: number };
+
+// Wiederkehrende Input-Optik (Redesign): sunken Füllung, starke Linie
+const INPUT_CLS =
+  "w-full rounded-lg border border-line-strong bg-sunken px-2 py-1.5 text-xs text-ink placeholder:text-faint";
 
 export default function SituationsplanPage() {
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -482,15 +515,24 @@ export default function SituationsplanPage() {
     return parts.join(",") + `|${mpp}|${remountTick}`;
   }, [plan, mpp, remountTick]);
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
+  if (loading) {
+    return (
+      <>
+        <TopBar title="Lageplan" />
+        <div className="flex h-64 items-center justify-center text-sm text-ink-3">Lade…</div>
+      </>
+    );
+  }
 
   const selGame = selected?.type === "game" ? plan?.gamePositionen.find(p => p.gameId === selected.id) : null;
   const selCustom = selected?.type === "custom" ? plan?.customFelder.find(f => f.id === selected.id) : null;
   const selInfra = selected?.type === "infra" ? plan?.infrastruktur.find(e => e.id === selected.id) : null;
 
+  const placedCount = plan?.gamePositionen.length ?? 0;
+
   return (
-    <div className="space-y-4">
-      {/* GridStack Resize-Handles im Dark-UI-Stil */}
+    <div className="flex flex-col">
+      {/* GridStack Resize-Handles im Redesign-Stil */}
       <style>{`
         .grid-stack { background: transparent; }
         .grid-stack-item-content { inset: 0; overflow: visible; cursor: grab; }
@@ -502,7 +544,7 @@ export default function SituationsplanPage() {
         .grid-stack > .grid-stack-item.ui-resizable-resizing > .ui-resizable-handle { opacity: 1; }
         .grid-stack > .grid-stack-item > .ui-resizable-handle::before {
           content: ""; position: absolute; width: 8px; height: 8px; border-radius: 9999px;
-          background: #fff; border: 1px solid rgba(0,0,0,0.5); box-shadow: 0 0 2px rgba(0,0,0,0.6);
+          background: #F2F8FF; border: 1px solid rgba(0,0,0,0.5); box-shadow: 0 0 2px rgba(0,0,0,0.6);
           top: 50%; left: 50%; transform: translate(-50%, -50%);
         }
         .grid-stack > .grid-stack-item > .ui-resizable-nw { top: -4px; left: -4px; cursor: nwse-resize; }
@@ -520,330 +562,409 @@ export default function SituationsplanPage() {
         }
       `}</style>
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Situationsplan</h1>
-        <div className="flex items-center gap-3 text-xs">
-          <span className="px-2 py-1 rounded bg-emerald-900/60 text-emerald-300">Solo</span>
-          <span className="px-2 py-1 rounded bg-blue-900/60 text-blue-300">Duell</span>
-          <span className="text-zinc-600">|</span>
-          <label className="text-zinc-500">m/%:</label>
-          <input type="number" step="0.1" min="0.5" max="5" value={mpp}
-            onChange={e => setMpp(parseFloat(e.target.value) || DEFAULT_MPP)}
-            className="w-14 bg-zinc-900 border border-zinc-700 rounded px-1.5 py-0.5 text-xs text-center" />
-          <button onClick={exportImage}
-            className="px-3 py-1 border border-zinc-700 rounded hover:bg-zinc-800 transition">
-            Export PNG
-          </button>
-        </div>
-      </div>
+      <TopBar title="Lageplan">
+        <span className="hidden text-xs text-ink-3 sm:inline">
+          <span className="tnum">{placedCount}</span> von{" "}
+          <span className="tnum">{allGames.length}</span> Games platziert
+        </span>
+        <TopBarSpacer />
+        <Button variant="ghost" onClick={exportImage}>
+          <DownloadSimple size={15} weight="bold" /> PNG
+        </Button>
+      </TopBar>
 
-      {/* Lageplan-Bild fürs Team-Portal */}
-      <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">Lageplan-Bild (Team-Portal)</h3>
-          {plan?.hintergrundbildUrl
-            ? <span className="text-[10px] text-emerald-400">Aktiv – Teams sehen dieses Bild</span>
-            : <span className="text-[10px] text-zinc-500">Kein Bild gesetzt – Teams sehen Platzhalter</span>}
-        </div>
-        <div className="flex items-center gap-2">
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadBild(f); }} />
-          <button onClick={() => fileInputRef.current?.click()} disabled={bildUploading || bildSaving}
-            className="px-3 py-1 border border-emerald-700 text-emerald-300 rounded hover:bg-emerald-950 transition disabled:opacity-50">
-            {bildUploading ? "Lädt hoch…" : "Bild hochladen"}
-          </button>
-          <span className="text-[10px] text-zinc-600">oder URL einfügen:</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <input type="url" value={bildUrl} placeholder="https://… Bild-URL des Lageplans einfügen"
-            onChange={e => setBildUrl(e.target.value)}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs" />
-          <button onClick={() => saveBildUrl(bildUrl)} disabled={bildSaving}
-            className="px-3 py-1 border border-emerald-700 text-emerald-300 rounded hover:bg-emerald-950 transition disabled:opacity-50">
-            {bildSaving ? "Speichert…" : "Speichern"}
-          </button>
+      <div className="flex flex-col gap-4 px-4 py-4 sm:px-[22px]">
+        {/* Lageplan-Bild fürs Team-Portal */}
+        <div className="space-y-2.5 rounded-[10px] border border-line bg-surface p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="cg-label">Lageplan-Bild (Team-Portal)</h3>
+            {plan?.hintergrundbildUrl
+              ? <span className="text-[11px] font-medium text-done-tint">Aktiv – Teams sehen dieses Bild</span>
+              : <span className="text-[11px] text-ink-3">Kein Bild gesetzt – Teams sehen Platzhalter</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadBild(f); }} />
+            <Button variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={bildUploading || bildSaving}>
+              {bildUploading ? "Lädt hoch…" : "Bild hochladen"}
+            </Button>
+            <span className="text-[11px] text-ink-3">oder URL einfügen:</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="url" value={bildUrl} placeholder="https://… Bild-URL des Lageplans einfügen"
+              onChange={e => setBildUrl(e.target.value)}
+              className={`min-w-0 flex-1 ${INPUT_CLS}`} />
+            <Button variant="ghost" onClick={() => saveBildUrl(bildUrl)} disabled={bildSaving}>
+              {bildSaving ? "Speichert…" : "Speichern"}
+            </Button>
+            {plan?.hintergrundbildUrl && (
+              <Button variant="danger-ghost" onClick={() => { setBildUrl(""); saveBildUrl(null); }} disabled={bildSaving}>
+                Entfernen
+              </Button>
+            )}
+          </div>
           {plan?.hintergrundbildUrl && (
-            <button onClick={() => { setBildUrl(""); saveBildUrl(null); }} disabled={bildSaving}
-              className="px-3 py-1 border border-red-900 text-red-400 rounded hover:bg-red-950 transition disabled:opacity-50">
-              Entfernen
-            </button>
-          )}
-        </div>
-        {plan?.hintergrundbildUrl && (
-          <img src={plan.hintergrundbildUrl} alt="Lageplan-Vorschau"
-            className="max-h-32 rounded border border-zinc-800 object-contain" />
-        )}
-      </div>
-
-      <div className="grid grid-cols-[1fr_260px] gap-4">
-        {/* ── Canvas ── */}
-        <div ref={ref}
-          className={`relative border border-zinc-800 rounded-lg overflow-hidden select-none ${addingInfra ? "cursor-crosshair" : ""}`}
-          onClick={e => { if (addingInfra) { addInfra(e); return; } setSelected(null); }}
-          style={{ aspectRatio: `${IMG_RATIO}` }}>
-
-          <img src="/images/situationsplan.jpg" alt="" className="absolute inset-0 w-full h-full object-cover z-0" draggable={false} />
-
-          {/* GridStack Canvas: Game-Felder & Custom-Felder */}
-          <MapGrid
-            key={gridKey}
-            games={plan?.gamePositionen ?? []}
-            customs={plan?.customFelder ?? []}
-            mpp={mpp}
-            selected={selected}
-            onSelect={(type, id) => setSelected({ type, id })}
-            onSave={handleSave}
-          />
-
-          {/* Infrastruktur */}
-          {plan?.infrastruktur.map(el => (
-            <div key={el.id}
-              onClick={e => { e.stopPropagation(); setSelected({ type: "infra", id: el.id }); }}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 z-30 text-lg cursor-pointer ${selected?.type === "infra" && selected.id === el.id ? "ring-2 ring-white/60 rounded-full" : ""}`}
-              style={{ left: `${el.x}%`, top: `${el.y}%`, opacity: el.oeffentlich ? 1 : 0.4 }}
-              title={el.label ?? el.typ}>
-              {INFRA_ICONS[el.typ] ?? "📍"}
-            </div>
-          ))}
-
-          {addingInfra && (
-            <div className="absolute top-2 left-2 bg-zinc-900/90 text-xs text-amber-300 px-2 py-1 rounded z-40">
-              Klicke um {addingInfra.toLowerCase()} zu platzieren &middot;{" "}
-              <button onClick={e => { e.stopPropagation(); setAddingInfra(null); }} className="underline">Abbrechen</button>
-            </div>
+            <img src={plan.hintergrundbildUrl} alt="Lageplan-Vorschau"
+              className="max-h-32 rounded-lg border border-line object-contain" />
           )}
         </div>
 
-        {/* ── Sidebar ── */}
-        <div className="space-y-3 max-h-[calc(100vh-160px)] overflow-y-auto text-xs">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
+          {/* ── Canvas + Massstab-Leiste ── */}
+          <div className="min-w-0">
+            <div ref={ref}
+              className={`relative overflow-hidden rounded-[10px] border border-line bg-[#08101B] select-none ${addingInfra ? "cursor-crosshair" : ""}`}
+              onClick={e => { if (addingInfra) { addInfra(e); return; } setSelected(null); }}
+              style={{ aspectRatio: `${IMG_RATIO}` }}>
 
-          {/* Legende: Platzierte Games */}
-          {plan && plan.gamePositionen.length > 0 && (
-            <div className="border border-zinc-800 rounded-lg p-3 space-y-1.5">
-              <h3 className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Legende – Games</h3>
-              {plan.gamePositionen.map(pos => (
-                <div key={pos.id} className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${selected?.type === "game" && selected.id === pos.gameId ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
-                  onClick={() => setSelected({ type: "game", id: pos.gameId })}>
-                  <div className="w-5 h-5 rounded-sm flex items-center justify-center text-[9px] font-bold text-white"
-                    style={{ backgroundColor: MODUS_BG[pos.game.modus], border: `1px solid ${MODUS_BORDER[pos.game.modus]}` }}>
-                    {pos.nummer || "–"}
+              <img src="/images/situationsplan.jpg" alt=""
+                className="absolute inset-0 z-0 h-full w-full object-cover opacity-[0.62] [html[data-theme=light]_&]:opacity-80"
+                draggable={false} />
+
+              {/* GridStack Canvas: Game-Felder & Custom-Felder */}
+              <MapGrid
+                key={gridKey}
+                games={plan?.gamePositionen ?? []}
+                customs={plan?.customFelder ?? []}
+                mpp={mpp}
+                selected={selected}
+                onSelect={(type, id) => setSelected({ type, id })}
+                onSave={handleSave}
+              />
+
+              {/* Infrastruktur */}
+              {plan?.infrastruktur.map(el => {
+                const meta = infraMeta(el.typ);
+                const MetaIcon = meta.icon;
+                const isSelInfra = selected?.type === "infra" && selected.id === el.id;
+                return (
+                  <div key={el.id}
+                    onClick={e => { e.stopPropagation(); setSelected({ type: "infra", id: el.id }); }}
+                    className={`absolute z-30 flex h-[26px] w-[26px] -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-sunken ${isSelInfra ? "border-action ring-4 ring-[var(--action-ring)]" : "border-line-key"}`}
+                    style={{ left: `${el.x}%`, top: `${el.y}%`, opacity: el.oeffentlich ? 1 : 0.4 }}
+                    title={el.label ?? meta.label}>
+                    <MetaIcon size={14} weight="bold" className={meta.cls} />
                   </div>
-                  <span className="flex-1 truncate">{pos.game.name}</span>
-                  {!pos.oeffentlich && <span className="text-zinc-600">OKW</span>}
-                </div>
-              ))}
-            </div>
-          )}
+                );
+              })}
 
-          {/* Legende: Custom-Felder */}
-          {plan && plan.customFelder.length > 0 && (
-            <div className="border border-zinc-800 rounded-lg p-3 space-y-1.5">
-              <h3 className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Legende – Custom</h3>
-              {plan.customFelder.map(cf => (
-                <div key={cf.id} className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer ${selected?.type === "custom" && selected.id === cf.id ? "bg-zinc-800" : "hover:bg-zinc-900"}`}
-                  onClick={() => setSelected({ type: "custom", id: cf.id })}>
-                  <div className="w-5 h-5 rounded-sm flex items-center justify-center text-[9px] font-bold text-white"
-                    style={{ backgroundColor: cf.farbe }}>
-                    {cf.nummer || "–"}
+              {/* Overlay-Chips: Raster-Info + Massstab */}
+              <div className="pointer-events-none absolute right-2 top-2 z-20 rounded-[9px] border border-line px-3 py-2"
+                style={{ background: "var(--map-overlay)" }}>
+                <span className="tnum text-[11px] text-label">1 % Raster · Snap an</span>
+              </div>
+              <div className="pointer-events-none absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-[9px] border border-line px-3 py-2"
+                style={{ background: "var(--map-overlay)" }}>
+                <span className="h-[3px] w-14 rounded-full bg-ink" aria-hidden />
+                <span className="tnum text-[11px] text-label">{mpp} m pro %</span>
+              </div>
+
+              {addingInfra && (
+                <div className="absolute left-2 top-2 z-40 rounded-[9px] border border-line px-3 py-2 text-[11px] text-warn"
+                  style={{ background: "var(--map-overlay)" }}>
+                  Klicke um {addingInfra.toLowerCase()} zu platzieren &middot;{" "}
+                  <button onClick={e => { e.stopPropagation(); setAddingInfra(null); }} className="underline">Abbrechen</button>
+                </div>
+              )}
+            </div>
+
+            {/* Untere Leiste: Massstab + Legende */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[10px] border border-line bg-surface px-3.5 py-2.5">
+              <span className="cg-label">Massstab</span>
+              <input type="number" step="0.1" min="0.5" max="5" value={mpp}
+                onChange={e => setMpp(parseFloat(e.target.value) || DEFAULT_MPP)}
+                className="tnum w-16 rounded-lg border border-line-strong bg-sunken px-1.5 py-1 text-center text-xs text-ink" />
+              <span className="tnum text-[11px] text-ink-3">m pro %</span>
+              <span className="hidden h-4 w-px bg-line sm:block" aria-hidden />
+              <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
+                <span className="h-3 w-3 rounded-[3px]"
+                  style={{ background: "var(--solo)", border: "1px solid var(--solo-border)" }} aria-hidden />
+                Solo
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
+                <span className="h-3 w-3 rounded-[3px]"
+                  style={{ background: "var(--duell)", border: "1px solid var(--duell-border)" }} aria-hidden />
+                Duell
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
+                <Lock size={12} weight="bold" className="text-label" />
+                OKW · für Gäste verborgen
+              </span>
+            </div>
+          </div>
+
+          {/* ── Sidebar ── */}
+          <div className="space-y-3 overflow-y-auto text-xs lg:max-h-[calc(100vh-160px)]">
+
+            {/* Legende: Platzierte Games */}
+            {plan && plan.gamePositionen.length > 0 && (
+              <div className="space-y-1 rounded-[10px] border border-line bg-surface p-3">
+                <h3 className="cg-label pb-1">Legende – Games</h3>
+                {plan.gamePositionen.map(pos => (
+                  <div key={pos.id}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-colors duration-150 ${selected?.type === "game" && selected.id === pos.gameId ? "bg-action-row" : "hover:bg-sunken/60"}`}
+                    onClick={() => setSelected({ type: "game", id: pos.gameId })}>
+                    <div className="tnum flex h-5 w-5 items-center justify-center rounded-[5px] text-[9px] font-bold text-[#F2F8FF]"
+                      style={{ backgroundColor: MODUS_BG[pos.game.modus], border: `1px solid ${MODUS_BORDER[pos.game.modus]}` }}>
+                      {pos.nummer || "–"}
+                    </div>
+                    <span className="flex-1 truncate text-ink-2">{pos.game.name}</span>
+                    {pos.oeffentlich
+                      ? <Eye size={12} weight="bold" className="text-label" />
+                      : <Lock size={12} weight="bold" className="text-label" aria-label="OKW" />}
                   </div>
-                  <span className="flex-1 truncate">{cf.label}</span>
-                  {!cf.oeffentlich && <span className="text-zinc-600">OKW</span>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Unplatzierte Games */}
-          <div className="border border-zinc-800 rounded-lg p-3 space-y-1.5">
-            <h3 className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Nicht platziert ({unplaced.length})</h3>
-            {unplaced.length === 0 ? <p className="text-zinc-600">Alle platziert</p> : (
-              <div className="space-y-1">
-                {unplaced.map(g => (
-                  <button key={g.id} onClick={() => placeGame(g.id)}
-                    className={`w-full text-left px-2 py-1 rounded border transition hover:opacity-80 ${MODUS_TW[g.modus] ?? MODUS_TW.SOLO}`}>
-                    {g.name}
-                  </button>
                 ))}
               </div>
             )}
-          </div>
 
-          {/* Custom-Feld hinzufügen */}
-          <button onClick={() => setCreating({ label: "", nummer: "", farbe: "#6b7280", laengeM: 10, breiteM: 10 })}
-            className="w-full px-3 py-2 border border-dashed border-zinc-700 rounded-lg text-zinc-400 hover:border-zinc-500 hover:text-white transition">
-            + Custom-Feld
-          </button>
+            {/* Legende: Custom-Felder */}
+            {plan && plan.customFelder.length > 0 && (
+              <div className="space-y-1 rounded-[10px] border border-line bg-surface p-3">
+                <h3 className="cg-label pb-1">Legende – Custom</h3>
+                {plan.customFelder.map(cf => (
+                  <div key={cf.id}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-colors duration-150 ${selected?.type === "custom" && selected.id === cf.id ? "bg-action-row" : "hover:bg-sunken/60"}`}
+                    onClick={() => setSelected({ type: "custom", id: cf.id })}>
+                    <div className="tnum flex h-5 w-5 items-center justify-center rounded-[5px] text-[9px] font-bold text-[#F2F8FF]"
+                      style={{ backgroundColor: cf.farbe }}>
+                      {cf.nummer || "–"}
+                    </div>
+                    <span className="flex-1 truncate text-ink-2">{cf.label}</span>
+                    {cf.oeffentlich
+                      ? <Eye size={12} weight="bold" className="text-label" />
+                      : <Lock size={12} weight="bold" className="text-label" aria-label="OKW" />}
+                  </div>
+                ))}
+              </div>
+            )}
 
-          {/* Infrastruktur */}
-          <div className="border border-zinc-800 rounded-lg p-3 space-y-1.5">
-            <h3 className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Infrastruktur</h3>
-            <div className="grid grid-cols-2 gap-1">
-              {Object.entries(INFRA_ICONS).map(([typ, icon]) => (
-                <button key={typ} onClick={() => setAddingInfra(addingInfra === typ ? null : typ)}
-                  className={`px-2 py-1 rounded border transition ${addingInfra === typ ? "bg-amber-900/40 border-amber-700 text-amber-300" : "border-zinc-800 text-zinc-400 hover:border-zinc-600"}`}>
-                  {icon} {typ.charAt(0) + typ.slice(1).toLowerCase()}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Detail-Panel: Game ── */}
-          {selGame && (
-            <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">{selGame.game.name}</p>
-                <span className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5">↔ Ecken ziehen</span>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-zinc-500">Nummer im Plan:</label>
-                <input type="text" value={selGame.nummer} maxLength={3}
-                  onChange={e => {
-                    const v = e.target.value;
-                    setPlan(prev => prev ? { ...prev, gamePositionen: prev.gamePositionen.map(p => p.id === selGame.id ? { ...p, nummer: v } : p) } : prev);
-                  }}
-                  onBlur={() => updateGamePos(selGame.id, { nummer: selGame.nummer } as any)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-center font-mono" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500">Sichtbarkeit:</span>
-                <button onClick={() => updateGamePos(selGame.id, { oeffentlich: !selGame.oeffentlich } as any)}
-                  className={`px-2 py-0.5 rounded border transition ${selGame.oeffentlich ? "border-emerald-700 text-emerald-300" : "border-zinc-700 text-zinc-500"}`}>
-                  {selGame.oeffentlich ? "Öffentlich" : "OKW"}
-                </button>
-              </div>
-              <p className="text-zinc-600">{selGame.game.flaecheLaengeM}×{selGame.game.flaecheBreiteM}m · {selGame.rotation}°</p>
-              <div className="flex gap-2">
-                <button onClick={() => rotate("game", selGame.gameId, selGame.rotation)}
-                  className="flex-1 py-1 border border-zinc-700 rounded hover:bg-zinc-800 transition">↻ +45°</button>
-                <button onClick={() => deleteItem("game", selGame.id)}
-                  className="flex-1 py-1 border border-red-900 text-red-400 rounded hover:bg-red-950 transition">Entfernen</button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Detail-Panel: Custom ── */}
-          {selCustom && (
-            <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Custom-Feld</span>
-                <span className="text-[10px] text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5">↔ Ecken ziehen</span>
-              </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">Label:</label>
-                <input type="text" value={selCustom.label}
-                  onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, label: e.target.value } : f) } : prev)}
-                  onBlur={() => updateCustom(selCustom.id, { label: selCustom.label })}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
+            {/* Unplatzierte Games */}
+            <div className="space-y-1.5 rounded-[10px] border border-line bg-surface p-3">
+              <h3 className="cg-label pb-0.5">Nicht platziert ({unplaced.length})</h3>
+              {unplaced.length === 0 ? <p className="text-ink-3">Alle platziert</p> : (
                 <div className="space-y-1">
-                  <label className="text-zinc-500">Nummer:</label>
-                  <input type="text" value={selCustom.nummer} maxLength={3}
-                    onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, nummer: e.target.value } : f) } : prev)}
-                    onBlur={() => updateCustom(selCustom.id, { nummer: selCustom.nummer })}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-center font-mono" />
+                  {unplaced.map(g => (
+                    <button key={g.id} onClick={() => placeGame(g.id)}
+                      className={`w-full rounded-lg px-2.5 py-1.5 text-left font-medium transition-colors duration-150 ${MODUS_TW[g.modus] ?? MODUS_TW.SOLO}`}>
+                      {g.name}
+                    </button>
+                  ))}
                 </div>
-                <div className="space-y-1">
-                  <label className="text-zinc-500">Farbe:</label>
-                  <input type="color" value={selCustom.farbe}
+              )}
+            </div>
+
+            {/* Custom-Feld hinzufügen */}
+            <button onClick={() => setCreating({ label: "", nummer: "", farbe: "#6b7280", laengeM: 10, breiteM: 10 })}
+              className="w-full rounded-[10px] border border-dashed border-line-strong px-3 py-2 font-medium text-ink-3 transition-colors duration-150 hover:border-action hover:text-action-tint">
+              + Custom-Feld
+            </button>
+
+            {/* Infrastruktur */}
+            <div className="space-y-1.5 rounded-[10px] border border-line bg-surface p-3">
+              <h3 className="cg-label pb-0.5">Infrastruktur</h3>
+              <div className="grid grid-cols-2 gap-1">
+                {Object.entries(INFRA_META).map(([typ, meta]) => {
+                  const MetaIcon = meta.icon;
+                  return (
+                    <button key={typ} onClick={() => setAddingInfra(addingInfra === typ ? null : typ)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 transition-colors duration-150 ${addingInfra === typ ? "border-action bg-action-dim font-semibold text-action-tint" : "border-line-strong bg-sunken text-ink-3 hover:text-ink-2"}`}>
+                      <MetaIcon size={13} weight="bold" className={addingInfra === typ ? undefined : meta.cls} />
+                      {meta.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Detail-Panel: Game ── */}
+            {selGame && (
+              <div className="space-y-3 rounded-[10px] border border-line bg-surface p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-ink">{selGame.game.name}</p>
+                  <span className="cg-label whitespace-nowrap rounded-md border border-line px-1.5 py-0.5">Ecken ziehen</span>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="cg-label block">Nummer im Plan</label>
+                  <input type="text" value={selGame.nummer} maxLength={3}
                     onChange={e => {
                       const v = e.target.value;
-                      setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, farbe: v } : f) } : prev);
+                      setPlan(prev => prev ? { ...prev, gamePositionen: prev.gamePositionen.map(p => p.id === selGame.id ? { ...p, nummer: v } : p) } : prev);
                     }}
-                    onBlur={() => updateCustom(selCustom.id, { farbe: selCustom.farbe })}
-                    className="w-full h-7 bg-zinc-900 border border-zinc-700 rounded cursor-pointer" />
+                    onBlur={() => updateGamePos(selGame.id, { nummer: selGame.nummer } as any)}
+                    className={`tnum text-center ${INPUT_CLS}`} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="cg-label">Sichtbarkeit</span>
+                  <button onClick={() => updateGamePos(selGame.id, { oeffentlich: !selGame.oeffentlich } as any)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-medium transition-colors duration-150 ${selGame.oeffentlich ? "border-done bg-done-dim text-done-tint" : "border-line-strong bg-sunken text-ink-3"}`}>
+                    {selGame.oeffentlich ? <Eye size={13} weight="bold" /> : <Lock size={13} weight="bold" />}
+                    {selGame.oeffentlich ? "Öffentlich" : "OKW"}
+                  </button>
+                </div>
+                <p className="tnum text-[11px] text-ink-3">
+                  {selGame.game.flaecheLaengeM}×{selGame.game.flaecheBreiteM} m · {selGame.rotation}°
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => rotate("game", selGame.gameId, selGame.rotation)}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-sunken py-1.5 font-medium text-ink-2 transition-colors duration-150 hover:border-action hover:text-action-tint">
+                    <ArrowClockwise size={13} weight="bold" /> +45°
+                  </button>
+                  <button onClick={() => deleteItem("game", selGame.id)}
+                    className="flex-1 rounded-lg border border-[var(--hot-border)] py-1.5 font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim">
+                    Vom Plan entfernen
+                  </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-zinc-500">Länge (m):</label>
-                  <input type="number" step="1" value={selCustom.laengeM}
-                    onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, laengeM: parseFloat(e.target.value) || 10 } : f) } : prev)}
-                    onBlur={() => updateCustom(selCustom.id, { laengeM: selCustom.laengeM }, true)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1" />
+            )}
+
+            {/* ── Detail-Panel: Custom ── */}
+            {selCustom && (
+              <div className="space-y-3 rounded-[10px] border border-line bg-surface p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="cg-label">Custom-Feld</span>
+                  <span className="cg-label whitespace-nowrap rounded-md border border-line px-1.5 py-0.5">Ecken ziehen</span>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-zinc-500">Breite (m):</label>
-                  <input type="number" step="1" value={selCustom.breiteM}
-                    onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, breiteM: parseFloat(e.target.value) || 10 } : f) } : prev)}
-                    onBlur={() => updateCustom(selCustom.id, { breiteM: selCustom.breiteM }, true)}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1" />
+                <div className="space-y-1.5">
+                  <label className="cg-label block">Label</label>
+                  <input type="text" value={selCustom.label}
+                    onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, label: e.target.value } : f) } : prev)}
+                    onBlur={() => updateCustom(selCustom.id, { label: selCustom.label })}
+                    className={INPUT_CLS} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <label className="cg-label block">Nummer</label>
+                    <input type="text" value={selCustom.nummer} maxLength={3}
+                      onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, nummer: e.target.value } : f) } : prev)}
+                      onBlur={() => updateCustom(selCustom.id, { nummer: selCustom.nummer })}
+                      className={`tnum text-center ${INPUT_CLS}`} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="cg-label block">Farbe</label>
+                    <input type="color" value={selCustom.farbe}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, farbe: v } : f) } : prev);
+                      }}
+                      onBlur={() => updateCustom(selCustom.id, { farbe: selCustom.farbe })}
+                      className="h-8 w-full cursor-pointer rounded-lg border border-line-strong bg-sunken" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <label className="cg-label block">Länge (m)</label>
+                    <input type="number" step="1" value={selCustom.laengeM}
+                      onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, laengeM: parseFloat(e.target.value) || 10 } : f) } : prev)}
+                      onBlur={() => updateCustom(selCustom.id, { laengeM: selCustom.laengeM }, true)}
+                      className={`tnum ${INPUT_CLS}`} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="cg-label block">Breite (m)</label>
+                    <input type="number" step="1" value={selCustom.breiteM}
+                      onChange={e => setPlan(prev => prev ? { ...prev, customFelder: prev.customFelder.map(f => f.id === selCustom.id ? { ...f, breiteM: parseFloat(e.target.value) || 10 } : f) } : prev)}
+                      onBlur={() => updateCustom(selCustom.id, { breiteM: selCustom.breiteM }, true)}
+                      className={`tnum ${INPUT_CLS}`} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="cg-label">Sichtbarkeit</span>
+                  <button onClick={() => updateCustom(selCustom.id, { oeffentlich: !selCustom.oeffentlich })}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-medium transition-colors duration-150 ${selCustom.oeffentlich ? "border-done bg-done-dim text-done-tint" : "border-line-strong bg-sunken text-ink-3"}`}>
+                    {selCustom.oeffentlich ? <Eye size={13} weight="bold" /> : <Lock size={13} weight="bold" />}
+                    {selCustom.oeffentlich ? "Öffentlich" : "OKW"}
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => rotate("custom", selCustom.id, selCustom.rotation)}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-sunken py-1.5 font-medium text-ink-2 transition-colors duration-150 hover:border-action hover:text-action-tint">
+                    <ArrowClockwise size={13} weight="bold" /> +45°
+                  </button>
+                  <button onClick={() => deleteItem("custom", selCustom.id)}
+                    className="flex-1 rounded-lg border border-[var(--hot-border)] py-1.5 font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim">
+                    Löschen
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500">Sichtbarkeit:</span>
-                <button onClick={() => updateCustom(selCustom.id, { oeffentlich: !selCustom.oeffentlich })}
-                  className={`px-2 py-0.5 rounded border transition ${selCustom.oeffentlich ? "border-emerald-700 text-emerald-300" : "border-zinc-700 text-zinc-500"}`}>
-                  {selCustom.oeffentlich ? "Öffentlich" : "OKW"}
+            )}
+
+            {/* ── Detail-Panel: Infra ── */}
+            {selInfra && (
+              <div className="space-y-3 rounded-[10px] border border-line bg-surface p-3">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const meta = infraMeta(selInfra.typ);
+                    const MetaIcon = meta.icon;
+                    return (
+                      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full border border-line-key bg-sunken">
+                        <MetaIcon size={14} weight="bold" className={meta.cls} />
+                      </span>
+                    );
+                  })()}
+                  <p className="text-ink-2">
+                    {infraMeta(selInfra.typ).label}{selInfra.label ? ` – ${selInfra.label}` : ""}
+                  </p>
+                </div>
+                <button onClick={() => deleteItem("infra", selInfra.id)}
+                  className="w-full rounded-lg border border-[var(--hot-border)] py-1.5 font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim">
+                  Löschen
                 </button>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => rotate("custom", selCustom.id, selCustom.rotation)}
-                  className="flex-1 py-1 border border-zinc-700 rounded hover:bg-zinc-800 transition">↻ +45°</button>
-                <button onClick={() => deleteItem("custom", selCustom.id)}
-                  className="flex-1 py-1 border border-red-900 text-red-400 rounded hover:bg-red-950 transition">Löschen</button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Detail-Panel: Infra ── */}
-          {selInfra && (
-            <div className="border border-zinc-800 rounded-lg p-3 space-y-2">
-              <p>{INFRA_ICONS[selInfra.typ]} {selInfra.typ}{selInfra.label ? ` – ${selInfra.label}` : ""}</p>
-              <button onClick={() => deleteItem("infra", selInfra.id)}
-                className="w-full py-1 border border-red-900 text-red-400 rounded hover:bg-red-950 transition">Löschen</button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── Custom-Feld Erstell-Modal ── */}
       {creating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={() => setCreating(null)}>
-          <div className="w-80 bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-3 text-xs"
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "var(--scrim)" }}
+          onClick={() => setCreating(null)}
+          onKeyDown={e => {
+            if (e.key === "Escape") setCreating(null);
+          }}>
+          <div role="dialog" aria-modal="true" aria-label="Custom-Feld anlegen"
+            className="anim-pop w-80 space-y-3 rounded-[14px] border border-line bg-surface p-4 text-xs"
+            style={{ boxShadow: "var(--shadow-pop)" }}
             onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold">Custom-Feld anlegen</h3>
-            <div className="space-y-1">
-              <label className="text-zinc-500">Label:</label>
+            <h3 className="text-sm font-semibold text-ink">Custom-Feld anlegen</h3>
+            <div className="space-y-1.5">
+              <label className="cg-label block">Label</label>
               <input autoFocus type="text" value={creating.label}
                 onChange={e => setCreating(c => c ? { ...c, label: e.target.value } : c)}
                 placeholder="z.B. Verpflegung"
-                className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5" />
+                className={INPUT_CLS} />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-zinc-500">Nummer:</label>
+              <div className="space-y-1.5">
+                <label className="cg-label block">Nummer</label>
                 <input type="text" maxLength={3} value={creating.nummer}
                   onChange={e => setCreating(c => c ? { ...c, nummer: e.target.value } : c)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 text-center font-mono" />
+                  className={`tnum text-center ${INPUT_CLS}`} />
               </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">Farbe:</label>
+              <div className="space-y-1.5">
+                <label className="cg-label block">Farbe</label>
                 <input type="color" value={creating.farbe}
                   onChange={e => setCreating(c => c ? { ...c, farbe: e.target.value } : c)}
-                  className="w-full h-8 bg-zinc-900 border border-zinc-700 rounded cursor-pointer" />
+                  className="h-8 w-full cursor-pointer rounded-lg border border-line-strong bg-sunken" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-zinc-500">Länge (m):</label>
+              <div className="space-y-1.5">
+                <label className="cg-label block">Länge (m)</label>
                 <input type="number" step="1" min="1" value={creating.laengeM}
                   onChange={e => setCreating(c => c ? { ...c, laengeM: parseFloat(e.target.value) || 10 } : c)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5" />
+                  className={`tnum ${INPUT_CLS}`} />
               </div>
-              <div className="space-y-1">
-                <label className="text-zinc-500">Breite (m):</label>
+              <div className="space-y-1.5">
+                <label className="cg-label block">Breite (m)</label>
                 <input type="number" step="1" min="1" value={creating.breiteM}
                   onChange={e => setCreating(c => c ? { ...c, breiteM: parseFloat(e.target.value) || 10 } : c)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5" />
+                  className={`tnum ${INPUT_CLS}`} />
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setCreating(null)}
-                className="flex-1 py-1.5 border border-zinc-700 rounded hover:bg-zinc-800 transition">Abbrechen</button>
-              <button onClick={submitCreate}
-                className="flex-1 py-1.5 border border-emerald-700 text-emerald-300 rounded hover:bg-emerald-950 transition">Anlegen</button>
+              <Button variant="ghost" className="flex-1" onClick={() => setCreating(null)}>Abbrechen</Button>
+              <Button variant="primary" className="flex-1" onClick={submitCreate}>Anlegen</Button>
             </div>
           </div>
         </div>

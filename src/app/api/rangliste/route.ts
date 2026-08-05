@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { berechneGesamtrangliste } from "@/lib/rangpunkte";
+import { istGesperrt } from "@/lib/ergebnis-sperre";
 import type { Prisma } from "@prisma/client";
 
 // GET /api/rangliste – Live-Gesamtrangliste
@@ -32,6 +33,7 @@ export async function GET() {
           gamePunkte: true,
           rangImGame: true,
           rangPunkte: true,
+          eingetragenUm: true,
         },
       }),
       prisma.team.findMany({
@@ -55,11 +57,20 @@ export async function GET() {
 
     const rangliste = berechneGesamtrangliste(raenge, teams, games.length);
 
+    // Rang-Sperrstatus: Ergebnisse innerhalb der Korrekturfrist sind noch
+    // korrigierbar — der Rang des betroffenen Teams gilt als provisorisch.
+    const offeneErgebnisse = ergebnisse.filter((e) => !istGesperrt(e.eingetragenUm));
+    const offeneTeamIds = new Set(offeneErgebnisse.map((e) => e.teamId));
+
     return NextResponse.json({
-      rangliste,
+      rangliste: rangliste.map((entry) => ({
+        ...entry,
+        rangGesperrt: !offeneTeamIds.has(entry.teamId),
+      })),
       totalGames: games.length,
       totalTeams: teams.length,
       ergebnisseEingetragen: ergebnisse.length,
+      offeneKorrekturen: offeneErgebnisse.length,
       modus,
       enthaeltTestErgebnisse: includeTest,
     });

@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { CaretLeft } from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { Button } from "@/components/ui/button";
 
 type MaterialItem = {
   id: string;
@@ -39,13 +42,8 @@ const STATUS_OPTIONS = [
   { value: "GELIEFERT", label: "Geliefert" },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  OFFEN: "border-zinc-700 bg-zinc-800",
-  ANGEFRAGT: "border-blue-800 bg-blue-950/40",
-  BESTAETIGT: "border-amber-800 bg-amber-950/40",
-  VORHANDEN: "border-emerald-800 bg-emerald-950/40",
-  GELIEFERT: "border-emerald-700 bg-emerald-900/50",
-};
+const INPUT_CLS =
+  "w-full rounded-[9px] border border-line-strong bg-sunken px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-action focus:outline-none transition-colors duration-150";
 
 export default function MaterialDetailPage() {
   const params = useParams();
@@ -122,189 +120,232 @@ export default function MaterialDetailPage() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
-  if (!item) return (
-    <div className="flex flex-col items-center justify-center h-64 gap-4">
-      <p className="text-red-400">{error ?? "Nicht gefunden"}</p>
-      <Link href="/admin/materials" className="text-sm text-zinc-400 hover:text-white">Zurück</Link>
-    </div>
-  );
+  if (loading)
+    return (
+      <div className="flex h-64 items-center justify-center text-sm text-ink-3">
+        Lade...
+      </div>
+    );
+  if (!item)
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-4">
+        <p className="text-sm text-hot-tint">{error ?? "Nicht gefunden"}</p>
+        <Link
+          href="/admin/materials"
+          className="text-[13px] text-ink-3 transition-colors duration-150 hover:text-ink"
+        >
+          Zurück
+        </Link>
+      </div>
+    );
+
+  const currentIdx = STATUS_OPTIONS.findIndex((s) => s.value === item.status);
 
   return (
-    <div className="max-w-4xl space-y-8">
-      {/* Breadcrumb + Actions */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-zinc-500">
-          <Link href="/admin/materials" className="hover:text-white transition">Material</Link>
-          <span>/</span>
-          <span className="text-white">{item.name}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          {successMsg && <span className="text-sm text-emerald-400">{successMsg}</span>}
-          {error && <span className="text-sm text-red-400">{error}</span>}
-          <button
-            onClick={handleSave}
-            disabled={!dirty || saving}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-              dirty ? "bg-white text-black hover:bg-zinc-200" : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-            }`}
-          >
-            {saving ? "Speichert..." : "Speichern"}
-          </button>
-        </div>
-      </div>
-
-      {/* Status Pipeline */}
-      <div className="flex gap-2">
-        {STATUS_OPTIONS.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => update("status", s.value)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-              item.status === s.value
-                ? STATUS_COLORS[s.value] + " text-white"
-                : "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-700"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Grunddaten */}
-      <section className="border border-zinc-800 rounded-lg p-6 space-y-5">
-        <h2 className="text-lg font-semibold">Grunddaten</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Name">
-            <input
-              type="text"
-              value={item.name}
-              onChange={(e) => update("name", e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            />
-          </Field>
-          <Field label="Game">
-            <select
-              value={item.gameId ?? ""}
-              onChange={(e) => update("gameId", e.target.value || null)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+    <>
+      <TopBar
+        title={
+          <span className="flex items-center gap-2.5">
+            <Link
+              href="/admin/materials"
+              className="text-faint transition-colors duration-150 hover:text-ink"
+              aria-label="Zurück zu Material"
             >
-              <option value="">Allgemein</option>
-              {games.map((g) => (
-                <option key={g.id} value={g.id}>{g.name}</option>
-              ))}
-            </select>
-          </Field>
+              <CaretLeft size={16} weight="bold" />
+            </Link>
+            {item.name}
+          </span>
+        }
+      >
+        <span className="hidden text-[13px] text-ink-3 sm:inline">
+          {item.game?.name ?? "Allgemein"}
+        </span>
+        <TopBarSpacer />
+        {successMsg && (
+          <span className="text-[13px] text-done-tint">{successMsg}</span>
+        )}
+        {error && <span className="text-[13px] text-hot-tint">{error}</span>}
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={!dirty || saving}
+        >
+          {saving ? "Speichert..." : "Speichern"}
+        </Button>
+      </TopBar>
+
+      <div className="anim-rise max-w-[880px] space-y-5 px-4 py-5 sm:px-[22px]">
+        {/* Status-Pipeline (Segmented Control) */}
+        <div>
+          <span className="cg-label mb-2 block">Status</span>
+          <div className="flex rounded-[9px] border border-line-strong bg-sunken p-0.5">
+            {STATUS_OPTIONS.map((s, idx) => {
+              const active = item.status === s.value;
+              const passed = currentIdx >= 0 && idx < currentIdx;
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => update("status", s.value)}
+                  className={`flex-1 rounded-[7px] px-1 py-[5px] text-xs transition-colors duration-150 sm:px-3 ${
+                    active
+                      ? "bg-action font-semibold text-on-action"
+                      : passed
+                        ? "bg-done-dim font-medium text-done-tint"
+                        : "font-medium text-ink-3 hover:text-ink-2"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          <Field label="Kategorie">
-            <select
-              value={item.kategorie}
-              onChange={(e) => update("kategorie", e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            >
-              {KATEGORIEN.map((k) => (
-                <option key={k.value} value={k.value}>{k.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Menge">
-            <input
-              type="text"
-              value={item.menge ?? ""}
-              onChange={(e) => update("menge", e.target.value || null)}
-              placeholder="z.B. 100 Stk."
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            />
-          </Field>
-          <Field label="Sponsor">
-            <input
-              type="text"
-              value={item.sponsor ?? ""}
-              onChange={(e) => update("sponsor", e.target.value || null)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            />
-          </Field>
-        </div>
+        {/* Grunddaten */}
+        <section className="rounded-[10px] border border-line bg-surface p-3.5 sm:p-5">
+          <h2 className="cg-label mb-4">Grunddaten</h2>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Name">
+                <input
+                  type="text"
+                  value={item.name}
+                  onChange={(e) => update("name", e.target.value)}
+                  className={INPUT_CLS}
+                />
+              </Field>
+              <Field label="Game">
+                <select
+                  value={item.gameId ?? ""}
+                  onChange={(e) => update("gameId", e.target.value || null)}
+                  className={INPUT_CLS}
+                >
+                  <option value="">Allgemein</option>
+                  {games.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
 
-        <Field label="Beschreibung">
-          <textarea
-            value={item.beschreibung ?? ""}
-            onChange={(e) => update("beschreibung", e.target.value || null)}
-            rows={3}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none"
-          />
-        </Field>
-      </section>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Kategorie">
+                <select
+                  value={item.kategorie}
+                  onChange={(e) => update("kategorie", e.target.value)}
+                  className={INPUT_CLS}
+                >
+                  {KATEGORIEN.map((k) => (
+                    <option key={k.value} value={k.value}>{k.label}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Menge">
+                <input
+                  type="text"
+                  value={item.menge ?? ""}
+                  onChange={(e) => update("menge", e.target.value || null)}
+                  placeholder="z.B. 100 Stk."
+                  className={INPUT_CLS}
+                />
+              </Field>
+              <Field label="Sponsor">
+                <input
+                  type="text"
+                  value={item.sponsor ?? ""}
+                  onChange={(e) => update("sponsor", e.target.value || null)}
+                  className={INPUT_CLS}
+                />
+              </Field>
+            </div>
 
-      {/* Kosten */}
-      <section className="border border-zinc-800 rounded-lg p-6 space-y-5">
-        <h2 className="text-lg font-semibold">Kosten</h2>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Geschätzt (CHF)">
-            <input
-              type="number"
-              step="0.01"
-              value={item.kostenGeschaetzt ?? ""}
-              onChange={(e) => update("kostenGeschaetzt", e.target.value || null)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            />
-          </Field>
-          <Field label="Effektiv (CHF)">
-            <input
-              type="number"
-              step="0.01"
-              value={item.kostenEffektiv ?? ""}
-              onChange={(e) => update("kostenEffektiv", e.target.value || null)}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            />
-          </Field>
-        </div>
-      </section>
-
-      {/* Kommentare (read-only) */}
-      {item.kommentare && item.kommentare.length > 0 && (
-        <section className="border border-zinc-800 rounded-lg p-6 space-y-4">
-          <h2 className="text-lg font-semibold">Kommentare ({item.kommentare.length})</h2>
-          <div className="space-y-3">
-            {item.kommentare.map((k) => (
-              <div key={k.id} className="border border-zinc-800 rounded-lg px-4 py-3">
-                <div className="flex items-center gap-2 text-xs text-zinc-500 mb-1">
-                  <span className="font-medium text-zinc-400">{k.autor.name}</span>
-                  <span>&middot;</span>
-                  <span>{new Date(k.createdAt).toLocaleDateString("de-CH")}</span>
-                </div>
-                <p className="text-sm">{k.text}</p>
-              </div>
-            ))}
+            <Field label="Beschreibung">
+              <textarea
+                value={item.beschreibung ?? ""}
+                onChange={(e) => update("beschreibung", e.target.value || null)}
+                rows={3}
+                className={`${INPUT_CLS} resize-none`}
+              />
+            </Field>
           </div>
         </section>
-      )}
 
-      {/* Danger Zone */}
-      <section className="border border-red-900/50 rounded-lg p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-zinc-300">Material endgültig löschen</p>
-            <p className="text-xs text-zinc-500">Inkl. aller Kommentare.</p>
+        {/* Kosten */}
+        <section className="rounded-[10px] border border-line bg-surface p-3.5 sm:p-5">
+          <h2 className="cg-label mb-4">Kosten</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Geschätzt (CHF)">
+              <input
+                type="number"
+                step="0.01"
+                value={item.kostenGeschaetzt ?? ""}
+                onChange={(e) => update("kostenGeschaetzt", e.target.value || null)}
+                className={`${INPUT_CLS} tnum`}
+              />
+            </Field>
+            <Field label="Effektiv (CHF)">
+              <input
+                type="number"
+                step="0.01"
+                value={item.kostenEffektiv ?? ""}
+                onChange={(e) => update("kostenEffektiv", e.target.value || null)}
+                className={`${INPUT_CLS} tnum`}
+              />
+            </Field>
           </div>
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 text-sm font-medium text-red-400 border border-red-800 rounded-lg hover:bg-red-950 transition"
-          >
-            Löschen
-          </button>
-        </div>
-      </section>
-    </div>
+        </section>
+
+        {/* Kommentare (read-only) */}
+        {item.kommentare && item.kommentare.length > 0 && (
+          <section className="rounded-[10px] border border-line bg-surface p-3.5 sm:p-5">
+            <h2 className="cg-label mb-4">
+              Kommentare · <span className="tnum">{item.kommentare.length}</span>
+            </h2>
+            <div className="space-y-2.5">
+              {item.kommentare.map((k) => (
+                <div
+                  key={k.id}
+                  className="rounded-[10px] border border-line-soft bg-sunken px-4 py-3"
+                >
+                  <div className="mb-1 flex items-center gap-2 text-[11px] text-ink-3">
+                    <span className="font-medium text-ink-2">{k.autor.name}</span>
+                    <span>&middot;</span>
+                    <span className="tnum">
+                      {new Date(k.createdAt).toLocaleDateString("de-CH")}
+                    </span>
+                  </div>
+                  <p className="text-[13px] text-ink">{k.text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Danger Zone */}
+        <section
+          className="rounded-[10px] border bg-surface p-3.5 sm:p-5"
+          style={{ borderColor: "var(--hot-border)" }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[13px] text-ink-2">Position endgültig löschen</p>
+              <p className="text-[11px] text-ink-3">Inkl. aller Kommentare.</p>
+            </div>
+            <Button variant="danger-ghost" onClick={handleDelete}>
+              Löschen
+            </Button>
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{label}</label>
+      <label className="cg-label block">{label}</label>
       {children}
     </div>
   );

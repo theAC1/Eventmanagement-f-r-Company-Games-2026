@@ -2,6 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  CaretDown,
+  Check,
+  Funnel,
+  MagnifyingGlass,
+  Plus,
+  X,
+} from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { KpiBand, KpiCell } from "@/components/ui/kpi";
+import { StatusPill, type PillTone } from "@/components/ui/pills";
+import { ProgressBar } from "@/components/ui/progress";
+import { Button, ButtonLink } from "@/components/ui/button";
 
 type MaterialItem = {
   id: string;
@@ -22,12 +35,12 @@ type MaterialItem = {
 type GameOption = { id: string; name: string };
 type PersonOption = { id: string; name: string; rolle: string };
 
-const STATUS_COLORS: Record<string, string> = {
-  OFFEN: "bg-zinc-700 text-zinc-300",
-  ANGEFRAGT: "bg-blue-900/60 text-blue-300",
-  BESTAETIGT: "bg-amber-900/60 text-amber-300",
-  VORHANDEN: "bg-emerald-900/60 text-emerald-300",
-  GELIEFERT: "bg-emerald-800/80 text-emerald-200",
+const STATUS_TONES: Record<string, PillTone> = {
+  OFFEN: "neutral",
+  ANGEFRAGT: "action",
+  BESTAETIGT: "warn",
+  VORHANDEN: "done",
+  GELIEFERT: "done-strong",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -46,6 +59,22 @@ const KAT_LABELS: Record<string, string> = {
   VERBRAUCH: "Verbrauch",
   INFRASTRUKTUR: "Infrastruktur",
 };
+
+const GESICHERT_STATI = new Set(["BESTAETIGT", "VORHANDEN", "GELIEFERT"]);
+
+const ALLGEMEIN_KEY = "__allgemein__";
+const ALLGEMEIN_LABEL = "Allgemein · Infrastruktur";
+
+const INPUT_CLS =
+  "w-full rounded-[9px] border border-line-strong bg-sunken px-3 py-2 text-[13px] text-ink placeholder:text-faint focus:border-action focus:outline-none disabled:opacity-40 transition-colors duration-150";
+
+const chf = (v: string | null | undefined): number => {
+  if (v == null || v === "") return 0;
+  const n = parseFloat(v);
+  return Number.isNaN(n) ? 0 : n;
+};
+
+const fmtChf = (n: number): string => Math.round(n).toLocaleString("de-CH");
 
 type BulkField =
   | "gameId"
@@ -80,6 +109,8 @@ export default function MaterialsPage() {
   const [filterGame, setFilterGame] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterKat, setFilterKat] = useState("");
+  const [search, setSearch] = useState("");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -92,7 +123,6 @@ export default function MaterialsPage() {
   const reload = () => {
     const params = new URLSearchParams();
     if (filterGame) params.set("gameId", filterGame);
-    if (filterStatus) params.set("status", filterStatus);
     if (filterKat) params.set("kategorie", filterKat);
     setLoading(true);
     fetch(`/api/materials?${params}`)
@@ -104,7 +134,7 @@ export default function MaterialsPage() {
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterGame, filterStatus, filterKat]);
+  }, [filterGame, filterKat]);
 
   useEffect(() => {
     fetch("/api/games")
@@ -119,15 +149,36 @@ export default function MaterialsPage() {
       .catch(() => {});
   }, []);
 
+  // Suche + Status filtern clientseitig
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((i) => {
+      if (filterStatus && i.status !== filterStatus) return false;
+      if (!q) return true;
+      const hay = [
+        i.name,
+        i.sponsor ?? "",
+        i.beschreibung ?? "",
+        i.menge ?? "",
+        KAT_LABELS[i.kategorie] ?? i.kategorie,
+        i.game?.name ?? ALLGEMEIN_LABEL,
+        i.verantwortlich?.name ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [items, filterStatus, search]);
+
   // Auswahl wird gepurged, sobald sich die sichtbare Liste ändert
   useEffect(() => {
-    const visibleIds = new Set(items.map((i) => i.id));
+    const visibleIds = new Set(filtered.map((i) => i.id));
     setSelected((prev) => {
       const next = new Set<string>();
       for (const id of prev) if (visibleIds.has(id)) next.add(id);
       return next;
     });
-  }, [items]);
+  }, [filtered]);
 
   const games = useMemo(
     () =>
@@ -139,21 +190,49 @@ export default function MaterialsPage() {
     [items]
   );
 
-  const stats = {
-    total: items.length,
-    offen: items.filter((i) => i.status === "OFFEN").length,
-    bestaetigt: items.filter(
-      (i) =>
-        i.status === "BESTAETIGT" ||
-        i.status === "VORHANDEN" ||
-        i.status === "GELIEFERT"
-    ).length,
-  };
+  const stats = useMemo(() => {
+    const gesichert = items.filter((i) => GESICHERT_STATI.has(i.status)).length;
+    return {
+      total: items.length,
+      offen: items.filter((i) => i.status === "OFFEN").length,
+      gesichert,
+      kostenGeschaetzt: items.reduce((s, i) => s + chf(i.kostenGeschaetzt), 0),
+      kostenEffektiv: items.reduce((s, i) => s + chf(i.kostenEffektiv), 0),
+    };
+  }, [items]);
   const progressPct =
-    stats.total > 0 ? Math.round((stats.bestaetigt / stats.total) * 100) : 0;
+    stats.total > 0 ? Math.round((stats.gesichert / stats.total) * 100) : 0;
 
-  const allSelected = items.length > 0 && selected.size === items.length;
-  const someSelected = selected.size > 0 && selected.size < items.length;
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const i of items) counts[i.status] = (counts[i.status] ?? 0) + 1;
+    return counts;
+  }, [items]);
+
+  // Gruppierung nach Game
+  const groups = useMemo(() => {
+    const map = new Map<string, { key: string; name: string; items: MaterialItem[] }>();
+    for (const i of filtered) {
+      const key = i.game?.id ?? ALLGEMEIN_KEY;
+      const name = i.game?.name ?? ALLGEMEIN_LABEL;
+      if (!map.has(key)) map.set(key, { key, name, items: [] });
+      map.get(key)!.items.push(i);
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.key === ALLGEMEIN_KEY) return -1;
+      if (b.key === ALLGEMEIN_KEY) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filtered]);
+
+  const toggleGroup = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const toggleOne = (id: string) => {
     setSelected((prev) => {
@@ -164,9 +243,13 @@ export default function MaterialsPage() {
     });
   };
 
+  const allSelected = filtered.length > 0 && selected.size === filtered.length;
+
   const toggleAll = () => {
     setSelected((prev) =>
-      prev.size === items.length ? new Set() : new Set(items.map((i) => i.id))
+      prev.size === filtered.length
+        ? new Set()
+        : new Set(filtered.map((i) => i.id))
     );
   };
 
@@ -260,7 +343,7 @@ export default function MaterialsPage() {
     if (selected.size === 0) return;
     if (
       !confirm(
-        `${selected.size} Material${selected.size === 1 ? "" : "ien"} wirklich löschen?`
+        `${selected.size} Position${selected.size === 1 ? "" : "en"} wirklich löschen?`
       )
     )
       return;
@@ -278,220 +361,257 @@ export default function MaterialsPage() {
     }
   };
 
+  const filterChips: { value: string; label: string; count: number }[] = [
+    { value: "", label: "Alle", count: stats.total },
+    ...Object.entries(STATUS_LABELS).map(([value, label]) => ({
+      value,
+      label,
+      count: statusCounts[value] ?? 0,
+    })),
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Material-Manager</h1>
-          <div className="flex items-center gap-4 mt-1">
-            <p className="text-sm text-zinc-500">
-              {stats.total} Items &middot; {stats.offen} offen &middot;{" "}
-              {stats.bestaetigt} gesichert
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-              <span className="text-xs text-zinc-500">{progressPct}%</span>
-            </div>
+    <>
+      <TopBar title="Material">
+        <span className="hidden text-[13px] text-ink-3 sm:inline">
+          <span className="tnum text-ink-2">{stats.total}</span> Positionen
+        </span>
+        <TopBarSpacer />
+        <label className="relative hidden md:block">
+          <MagnifyingGlass
+            size={15}
+            weight="bold"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Position suchen"
+            className="h-[34px] w-[200px] rounded-[9px] border border-line-strong bg-transparent pl-9 pr-3 text-[13px] text-ink placeholder:text-faint focus:border-action focus:outline-none transition-colors duration-150"
+          />
+        </label>
+        <ButtonLink href="/admin/materials/new" variant="primary">
+          <Plus size={15} weight="bold" />
+          Neue Position
+        </ButtonLink>
+      </TopBar>
+
+      {/* KPI-Band */}
+      <KpiBand columns="1.4fr 1fr 1fr 1fr" className="max-sm:grid-cols-2!">
+        <div className="flex flex-col gap-1.5 border-r border-line px-4 py-4 sm:px-[22px]">
+          <span className="cg-label">Gesichert</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="tnum text-[28px] font-semibold leading-none tracking-[-0.02em] text-ink">
+              {stats.gesichert}
+            </span>
+            <span className="tnum text-sm text-ink-3">/{stats.total}</span>
+            <span className="tnum text-[13px] font-semibold text-done">
+              {progressPct} %
+            </span>
           </div>
+          <ProgressBar
+            pct={progressPct}
+            color="var(--done)"
+            height={3}
+            className="mt-1 max-w-[280px]"
+          />
         </div>
-        <Link
-          href="/admin/materials/new"
-          className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-zinc-200 transition"
+        <KpiCell
+          label="Offen"
+          value={stats.offen}
+          valueColor="var(--warn)"
+          note="ohne Zusage"
+        />
+        <KpiCell
+          label="Kosten geschätzt"
+          value={fmtChf(stats.kostenGeschaetzt)}
+          unit="CHF"
+        />
+        <KpiCell
+          label="Effektiv verbucht"
+          value={fmtChf(stats.kostenEffektiv)}
+          unit="CHF"
+          valueColor="var(--done)"
+          last
+        />
+      </KpiBand>
+
+      {/* Filter-Chips */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3.5 sm:px-[22px]">
+        {filterChips.map((c) => {
+          const active = filterStatus === c.value;
+          return (
+            <button
+              key={c.value || "alle"}
+              type="button"
+              onClick={() => setFilterStatus(c.value)}
+              className={`inline-flex h-[30px] items-center gap-[7px] rounded-full px-3 text-xs transition-colors duration-150 ${
+                active
+                  ? "border border-ink bg-ink font-semibold text-bg"
+                  : "border border-line-strong text-ink-3 hover:text-ink-2"
+              }`}
+            >
+              {c.label}
+              <span className="tnum text-label">{c.count}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={toggleAll}
+          className="inline-flex h-[30px] items-center rounded-full border border-line-strong px-3 text-xs text-ink-3 transition-colors duration-150 hover:text-ink-2"
         >
-          + Neues Material
-        </Link>
+          {allSelected ? "Auswahl aufheben" : "Alle auswählen"}
+        </button>
+        <span className="flex-1" aria-hidden />
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-[30px] items-center gap-[7px] rounded-full border border-line-strong pl-3 pr-1 text-xs text-ink-3">
+            <Funnel size={13} weight="bold" />
+            <select
+              value={filterGame}
+              onChange={(e) => setFilterGame(e.target.value)}
+              className="h-full max-w-[150px] rounded-full bg-transparent pr-1 text-xs text-ink-3 focus:outline-none"
+              aria-label="Nach Game filtern"
+            >
+              <option value="">Alle Games</option>
+              {games.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </span>
+          <span className="inline-flex h-[30px] items-center rounded-full border border-line-strong px-1 text-xs text-ink-3">
+            <select
+              value={filterKat}
+              onChange={(e) => setFilterKat(e.target.value)}
+              className="h-full max-w-[140px] rounded-full bg-transparent px-2 text-xs text-ink-3 focus:outline-none"
+              aria-label="Nach Kategorie filtern"
+            >
+              <option value="">Alle Kategorien</option>
+              {Object.entries(KAT_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </span>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3">
-        <select
-          value={filterGame}
-          onChange={(e) => setFilterGame(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
-        >
-          <option value="">Alle Games</option>
-          {games.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filterKat}
-          onChange={(e) => setFilterKat(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
-        >
-          <option value="">Alle Kategorien</option>
-          {Object.entries(KAT_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
-        >
-          <option value="">Alle Status</option>
-          {Object.entries(STATUS_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Bulk Action Bar */}
+      {/* Bulk-Bar */}
       {selected.size > 0 && (
-        <div className="flex items-center justify-between gap-4 border border-blue-800/60 bg-blue-950/30 rounded-lg px-4 py-2.5">
-          <div className="text-sm text-blue-200">
-            <span className="font-medium">{selected.size}</span> selektiert
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={openBulk}
-              className="px-3 py-1.5 text-sm font-medium bg-white text-black rounded-lg hover:bg-zinc-200 transition"
-            >
-              Bearbeiten
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              className="px-3 py-1.5 text-sm font-medium text-red-300 border border-red-800 rounded-lg hover:bg-red-950 transition"
-            >
-              Löschen
-            </button>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="px-3 py-1.5 text-sm text-zinc-400 hover:text-white transition"
-            >
-              Auswahl aufheben
-            </button>
-          </div>
+        <div
+          className="mx-4 mt-3.5 flex h-auto min-h-[46px] flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border bg-action-dim px-3.5 py-1.5 sm:mx-[22px] sm:h-[46px] sm:flex-nowrap sm:py-0"
+          style={{
+            borderColor: "color-mix(in srgb, var(--action) 45%, transparent)",
+          }}
+        >
+          <span className="text-[13px] text-action-tint">
+            <span className="tnum font-bold">{selected.size}</span> Positionen
+            ausgewählt
+          </span>
+          <span className="flex-1" aria-hidden />
+          <Button variant="primary" className="h-8" onClick={openBulk}>
+            Bearbeiten
+          </Button>
+          <Button
+            variant="danger-ghost"
+            className="h-8"
+            onClick={handleBulkDelete}
+          >
+            Löschen
+          </Button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="text-xs text-ink-3 transition-colors duration-150 hover:text-ink"
+          >
+            Aufheben
+          </button>
         </div>
       )}
 
-      {/* Table */}
+      {/* Gruppierte Liste */}
       {loading ? (
-        <div className="flex items-center justify-center h-32 text-zinc-500">
+        <div className="flex h-32 items-center justify-center text-sm text-ink-3">
           Lade...
         </div>
-      ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-32 text-zinc-500 gap-2">
-          <p>Keine Materialien vorhanden</p>
+      ) : filtered.length === 0 ? (
+        <div className="flex h-32 flex-col items-center justify-center gap-2 text-sm text-ink-3">
+          <p>Keine Positionen gefunden</p>
           <Link
             href="/admin/materials/new"
-            className="text-sm text-blue-400 hover:text-blue-300"
+            className="text-[13px] text-action transition-colors duration-150 hover:text-ink"
           >
-            Erstes Material anlegen
+            Erste Position anlegen
           </Link>
         </div>
       ) : (
-        <div className="border border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-900/50 text-zinc-400 text-left">
-                <th className="px-3 py-3 w-10">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(el) => {
-                      if (el) el.indeterminate = someSelected;
-                    }}
-                    onChange={toggleAll}
-                    className="accent-blue-500 cursor-pointer"
-                    aria-label="Alle auswählen"
-                  />
-                </th>
-                <th className="px-4 py-3 font-medium">Material</th>
-                <th className="px-4 py-3 font-medium">Game</th>
-                <th className="px-4 py-3 font-medium">Kategorie</th>
-                <th className="px-4 py-3 font-medium">Menge</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Verantwortlich</th>
-                <th className="px-4 py-3 font-medium text-right">Kosten</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {items.map((item) => {
-                const isSel = selected.has(item.id);
-                return (
-                  <tr
-                    key={item.id}
-                    className={`transition-colors ${
-                      isSel ? "bg-blue-950/30" : "hover:bg-zinc-900/40"
+        <div className="anim-rise px-4 pb-10 pt-2.5 sm:px-[22px]">
+          {groups.map((g) => {
+            const gesichert = g.items.filter((i) =>
+              GESICHERT_STATI.has(i.status)
+            ).length;
+            const pct =
+              g.items.length > 0
+                ? Math.round((gesichert / g.items.length) * 100)
+                : 0;
+            const kosten = g.items.reduce(
+              (s, i) => s + chf(i.kostenGeschaetzt),
+              0
+            );
+            const isCollapsed = collapsed.has(g.key);
+            return (
+              <div key={g.key}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(g.key)}
+                  className="flex h-[38px] w-full items-center gap-2.5 text-left"
+                  aria-expanded={!isCollapsed}
+                >
+                  <CaretDown
+                    size={13}
+                    weight="bold"
+                    className={`shrink-0 text-ink-3 transition-transform duration-150 ${
+                      isCollapsed ? "-rotate-90" : ""
                     }`}
-                  >
-                    <td className="px-3 py-3">
-                      <input
-                        type="checkbox"
-                        checked={isSel}
-                        onChange={() => toggleOne(item.id)}
-                        className="accent-blue-500 cursor-pointer"
-                        aria-label={`${item.name} auswählen`}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/materials/${item.id}`}
-                        className="font-medium text-white hover:text-blue-400 transition"
-                      >
-                        {item.name}
-                      </Link>
-                      {item.sponsor && (
-                        <span className="ml-2 text-xs text-zinc-500">
-                          via {item.sponsor}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      {item.game ? (
-                        <Link
-                          href={`/admin/games/${item.game.id}`}
-                          className="hover:text-white transition"
-                        >
-                          {item.game.name}
-                        </Link>
-                      ) : (
-                        <span className="text-zinc-600">Allgemein</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      {KAT_LABELS[item.kategorie] ?? item.kategorie}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      {item.menge ?? "–"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          STATUS_COLORS[item.status] ?? "bg-zinc-700 text-zinc-300"
-                        }`}
-                      >
-                        {STATUS_LABELS[item.status] ?? item.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-400">
-                      {item.verantwortlich?.name ?? (
-                        <span className="text-zinc-600">–</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right text-zinc-400 tabular-nums">
-                      {item.kostenGeschaetzt
-                        ? `~CHF ${parseFloat(item.kostenGeschaetzt).toFixed(0)}`
-                        : "–"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  />
+                  <span className="truncate text-[13px] font-semibold text-ink">
+                    {g.name}
+                  </span>
+                  <span className="tnum shrink-0 text-[11px] text-ink-3">
+                    {g.items.length} Positionen
+                  </span>
+                  <span className="hidden items-center gap-2 sm:flex">
+                    <ProgressBar
+                      pct={pct}
+                      color={pct >= 75 ? "var(--done)" : "var(--warn)"}
+                      height={4}
+                      className="w-[90px]"
+                    />
+                    <span className="whitespace-nowrap text-[11px] text-ink-3">
+                      <span className="tnum">{pct} %</span> gesichert
+                    </span>
+                  </span>
+                  <span className="flex-1" aria-hidden />
+                  <span className="tnum shrink-0 text-[11px] text-ink-3">
+                    CHF {fmtChf(kosten)}
+                  </span>
+                </button>
+                {!isCollapsed &&
+                  g.items.map((item) => (
+                    <MaterialRow
+                      key={item.id}
+                      item={item}
+                      selected={selected.has(item.id)}
+                      onToggle={() => toggleOne(item.id)}
+                    />
+                  ))}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -510,6 +630,97 @@ export default function MaterialsPage() {
           onClose={closeBulk}
         />
       )}
+    </>
+  );
+}
+
+function Checkbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      className={`inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-150 ${
+        checked
+          ? "border-action bg-action text-on-action"
+          : "border-line-key bg-transparent hover:border-action"
+      }`}
+    >
+      {checked && <Check size={10} weight="bold" />}
+    </button>
+  );
+}
+
+function MaterialRow({
+  item,
+  selected,
+  onToggle,
+}: {
+  item: MaterialItem;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const sub = item.sponsor
+    ? `via ${item.sponsor}`
+    : (item.beschreibung ?? null);
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-x-3.5 gap-y-1.5 border-t border-line-soft px-3 py-2.5 transition-colors duration-150 lg:grid lg:h-[50px] lg:grid-cols-[22px_1fr_118px_132px_150px_116px_96px] lg:py-0 ${
+        selected ? "bg-action-row" : "hover:bg-sunken/60"
+      }`}
+    >
+      <Checkbox
+        checked={selected}
+        onChange={onToggle}
+        label={`${item.name} auswählen`}
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 lg:flex-none">
+        <Link
+          href={`/admin/materials/${item.id}`}
+          className="truncate text-[13px] font-medium text-ink transition-colors duration-150 hover:text-action"
+        >
+          {item.name}
+        </Link>
+        {sub && <span className="truncate text-[11px] text-ink-3">{sub}</span>}
+      </div>
+      <span className="hidden text-xs text-ink-3 lg:block">
+        {KAT_LABELS[item.kategorie] ?? item.kategorie}
+      </span>
+      <span className="tnum hidden text-xs text-ink-3 lg:block">
+        {item.menge ?? "–"}
+      </span>
+      <span className="hidden truncate text-xs text-ink-3 lg:block">
+        {item.verantwortlich?.name ?? "–"}
+      </span>
+      <span className="lg:justify-self-start">
+        <StatusPill tone={STATUS_TONES[item.status] ?? "neutral"}>
+          {STATUS_LABELS[item.status] ?? item.status}
+        </StatusPill>
+      </span>
+      <span className="tnum hidden text-right text-xs text-ink-3 lg:block">
+        {item.kostenGeschaetzt ? fmtChf(chf(item.kostenGeschaetzt)) : "–"}
+      </span>
+      {/* Mobile-Meta */}
+      <span className="flex w-full flex-wrap gap-x-3 pl-[27px] text-[11px] text-ink-3 lg:hidden">
+        <span>{KAT_LABELS[item.kategorie] ?? item.kategorie}</span>
+        {item.menge && <span className="tnum">{item.menge}</span>}
+        {item.verantwortlich && <span>{item.verantwortlich.name}</span>}
+        {item.kostenGeschaetzt && (
+          <span className="tnum">
+            CHF {fmtChf(chf(item.kostenGeschaetzt))}
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -543,33 +754,43 @@ function BulkEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "var(--scrim)" }}
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
     >
       <div
-        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Positionen bearbeiten"
+        className="anim-pop max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[14px] border border-line bg-surface"
+        style={{ boxShadow: "var(--shadow-pop)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between sticky top-0 bg-zinc-950">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-base font-semibold text-ink">
               Gruppen-Bearbeitung
             </h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              {count} Material{count === 1 ? "" : "ien"} · Aktiviere die Felder,
-              die geändert werden sollen
+            <p className="mt-0.5 text-[11px] text-ink-3">
+              <span className="tnum">{count}</span> Position
+              {count === 1 ? "" : "en"} · Aktiviere die Felder, die geändert
+              werden sollen
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-zinc-500 hover:text-white transition text-2xl leading-none"
+            className="text-ink-3 transition-colors duration-150 hover:text-ink"
             aria-label="Schliessen"
           >
-            ×
+            <X size={18} weight="bold" />
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="space-y-4 px-6 py-5">
           <BulkRow
             label="Game"
             enabled={patch.gameId.enabled}
@@ -579,7 +800,7 @@ function BulkEditModal({
               disabled={!patch.gameId.enabled}
               value={patch.gameId.value}
               onChange={(e) => update("gameId", { value: e.target.value })}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={INPUT_CLS}
             >
               <option value="">Allgemein (kein Game)</option>
               {gameOptions.map((g) => (
@@ -599,7 +820,7 @@ function BulkEditModal({
               disabled={!patch.kategorie.enabled}
               value={patch.kategorie.value}
               onChange={(e) => update("kategorie", { value: e.target.value })}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={INPUT_CLS}
             >
               {Object.entries(KAT_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -618,7 +839,7 @@ function BulkEditModal({
               disabled={!patch.status.enabled}
               value={patch.status.value}
               onChange={(e) => update("status", { value: e.target.value })}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={INPUT_CLS}
             >
               {Object.entries(STATUS_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -639,7 +860,7 @@ function BulkEditModal({
               onChange={(e) =>
                 update("verantwortlichId", { value: e.target.value })
               }
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={INPUT_CLS}
             >
               <option value="">Niemand (entfernen)</option>
               {personOptions.map((p) => (
@@ -661,7 +882,7 @@ function BulkEditModal({
               value={patch.menge.value}
               onChange={(e) => update("menge", { value: e.target.value })}
               placeholder="z.B. 100 Stk. (leer = entfernen)"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={INPUT_CLS}
             />
           </BulkRow>
 
@@ -676,7 +897,7 @@ function BulkEditModal({
               value={patch.sponsor.value}
               onChange={(e) => update("sponsor", { value: e.target.value })}
               placeholder="(leer = entfernen)"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={INPUT_CLS}
             />
           </BulkRow>
 
@@ -694,7 +915,7 @@ function BulkEditModal({
                 update("kostenGeschaetzt", { value: e.target.value })
               }
               placeholder="(leer = entfernen)"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={`${INPUT_CLS} tnum`}
             />
           </BulkRow>
 
@@ -712,7 +933,7 @@ function BulkEditModal({
                 update("kostenEffektiv", { value: e.target.value })
               }
               placeholder="(leer = entfernen)"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+              className={`${INPUT_CLS} tnum`}
             />
           </BulkRow>
 
@@ -727,33 +948,28 @@ function BulkEditModal({
               onChange={(e) => update("beschreibung", { value: e.target.value })}
               rows={3}
               placeholder="(leer = entfernen) — überschreibt bei allen!"
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40 resize-none"
+              className={`${INPUT_CLS} resize-none`}
             />
           </BulkRow>
         </div>
 
-        <div className="px-6 py-4 border-t border-zinc-800 flex items-center justify-between sticky bottom-0 bg-zinc-950">
-          <div className="text-xs text-zinc-500">
-            {enabledCount} Feld{enabledCount === 1 ? "" : "er"} aktiv
-            {error && <span className="ml-3 text-red-400">{error}</span>}
+        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-line bg-surface px-6 py-4">
+          <div className="text-[11px] text-ink-3">
+            <span className="tnum">{enabledCount}</span> Feld
+            {enabledCount === 1 ? "" : "er"} aktiv
+            {error && <span className="ml-3 text-hot-tint">{error}</span>}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              disabled={saving}
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition disabled:opacity-50"
-            >
+            <Button variant="ghost" onClick={onClose} disabled={saving}>
               Abbrechen
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={onSave}
               disabled={saving || enabledCount === 0}
-              className="px-4 py-2 text-sm font-medium bg-white text-black rounded-lg hover:bg-zinc-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {saving
-                ? "Speichert..."
-                : `Auf ${count} anwenden`}
-            </button>
+              {saving ? "Speichert..." : `Auf ${count} anwenden`}
+            </Button>
           </div>
         </div>
       </div>
@@ -773,18 +989,10 @@ function BulkRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[auto_180px_1fr] items-center gap-3">
-      <input
-        type="checkbox"
-        checked={enabled}
-        onChange={(e) => onToggle(e.target.checked)}
-        className="accent-blue-500 cursor-pointer"
-        aria-label={`${label} ändern`}
-      />
-      <label className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
-        {label}
-      </label>
-      <div>{children}</div>
+    <div className="grid grid-cols-[auto_1fr] items-center gap-3 sm:grid-cols-[auto_180px_1fr]">
+      <Checkbox checked={enabled} onChange={() => onToggle(!enabled)} label={`${label} ändern`} />
+      <label className="cg-label">{label}</label>
+      <div className="col-span-2 sm:col-span-1">{children}</div>
     </div>
   );
 }

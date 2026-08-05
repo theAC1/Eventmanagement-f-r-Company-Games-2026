@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { HotPill, StatusPill } from "@/components/ui/pills";
+import { Button } from "@/components/ui/button";
 
 type GamedayStatus = {
   modus: "INAKTIV" | "TEST" | "HOT";
@@ -169,48 +171,47 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
   }
 
   if (loading) {
-    return (
-      <div className="h-14 rounded-lg border border-zinc-800 bg-zinc-900/50 animate-pulse" />
-    );
+    return <div className="h-[54px] animate-pulse border-b border-line bg-sunken" />;
   }
 
   const testCount = status?.testErgebnisse ?? 0;
 
   if (!status || status.modus === "INAKTIV") {
     return (
-      <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
-        <div className="space-y-0.5">
-          <span className="text-sm text-zinc-400">Kein aktiver Gameday</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-2.5 sm:px-[22px]">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm text-ink-3">Kein aktiver Gameday</span>
           {testCount > 0 && (
-            <p className="text-xs text-amber-400">
-              {testCount} Test-Ergebnis{testCount === 1 ? "" : "se"} vorhanden — vor HOT-Start löschen
+            <p className="text-xs text-warn">
+              <span className="tnum">{testCount}</span> Test-Ergebnis
+              {testCount === 1 ? "" : "se"} vorhanden — vor HOT-Start löschen
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {testCount > 0 && (
-            <button
+            <Button
+              variant="ghost"
               onClick={resetTestData}
               disabled={actionLoading}
-              className="px-3 py-1.5 text-sm font-medium rounded-md border border-amber-700 bg-amber-900/40 hover:bg-amber-900/60 text-amber-300 transition disabled:opacity-50"
             >
-              Test-Daten löschen ({testCount})
-            </button>
+              Test-Daten löschen (<span className="tnum">{testCount}</span>)
+            </Button>
           )}
-          <button
+          <Button
+            variant="primary"
             onClick={() => startGameday("TEST")}
             disabled={actionLoading}
-            className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-600 hover:bg-blue-700 text-white transition disabled:opacity-50"
           >
             Test starten
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="danger-ghost"
             onClick={() => startGameday("HOT")}
             disabled={actionLoading}
-            className="px-3 py-1.5 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition disabled:opacity-50"
           >
             HOT starten
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -218,38 +219,34 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
 
   if (status.modus === "TEST") {
     return (
-      <div className="flex items-center justify-between rounded-lg border border-blue-700 bg-blue-900/40 px-4 py-3">
-        <div className="space-y-0.5">
-          <p className="text-sm font-semibold text-blue-300">
-            {"🔵 TEST-MODUS"}
-          </p>
-          <p className="text-xs text-blue-400/70">
-            Gestartet um {status.startedAt ? formatTime(status.startedAt) : "–"}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-action-row px-4 py-2.5 sm:px-[22px]">
+        <div className="flex items-center gap-3">
+          <StatusPill tone="action">TEST-MODUS</StatusPill>
+          <p className="text-xs text-ink-3">
+            Gestartet um{" "}
+            <span className="tnum">
+              {status.startedAt ? formatTime(status.startedAt) : "–"}
+            </span>
             {status.startedBy?.name ? ` von ${status.startedBy.name}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={resetTestData}
-            disabled={actionLoading}
-            className="px-3 py-1.5 text-sm font-medium rounded-md border border-zinc-600 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition disabled:opacity-50"
-          >
-            Test-Daten löschen{testCount > 0 ? ` (${testCount})` : ""}
-          </button>
-          <button
-            onClick={stopGameday}
-            disabled={actionLoading}
-            className="px-3 py-1.5 text-sm font-medium rounded-md border border-zinc-600 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition disabled:opacity-50"
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ghost" onClick={resetTestData} disabled={actionLoading}>
+            Test-Daten löschen
+            {testCount > 0 ? (
+              <span className="tnum">({testCount})</span>
+            ) : null}
+          </Button>
+          <Button variant="ghost" onClick={stopGameday} disabled={actionLoading}>
             Test beenden
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="danger-ghost"
             onClick={switchToHot}
             disabled={actionLoading}
-            className="px-3 py-1.5 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition disabled:opacity-50"
           >
             Zu HOT wechseln
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -257,25 +254,20 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
 
   // HOT
   return (
-    <div className="flex items-center justify-between rounded-lg border border-red-700 bg-red-900/40 px-4 py-3">
-      <div className="space-y-0.5">
-        <p className="text-sm font-semibold text-red-300">
-          {"🔴 HOT — Produktiver Gameday"}
-        </p>
-        <p className="text-xs text-red-400/70">
-          Gestartet um {status.startedAt ? formatTime(status.startedAt) : "–"}
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--hot-border)] bg-hot-dim px-4 py-2.5 sm:px-[22px]">
+      <div className="flex items-center gap-3">
+        <HotPill />
+        <p className="text-xs text-hot-tint">
+          Produktiver Gameday · gestartet um{" "}
+          <span className="tnum">
+            {status.startedAt ? formatTime(status.startedAt) : "–"}
+          </span>
           {status.startedBy?.name ? ` von ${status.startedBy.name}` : ""}
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={stopGameday}
-          disabled={actionLoading}
-          className="px-3 py-1.5 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 text-white transition disabled:opacity-50"
-        >
-          Gameday beenden
-        </button>
-      </div>
+      <Button variant="danger-ghost" onClick={stopGameday} disabled={actionLoading}>
+        Gameday beenden
+      </Button>
     </div>
   );
 }

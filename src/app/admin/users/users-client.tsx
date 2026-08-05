@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Warning } from "@phosphor-icons/react";
+import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
+import { StatusPill, type PillTone } from "@/components/ui/pills";
+import { Button } from "@/components/ui/button";
 
 type User = {
   id: string;
@@ -23,6 +27,50 @@ const ROLE_LABELS: Record<string, string> = {
   SCHIEDSRICHTER: "Schiedsrichter",
   HELFER: "Helfer",
 };
+
+const ROLE_TONES: Record<string, PillTone> = {
+  OWNER: "action",
+  ADMIN: "warn",
+  ORGA: "action",
+  SCHIEDSRICHTER: "done",
+  HELFER: "neutral",
+};
+
+const GRID_COLS = "1.4fr 1fr 1.5fr 110px 210px";
+
+const INPUT_CLASS =
+  "w-full rounded-[9px] border border-line-strong bg-sunken px-3 py-2 text-sm text-ink outline-none transition-colors duration-150 placeholder:text-label focus:border-action";
+
+const SMALL_GHOST =
+  "rounded-[7px] border border-line-strong px-2.5 py-1 text-[11px] font-medium text-ink-2 transition-colors duration-150 hover:border-action hover:text-ink";
+
+const SMALL_DANGER_GHOST =
+  "rounded-[7px] border border-[var(--hot-border)] px-2.5 py-1 text-[11px] font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim";
+
+function ActiveTogglePill({
+  active,
+  disabled,
+  onClick,
+}: {
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center rounded-full px-[9px] py-1 text-[11px] font-semibold tracking-[0.04em] transition-opacity duration-150 hover:opacity-80 disabled:cursor-not-allowed disabled:hover:opacity-100"
+      style={
+        active
+          ? { color: "var(--done-tint)", background: "var(--done-dim)" }
+          : { color: "var(--hot-tint)", background: "var(--hot-dim)" }
+      }
+    >
+      {active ? "Aktiv" : "Deaktiviert"}
+    </button>
+  );
+}
 
 export function UsersClient({ isOwner }: { isOwner: boolean }) {
   const [users, setUsers] = useState<User[]>([]);
@@ -159,86 +207,86 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
   }
 
   if (loading) {
-    return <div className="text-zinc-500">Laden...</div>;
+    return (
+      <div className="flex h-64 items-center justify-center text-sm text-ink-3">
+        Laden...
+      </div>
+    );
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-semibold">Benutzer</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            {users.length} Benutzer registriert
-          </p>
-        </div>
+    <div className="flex flex-col">
+      <TopBar title="Benutzer">
+        <span className="tnum text-xs text-ink-3">{users.length} Benutzer registriert</span>
+        <TopBarSpacer />
         {isOwner && (
-          <button
+          <Button
+            variant="primary"
             onClick={() => {
               resetForm();
               setShowForm(true);
             }}
-            className="px-4 py-2 bg-white text-zinc-950 text-sm font-medium rounded-md hover:bg-zinc-200 transition"
           >
             + Neuer Benutzer
-          </button>
+          </Button>
         )}
-      </div>
+      </TopBar>
 
       {!isOwner && (
-        <p className="mb-6 text-sm text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2">
+        <p className="mx-4 mt-4 rounded-[10px] border border-line bg-surface px-3.5 py-2.5 text-xs text-ink-3 sm:mx-[22px]">
           Nur der Owner kann Accounts anlegen oder Aktivierungscodes zurücksetzen.
         </p>
       )}
 
       {/* Formular */}
       {showForm && isOwner && (
-        <div className="mb-6 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-          <h2 className="text-sm font-medium mb-4">
+        <div className="mx-4 mt-4 rounded-[10px] border border-line bg-surface p-5 sm:mx-[22px]">
+          <h2 className="cg-label mb-4">
             {editingId ? "Benutzer bearbeiten" : "Neuer Benutzer"}
           </h2>
           {!editingId && (
-            <p className="text-xs text-zinc-500 mb-4">
+            <p className="mb-4 text-xs text-ink-3">
               Beim Erstellen wird ein einmaliger Aktivierungscode erzeugt. Der neue Benutzer meldet sich
               damit an und setzt anschliessend sein eigenes Passwort.
             </p>
           )}
-          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Name *</label>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="cg-label block">Name *</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded text-sm text-white focus:border-zinc-500 focus:outline-none"
+                className={INPUT_CLASS}
               />
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Email</label>
+            <div className="space-y-1.5">
+              <label className="cg-label block">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded text-sm text-white focus:border-zinc-500 focus:outline-none"
+                className={INPUT_CLASS}
               />
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Benutzername *</label>
+            <div className="space-y-1.5">
+              <label className="cg-label block">Benutzername *</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))}
                 required
-                className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded text-sm text-white focus:border-zinc-500 focus:outline-none font-mono"
+                className={`${INPUT_CLASS} tnum`}
                 placeholder="z.B. max.muster"
               />
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Rolle *</label>
+            <div className="space-y-1.5">
+              <label className="cg-label block">Rolle *</label>
               <select
                 value={rolle}
                 onChange={(e) => setRolle(e.target.value)}
-                className="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded text-sm text-white focus:border-zinc-500 focus:outline-none"
+                className={INPUT_CLASS}
               >
                 {ROLLEN.map((r) => (
                   <option key={r} value={r}>
@@ -248,22 +296,19 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
               </select>
             </div>
             <div className="flex items-end gap-2">
-              <button
-                type="submit"
-                className="px-4 py-1.5 bg-white text-zinc-950 text-sm font-medium rounded hover:bg-zinc-200 transition"
-              >
+              <Button type="submit" variant="primary">
                 {editingId ? "Speichern" : "Erstellen"}
-              </button>
+              </Button>
               <button
                 type="button"
                 onClick={resetForm}
-                className="px-4 py-1.5 text-sm text-zinc-400 hover:text-white transition"
+                className="px-2 text-[13px] font-medium text-ink-3 transition-colors duration-150 hover:text-ink"
               >
                 Abbrechen
               </button>
             </div>
             {error && (
-              <p className="col-span-2 text-sm text-red-400 bg-red-400/10 px-3 py-2 rounded">
+              <p className="rounded-[9px] bg-hot-dim px-3 py-2 text-xs font-medium text-hot-tint sm:col-span-2">
                 {error}
               </p>
             )}
@@ -271,128 +316,136 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
         </div>
       )}
 
-      {/* Tabelle */}
-      <div className="border border-zinc-800 rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-900/50">
-              <th className="text-left px-4 py-2.5 text-zinc-400 font-medium">Name</th>
-              <th className="text-left px-4 py-2.5 text-zinc-400 font-medium">Username</th>
-              <th className="text-left px-4 py-2.5 text-zinc-400 font-medium">Rolle</th>
-              <th className="text-left px-4 py-2.5 text-zinc-400 font-medium">Status</th>
-              <th className="text-right px-4 py-2.5 text-zinc-400 font-medium">Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30">
-                <td className="px-4 py-2.5">
-                  <div className="text-white">{user.name}</div>
+      {/* Tabellenkopf (ab lg) */}
+      <div
+        className="mt-4 hidden border-y border-line bg-sunken px-[22px] py-[11px] lg:grid"
+        style={{ gridTemplateColumns: GRID_COLS, gap: "14px" }}
+      >
+        <span className="cg-label tracking-[0.1em]">Name</span>
+        <span className="cg-label tracking-[0.1em]">Username</span>
+        <span className="cg-label tracking-[0.1em]">Rolle</span>
+        <span className="cg-label tracking-[0.1em]">Status</span>
+        <span className="cg-label text-right tracking-[0.1em]">Aktionen</span>
+      </div>
+
+      {/* Zeilen / Karten */}
+      <div className="max-lg:space-y-3 max-lg:p-4">
+        {users.map((user) => {
+          const roleTone = ROLE_TONES[user.rolle] ?? "neutral";
+          const actions = isOwner && (
+            <>
+              {user.rolle !== "OWNER" && (
+                <button onClick={() => resetActivation(user)} className={SMALL_GHOST}>
+                  Code neu
+                </button>
+              )}
+              <button onClick={() => startEdit(user)} className={SMALL_GHOST}>
+                Bearbeiten
+              </button>
+              {user.rolle !== "OWNER" && (
+                <button onClick={() => handleDelete(user)} className={SMALL_DANGER_GHOST}>
+                  Löschen
+                </button>
+              )}
+            </>
+          );
+          return (
+            <div
+              key={user.id}
+              className="transition-colors duration-150 hover:bg-sunken/60 max-lg:rounded-[10px] max-lg:border max-lg:border-line max-lg:bg-surface lg:border-b lg:border-line-soft"
+            >
+              {/* Desktop-Zeile */}
+              <div
+                className="hidden min-h-[62px] items-center px-[22px] py-2 lg:grid"
+                style={{ gridTemplateColumns: GRID_COLS, gap: "14px" }}
+              >
+                <div className="flex min-w-0 flex-col gap-[3px]">
+                  <span className="truncate text-sm font-medium text-ink">{user.name}</span>
                   {user.email && (
-                    <div className="text-xs text-zinc-500">{user.email}</div>
+                    <span className="truncate text-[11px] text-ink-3">{user.email}</span>
                   )}
-                </td>
-                <td className="px-4 py-2.5 font-mono text-zinc-400">
+                </div>
+                <span className="tnum truncate text-xs text-ink-3">
                   {user.username || "—"}
-                </td>
-                <td className="px-4 py-2.5">
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                      user.rolle === "OWNER"
-                        ? "bg-purple-400/10 text-purple-400"
-                        : user.rolle === "ADMIN"
-                        ? "bg-amber-400/10 text-amber-400"
-                        : user.rolle === "ORGA"
-                        ? "bg-blue-400/10 text-blue-400"
-                        : user.rolle === "SCHIEDSRICHTER"
-                        ? "bg-green-400/10 text-green-400"
-                        : "bg-zinc-400/10 text-zinc-400"
-                    }`}
-                  >
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <StatusPill tone={roleTone}>
                     {ROLE_LABELS[user.rolle] || user.rolle}
-                  </span>
+                  </StatusPill>
                   {user.mussPasswortAendern && (
-                    <span className="ml-2 inline-block px-2 py-0.5 rounded text-xs bg-yellow-400/10 text-yellow-400">
-                      Nicht aktiviert
-                    </span>
+                    <StatusPill tone="warn">Nicht aktiviert</StatusPill>
                   )}
-                </td>
-                <td className="px-4 py-2.5">
-                  <button
-                    onClick={() => toggleActive(user)}
+                </div>
+                <div>
+                  <ActiveTogglePill
+                    active={user.istAktiv}
                     disabled={!isOwner}
-                    className={`text-xs px-2 py-0.5 rounded disabled:cursor-not-allowed ${
-                      user.istAktiv
-                        ? "bg-emerald-400/10 text-emerald-400"
-                        : "bg-red-400/10 text-red-400"
-                    }`}
-                  >
-                    {user.istAktiv ? "Aktiv" : "Deaktiviert"}
-                  </button>
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  {isOwner && (
-                    <>
-                      {user.rolle !== "OWNER" && (
-                        <button
-                          onClick={() => resetActivation(user)}
-                          className="text-xs text-zinc-400 hover:text-amber-400 transition mr-3"
-                        >
-                          Code neu
-                        </button>
-                      )}
-                      <button
-                        onClick={() => startEdit(user)}
-                        className="text-xs text-zinc-400 hover:text-white transition mr-3"
-                      >
-                        Bearbeiten
-                      </button>
-                      {user.rolle !== "OWNER" && (
-                        <button
-                          onClick={() => handleDelete(user)}
-                          className="text-xs text-zinc-500 hover:text-red-400 transition"
-                        >
-                          Löschen
-                        </button>
-                      )}
-                    </>
+                    onClick={() => toggleActive(user)}
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">{actions}</div>
+              </div>
+
+              {/* Mobile-Karte */}
+              <div className="flex flex-col gap-2.5 p-4 lg:hidden">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+                    <span className="truncate text-sm font-medium text-ink">{user.name}</span>
+                    <span className="tnum truncate text-[11px] text-ink-3">
+                      {user.username || "—"}
+                      {user.email ? ` · ${user.email}` : ""}
+                    </span>
+                  </div>
+                  <ActiveTogglePill
+                    active={user.istAktiv}
+                    disabled={!isOwner}
+                    onClick={() => toggleActive(user)}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <StatusPill tone={roleTone}>
+                    {ROLE_LABELS[user.rolle] || user.rolle}
+                  </StatusPill>
+                  {user.mussPasswortAendern && (
+                    <StatusPill tone="warn">Nicht aktiviert</StatusPill>
                   )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+                {isOwner && (
+                  <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Aktivierungscode-Modal */}
       {activationCode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-xl p-6 shadow-2xl">
-            <h2 className="text-lg font-semibold text-white">Aktivierungscode</h2>
-            <p className="text-sm text-zinc-400 mt-1">
-              Für Benutzer <span className="font-mono text-zinc-200">{activationCode.username}</span>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "var(--scrim)" }}
+        >
+          <div className="anim-pop w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow-pop)]">
+            <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Aktivierungscode</h2>
+            <p className="mt-1 text-sm text-ink-3">
+              Für Benutzer <span className="tnum text-ink-2">{activationCode.username}</span>
             </p>
             <div className="mt-4 flex items-center gap-2">
-              <code className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded text-lg font-mono tracking-wider text-amber-400 select-all">
+              <code className="tnum flex-1 select-all rounded-[9px] border border-line bg-sunken px-3 py-2 text-lg tracking-[0.2em] text-warn">
                 {activationCode.code}
               </code>
-              <button
-                onClick={copyCode}
-                className="px-3 py-2 bg-white text-zinc-950 text-sm font-medium rounded hover:bg-zinc-200 transition"
-              >
+              <Button variant="primary" onClick={copyCode}>
                 {copied ? "Kopiert" : "Kopieren"}
-              </button>
+              </Button>
             </div>
-            <p className="text-xs text-red-400/90 mt-3">
-              ⚠ Dieser Code wird nur einmal angezeigt. Gib ihn dem Benutzer direkt weiter.
+            <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-warn">
+              <Warning size={14} weight="bold" />
+              Dieser Code wird nur einmal angezeigt. Gib ihn dem Benutzer direkt weiter.
             </p>
             <div className="mt-5 text-right">
-              <button
-                onClick={() => setActivationCode(null)}
-                className="px-4 py-2 text-sm text-zinc-300 hover:text-white transition"
-              >
+              <Button variant="ghost" onClick={() => setActivationCode(null)}>
                 Schliessen
-              </button>
+              </Button>
             </div>
           </div>
         </div>

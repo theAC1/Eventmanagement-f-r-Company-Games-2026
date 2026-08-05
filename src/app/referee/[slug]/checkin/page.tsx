@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import jsQR from "jsqr";
+import { ArrowLeft, CheckCircle } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 
 type Game = { id: string; name: string; slug: string; modus: string; teamsProSlot: number };
 type CheckedInTeam = { teamId: string; teamName: string; teamNummer: number; teamFarbe: string };
@@ -248,65 +250,92 @@ export default function CheckinPage() {
     }
   };
 
-  if (loading || !game) return <div className="flex items-center justify-center h-64 text-zinc-500">Lade...</div>;
+  if (loading || !game) {
+    return (
+      <div className="mx-auto flex h-64 w-full max-w-md items-center justify-center text-sm text-ink-3">
+        Lade...
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-[18px] pb-12">
+      {/* Header */}
       <div>
-        <Link href={`/referee/${slug}`} className="text-xs text-zinc-500 hover:text-white transition">
-          &larr; {game.name}
+        <Link
+          href={`/referee/${slug}`}
+          className="inline-flex items-center gap-1.5 text-[12px] text-ink-3 transition-colors duration-150 hover:text-ink"
+        >
+          <ArrowLeft size={13} weight="bold" />
+          {game.name}
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight mt-2">Check-in</h1>
-        <p className="text-sm text-zinc-400">
-          {isDuell ? "2 Teams einchecken" : "Team einchecken"} &middot; {game.name}
+        <h1 className="mt-2.5 text-[22px] font-semibold tracking-tight">Check-in</h1>
+        <p className="mt-1 text-[13px] text-ink-3">
+          {isDuell ? "2 Teams einchecken" : "Team einchecken"} · {game.name}
         </p>
       </div>
 
       {/* Fortschritt bei Duell-Slots */}
       {isDuell && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className={checkedIn.length >= 1 ? "text-emerald-400" : "text-zinc-500"}>
+        <div className="flex items-center gap-2 text-[13px]">
+          <span className={checkedIn.length >= 1 ? "text-done-tint" : "text-ink-3"}>
             {checkedIn[0] ? `${checkedIn[0].teamName} ✓` : "Team A ausstehend"}
           </span>
-          <span className="text-zinc-700">—</span>
-          <span className={checkedIn.length >= 2 ? "text-emerald-400" : "text-zinc-500"}>
+          <span className="text-faint">—</span>
+          <span className={checkedIn.length >= 2 ? "text-done-tint" : "text-ink-3"}>
             {checkedIn[1] ? `${checkedIn[1].teamName} ✓` : "Team B ausstehend"}
           </span>
-          <span className="ml-auto text-xs text-zinc-500">
-            {checkedIn.length} von 2 Teams verifiziert
+          <span className="tnum ml-auto text-[11px] text-label">
+            {checkedIn.length}/2
           </span>
         </div>
       )}
 
       {/* Eingecheckte Teams */}
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {Array.from({ length: maxTeams }, (_, i) => {
           const t = checkedIn[i];
           return (
-            <div key={i} className={`flex items-center justify-between p-4 rounded-lg border ${
-              t ? "border-emerald-800 bg-emerald-950/20" : "border-zinc-800 border-dashed"
-            }`}>
+            <div
+              key={i}
+              className={`flex items-center justify-between rounded-xl border p-4 ${
+                t
+                  ? "border-[1.5px] border-done bg-done-dim/50"
+                  : "border-dashed border-line-strong"
+              }`}
+            >
               {t ? (
                 <>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white"
-                      style={{ backgroundColor: t.teamFarbe }}>
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-white"
+                      style={{ backgroundColor: t.teamFarbe }}
+                    >
                       {t.teamNummer}
                     </div>
                     <div>
-                      <p className="font-medium">{t.teamName}</p>
-                      <p className="text-xs text-emerald-400">Eingecheckt</p>
+                      <p className="font-medium text-ink">{t.teamName}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-[12px] text-done-tint">
+                        <CheckCircle size={13} weight="bold" />
+                        Eingecheckt
+                      </p>
                     </div>
                   </div>
-                  <button onClick={() => removeTeam(t.teamId)}
-                    className="text-xs text-zinc-500 hover:text-red-400 transition">
+                  <button
+                    onClick={() => removeTeam(t.teamId)}
+                    className="min-h-12 px-2 text-[12px] text-ink-3 transition-colors duration-150 hover:text-hot-tint"
+                  >
                     Entfernen
                   </button>
                 </>
               ) : (
-                <div className="flex items-center gap-3 text-zinc-500">
-                  <div className="w-10 h-10 rounded-full border border-dashed border-zinc-700 flex items-center justify-center text-lg">?</div>
-                  <p className="text-sm">{isDuell ? `Team ${i === 0 ? "A" : "B"}` : "Team"} – noch nicht eingecheckt</p>
+                <div className="flex items-center gap-3 text-ink-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-line-strong text-lg">
+                    ?
+                  </div>
+                  <p className="text-sm">
+                    {isDuell ? `Team ${i === 0 ? "A" : "B"}` : "Team"} – noch nicht eingecheckt
+                  </p>
                 </div>
               )}
             </div>
@@ -316,25 +345,34 @@ export default function CheckinPage() {
 
       {/* Check-in Methode */}
       {!allCheckedIn && (
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <button onClick={() => { setMode("code"); stopScanner(); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                mode === "code" ? "bg-zinc-800 border-zinc-600 text-white" : "border-zinc-800 text-zinc-500"
-              }`}>
+        <div className="flex flex-col gap-4">
+          {/* Segmented Control */}
+          <div className="flex rounded-[9px] border border-line-strong bg-sunken p-0.5">
+            <button
+              onClick={() => { setMode("code"); stopScanner(); }}
+              className={`min-h-12 flex-1 rounded-[7px] px-3 text-sm transition-colors duration-150 ${
+                mode === "code"
+                  ? "bg-action font-semibold text-on-action"
+                  : "font-medium text-ink-3"
+              }`}
+            >
               Code eingeben
             </button>
-            <button onClick={() => { setMode("scan"); startScanner(); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
-                mode === "scan" ? "bg-zinc-800 border-zinc-600 text-white" : "border-zinc-800 text-zinc-500"
-              }`}>
+            <button
+              onClick={() => { setMode("scan"); startScanner(); }}
+              className={`min-h-12 flex-1 rounded-[7px] px-3 text-sm transition-colors duration-150 ${
+                mode === "scan"
+                  ? "bg-action font-semibold text-on-action"
+                  : "font-medium text-ink-3"
+              }`}
+            >
               QR scannen
             </button>
           </div>
 
           {/* Code-Eingabe */}
           {mode === "code" && (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               <div className="flex gap-2">
                 <input
                   ref={codeInputRef}
@@ -344,15 +382,18 @@ export default function CheckinPage() {
                   onKeyDown={e => { if (e.key === "Enter") verifyCode(codeInput); }}
                   placeholder="z.B. B6J"
                   maxLength={3}
-                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-2xl font-mono text-center tracking-[0.3em] uppercase focus:outline-none focus:border-zinc-500"
+                  className="tnum min-w-0 flex-1 rounded-[9px] border border-line-strong bg-sunken px-4 py-3 text-center text-2xl uppercase tracking-[0.3em] text-ink placeholder:text-faint focus:border-action focus:outline-none"
                 />
-                <button onClick={() => verifyCode(codeInput)}
+                <Button
+                  variant="primary"
+                  onClick={() => verifyCode(codeInput)}
                   disabled={codeInput.length !== 3}
-                  className="px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-zinc-200 transition disabled:opacity-50">
+                  className="h-auto min-h-12 px-6"
+                >
                   OK
-                </button>
+                </Button>
               </div>
-              <p className="text-xs text-zinc-600 text-center">
+              <p className="text-center text-[12px] text-ink-3">
                 3-Zeichen Code vom Badge (unter dem QR-Code)
               </p>
             </div>
@@ -360,42 +401,42 @@ export default function CheckinPage() {
 
           {/* QR-Scanner */}
           {mode === "scan" && (
-            <div className="space-y-3">
-              <div className="relative rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "4/3" }}>
-                <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+            <div className="flex flex-col gap-3">
+              <div className="relative overflow-hidden rounded-xl border border-line bg-black" style={{ aspectRatio: "4/3" }}>
+                <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
                 {!scanning && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80">
-                    <button onClick={startScanner}
-                      className="px-4 py-2 bg-white text-black rounded-lg text-sm font-medium">
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--scrim)" }}>
+                    <Button variant="primary" onClick={startScanner} className="h-auto min-h-12 px-5">
                       Kamera starten
-                    </button>
+                    </Button>
                   </div>
                 )}
                 {scanning && (
-                  <div className="absolute inset-0 border-2 border-amber-500/30 rounded-lg pointer-events-none">
-                    <div className="absolute top-1/2 left-4 right-4 h-0.5 bg-amber-500/50 animate-pulse" />
+                  <div className="pointer-events-none absolute inset-0 rounded-xl border-2 border-warn/30">
+                    <div className="absolute left-4 right-4 top-1/2 h-0.5 animate-pulse bg-warn/50" />
                   </div>
                 )}
               </div>
-              <p className="text-xs text-zinc-600 text-center">
+              <p className="text-center text-[12px] text-ink-3">
                 Team-QR-Code auf dem Badge scannen
               </p>
             </div>
           )}
 
-          {error && <p className="text-sm text-red-400 text-center">{error}</p>}
+          {error && <p className="text-center text-sm text-hot-tint">{error}</p>}
         </div>
       )}
 
       {/* Partie starten */}
       {allCheckedIn && (
-        <button
+        <Button
+          variant="cta"
           onClick={startPartie}
           disabled={starting}
-          className="w-full py-4 bg-emerald-600 text-white text-lg font-semibold rounded-lg hover:bg-emerald-500 transition disabled:opacity-50"
+          className="h-16 w-full rounded-[14px]"
         >
           {starting ? "Wird gestartet..." : "Begegnung starten →"}
-        </button>
+        </Button>
       )}
     </div>
   );

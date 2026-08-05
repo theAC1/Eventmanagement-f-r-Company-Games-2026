@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { StatusPill } from "@/components/ui/pills";
 
 type SeedResult = {
   users: { username: string; name: string; rolle: string; password: string }[];
@@ -12,6 +14,14 @@ type SeedResult = {
 type DemoSeedProps = {
   onSeeded: () => void;
 };
+
+function CodeChip({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="tnum rounded-[5px] bg-raised px-1.5 py-0.5 text-ink-2">
+      {children}
+    </code>
+  );
+}
 
 export function DemoSeed({ onSeeded }: DemoSeedProps) {
   const [loading, setLoading] = useState(false);
@@ -44,60 +54,55 @@ export function DemoSeed({ onSeeded }: DemoSeedProps) {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3 space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <p className="text-sm font-medium text-zinc-200">Generalprobe vorbereiten</p>
-          <p className="text-xs text-zinc-500">
+    <div className="flex flex-col gap-3 border-b border-line px-4 py-2.5 sm:px-[22px]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-sm font-medium text-ink">Generalprobe vorbereiten</p>
+          <p className="text-xs text-ink-3">
             Legt Demo-Logins, Teams und aktive Games für die Generalprobe an.
           </p>
         </div>
-        <button
-          onClick={runSeed}
-          disabled={loading}
-          className="shrink-0 px-3 py-1.5 text-sm font-medium rounded-md border border-zinc-600 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition disabled:opacity-50"
-        >
+        <Button variant="ghost" onClick={runSeed} disabled={loading} className="shrink-0">
           {loading ? "Lege an…" : "Demo-Daten anlegen"}
-        </button>
+        </Button>
       </div>
 
-      {error && (
-        <p className="text-xs text-red-400">{error}</p>
-      )}
+      {error && <p className="text-xs text-hot-tint">{error}</p>}
 
       {result && (
-        <div className="space-y-3 rounded-md border border-emerald-800/60 bg-emerald-900/20 px-3 py-3 text-xs">
-          <p className="text-emerald-300 font-medium">
-            Demo-Daten angelegt · {result.gamedayNote}
-          </p>
+        <div className="anim-rise flex flex-col gap-3 rounded-[10px] border border-line bg-surface p-3.5 text-xs">
+          <div className="flex items-center gap-2">
+            <StatusPill tone="done">Demo-Daten angelegt</StatusPill>
+            <span className="text-ink-3">{result.gamedayNote}</span>
+          </div>
 
-          <div className="space-y-1">
-            <p className="text-zinc-400 uppercase tracking-wide text-[10px]">Logins</p>
+          <div className="flex flex-col gap-1">
+            <p className="cg-label">Logins</p>
             {result.users.map((u) => (
-              <div key={u.username} className="flex items-center gap-2 text-zinc-200">
-                <code className="rounded bg-zinc-800 px-1.5 py-0.5">{u.username}</code>
-                <span className="text-zinc-500">/</span>
-                <code className="rounded bg-zinc-800 px-1.5 py-0.5">{u.password}</code>
-                <span className="text-zinc-500">({u.rolle})</span>
+              <div key={u.username} className="flex items-center gap-2 text-ink">
+                <CodeChip>{u.username}</CodeChip>
+                <span className="text-ink-3">/</span>
+                <CodeChip>{u.password}</CodeChip>
+                <span className="text-ink-3">({u.rolle})</span>
               </div>
             ))}
           </div>
 
-          <div className="space-y-1">
-            <p className="text-zinc-400 uppercase tracking-wide text-[10px]">Team Check-in-Codes</p>
+          <div className="flex flex-col gap-1">
+            <p className="cg-label">Team Check-in-Codes</p>
             {result.teams.map((t) => (
-              <div key={t.nummer} className="flex items-center gap-2 text-zinc-200">
-                <span className="text-zinc-400">
-                  #{t.nummer} {t.name}:
+              <div key={t.nummer} className="flex items-center gap-2 text-ink">
+                <span className="text-ink-3">
+                  <span className="tnum">#{t.nummer}</span> {t.name}:
                 </span>
-                <code className="rounded bg-zinc-800 px-1.5 py-0.5">{t.checkinCode}</code>
+                <CodeChip>{t.checkinCode}</CodeChip>
               </div>
             ))}
           </div>
 
-          <div className="space-y-1">
-            <p className="text-zinc-400 uppercase tracking-wide text-[10px]">Aktive Games</p>
-            <p className="text-zinc-200">{result.games.join(", ")}</p>
+          <div className="flex flex-col gap-1">
+            <p className="cg-label">Aktive Games</p>
+            <p className="text-ink">{result.games.join(", ")}</p>
           </div>
         </div>
       )}

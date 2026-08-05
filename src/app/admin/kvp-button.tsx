@@ -2,16 +2,48 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { Bug, ChatCircleDots, CheckCircle, Lightbulb, Sparkle, X } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 
 type KvpTyp = "BUG" | "WUNSCHFUNKTION" | "IDEE";
 
-const TYP_CONFIG: Record<KvpTyp, { label: string; emoji: string; color: string }> = {
-  BUG: { label: "Bug / Fehler", emoji: "🐛", color: "bg-red-950/80 border-red-800 text-red-300" },
-  WUNSCHFUNKTION: { label: "Wunschfunktion", emoji: "✨", color: "bg-blue-950/80 border-blue-800 text-blue-300" },
-  IDEE: { label: "Idee / Verbesserung", emoji: "💡", color: "bg-amber-950/80 border-amber-800 text-amber-300" },
+const TYP_CONFIG: Record<
+  KvpTyp,
+  { label: string; icon: React.ComponentType<{ size?: number; weight?: "bold" }>; activeStyle: React.CSSProperties }
+> = {
+  BUG: {
+    label: "Bug / Fehler",
+    icon: Bug,
+    activeStyle: {
+      color: "var(--hot-tint)",
+      background: "var(--hot-dim)",
+      borderColor: "var(--hot-border)",
+    },
+  },
+  WUNSCHFUNKTION: {
+    label: "Wunschfunktion",
+    icon: Sparkle,
+    activeStyle: {
+      color: "var(--action-tint)",
+      background: "var(--action-dim)",
+      borderColor: "var(--action)",
+    },
+  },
+  IDEE: {
+    label: "Idee / Verbesserung",
+    icon: Lightbulb,
+    activeStyle: {
+      color: "var(--warn)",
+      background: "var(--warn-dim)",
+      borderColor: "var(--warn-border)",
+    },
+  },
 };
 
 const INITIAL_FORM = { typ: "BUG" as KvpTyp, titel: "", beschreibung: "" };
+
+const INPUT_CLASS =
+  "w-full rounded-[9px] border border-line-strong bg-sunken px-3 py-2 text-sm text-ink outline-none transition-colors duration-150 placeholder:text-label focus:border-action";
 
 export function KvpFloatingButton() {
   const pathname = usePathname();
@@ -75,69 +107,70 @@ export function KvpFloatingButton() {
       <button
         onClick={handleOpen}
         title="Feedback / KVP melden"
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-1.5 px-3 py-2 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium shadow-lg hover:bg-zinc-700 hover:text-white hover:border-zinc-600 transition-all hover:shadow-xl"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-1.5 rounded-full bg-action px-4 py-2.5 text-xs font-semibold text-on-action shadow-[var(--shadow-pop)] transition-colors duration-150 hover:bg-action-hover"
         aria-label="KVP-Meldung erstellen"
       >
-        <span className="text-sm">💬</span>
+        <ChatCircleDots size={16} weight="bold" />
         KVP
       </button>
 
-      {/* Modal */}
+      {/* Modal / Bottom-Sheet */}
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/60 backdrop-blur-sm p-4 sm:p-6"
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:justify-end sm:p-6"
+          style={{ background: "var(--scrim)" }}
           onClick={handleClose}
         >
           <div
-            className="w-full sm:w-[420px] bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden"
+            className="anim-pop w-full overflow-hidden rounded-t-2xl border border-line bg-surface shadow-[var(--shadow-pop)] sm:w-[420px] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold">Feedback / KVP</h2>
-                <p className="text-xs text-zinc-500 mt-0.5 truncate max-w-[280px]">
+            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-ink">Feedback / KVP</h2>
+                <p className="tnum mt-0.5 max-w-[280px] truncate text-[11px] text-label">
                   {pathname}
                 </p>
               </div>
               <button
                 onClick={handleClose}
                 disabled={saving}
-                className="text-zinc-500 hover:text-white transition text-xl leading-none disabled:opacity-40"
+                className="text-faint transition-colors duration-150 hover:text-ink disabled:opacity-40"
                 aria-label="Schliessen"
               >
-                ×
+                <X size={18} weight="bold" />
               </button>
             </div>
 
             {success ? (
-              <div className="px-5 py-10 flex flex-col items-center gap-3 text-emerald-400">
-                <span className="text-4xl">✓</span>
+              <div className="flex flex-col items-center gap-3 px-5 py-10 text-done">
+                <CheckCircle size={44} weight="bold" className="anim-pop" />
                 <p className="text-sm font-medium">Danke! Meldung gespeichert.</p>
               </div>
             ) : (
-              <div className="px-5 py-4 space-y-4">
+              <div className="space-y-4 px-5 py-4">
                 {/* Typ-Auswahl */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Typ
-                  </label>
+                  <label className="cg-label block">Typ</label>
                   <div className="flex gap-2">
                     {(Object.keys(TYP_CONFIG) as KvpTyp[]).map((typ) => {
                       const cfg = TYP_CONFIG[typ];
+                      const Icon = cfg.icon;
                       const isActive = form.typ === typ;
                       return (
                         <button
                           key={typ}
                           onClick={() => setForm({ ...form, typ })}
-                          className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                          className={`flex flex-1 flex-col items-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-colors duration-150 ${
                             isActive
-                              ? cfg.color
-                              : "border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-400"
+                              ? "font-semibold"
+                              : "border-line-strong text-ink-3 hover:text-ink-2"
                           }`}
+                          style={isActive ? cfg.activeStyle : undefined}
                         >
-                          <span className="text-lg">{cfg.emoji}</span>
-                          <span className="leading-tight text-center">{cfg.label}</span>
+                          <Icon size={18} weight="bold" />
+                          <span className="text-center leading-tight">{cfg.label}</span>
                         </button>
                       );
                     })}
@@ -146,9 +179,7 @@ export function KvpFloatingButton() {
 
                 {/* Titel */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    Titel
-                  </label>
+                  <label className="cg-label block">Titel</label>
                   <input
                     type="text"
                     value={form.titel}
@@ -157,19 +188,17 @@ export function KvpFloatingButton() {
                     }
                     placeholder="Kurze Zusammenfassung…"
                     maxLength={100}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+                    className={INPUT_CLASS}
                   />
                 </div>
 
                 {/* Beschreibung */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                      Beschreibung
-                    </label>
+                    <label className="cg-label">Beschreibung</label>
                     <span
-                      className={`text-xs tabular-nums ${
-                        charsLeft < 50 ? "text-amber-400" : "text-zinc-600"
+                      className={`tnum text-[11px] ${
+                        charsLeft < 50 ? "text-warn" : "text-label"
                       }`}
                     >
                       {charsLeft} / 500
@@ -186,31 +215,31 @@ export function KvpFloatingButton() {
                     placeholder="Was ist passiert? Was erwartest du? Je konkreter desto besser…"
                     rows={4}
                     maxLength={500}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600 resize-none"
+                    className={`${INPUT_CLASS} resize-none`}
                   />
                 </div>
 
                 {/* Error */}
                 {error && (
-                  <p className="text-xs text-red-400">{error}</p>
+                  <p className="text-xs font-medium text-hot-tint">{error}</p>
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center justify-end gap-2 pt-1">
+                <div className="flex items-center justify-end gap-2 pt-1 max-sm:pb-2">
                   <button
                     onClick={handleClose}
                     disabled={saving}
-                    className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition disabled:opacity-50"
+                    className="px-3 text-[13px] font-medium text-ink-3 transition-colors duration-150 hover:text-ink disabled:opacity-50"
                   >
                     Abbrechen
                   </button>
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={handleSubmit}
                     disabled={saving || !form.titel.trim() || !form.beschreibung.trim()}
-                    className="px-4 py-2 text-sm font-medium bg-white text-black rounded-lg hover:bg-zinc-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {saving ? "Sende…" : "Melden"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

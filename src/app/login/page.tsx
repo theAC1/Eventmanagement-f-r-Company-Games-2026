@@ -3,6 +3,10 @@
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, Suspense } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+const INPUT_CLASS =
+  "w-full h-11 px-3 bg-sunken border border-line-strong rounded-[9px] text-sm text-ink placeholder:text-faint focus:outline-none focus:border-action transition-colors duration-150";
 
 function LoginForm() {
   const router = useRouter();
@@ -45,69 +49,72 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <img
-            src="/images/logo.png"
-            alt="Company Games 2026"
-            className="mx-auto h-24 w-auto mb-4"
-          />
-          <h1 className="text-2xl font-semibold text-white">CG26</h1>
-          <p className="text-sm text-zinc-500 mt-1">Company Games 2026</p>
+    <div className="relative flex min-h-screen items-center justify-center bg-bg px-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
+
+      <div className="anim-rise w-full max-w-sm">
+        <div className="mb-8 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/logo.png" alt="Company Games 2026" className="mx-auto mb-4 h-24 w-auto" />
+          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-ink">Company Games</h1>
+          <p className="tnum mt-1 text-sm text-ink-3">2026 · Orga-Zugang</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm text-zinc-400 mb-1.5">
-              Benutzername
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              autoFocus
-              required
-              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition"
-              placeholder="z.B. juan"
-            />
-          </div>
+        <div className="rounded-[14px] border border-line bg-surface p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="username" className="cg-label mb-1.5 block">
+                Benutzername
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                autoFocus
+                required
+                className={INPUT_CLASS}
+                placeholder="z.B. juan"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm text-zinc-400 mb-1.5">
-              Passwort
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition"
-            />
-          </div>
+            <div>
+              <label htmlFor="password" className="cg-label mb-1.5 block">
+                Passwort
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                className={INPUT_CLASS}
+              />
+            </div>
 
-          {error && (
-            <p className="text-sm text-red-400 bg-red-400/10 px-3 py-2 rounded-md">
-              {error}
-            </p>
-          )}
+            {error && (
+              <p className="rounded-[9px] bg-hot-dim px-3 py-2 text-sm text-hot-tint" role="alert">
+                {error}
+              </p>
+            )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 bg-white text-zinc-950 font-medium rounded-md hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {loading ? "..." : "Anmelden"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="h-11 w-full rounded-[9px] bg-action px-4 text-sm font-semibold text-on-action transition-colors duration-150 hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Anmelden …" : "Anmelden"}
+            </button>
+          </form>
+        </div>
 
-        <p className="text-xs text-zinc-600 text-center mt-6">
+        <p className="mt-6 text-center text-xs text-faint">
           Neuen Aktivierungscode erhalten?{" "}
-          <a href="/activate" className="text-zinc-400 hover:text-white transition">
+          <a href="/activate" className="text-action hover:text-action-hover">
             Account aktivieren
           </a>
         </p>
@@ -118,11 +125,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-zinc-500">Laden...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-bg">
+          <div className="text-ink-3">Laden …</div>
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

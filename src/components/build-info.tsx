@@ -11,7 +11,7 @@ export function BuildInfo() {
     : "–";
 
   return (
-    <div className="fixed bottom-2 right-3 text-[11px] text-gray-400 select-none pointer-events-none z-50">
+    <div className="tnum fixed bottom-2 right-3 z-50 select-none pointer-events-none text-[11px] text-faint">
       <span>v{version}</span>
       <span className="mx-1">·</span>
       <span>Build {buildDate}</span>

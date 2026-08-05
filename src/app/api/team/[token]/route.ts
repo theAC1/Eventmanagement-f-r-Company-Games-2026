@@ -20,6 +20,21 @@ export async function GET(
       return NextResponse.json({ error: "Team nicht gefunden" }, { status: 404 });
     }
 
+    // Aktiver Situationsplan: Lageplan-Bild + Feld-Nummern (nur öffentliche Positionen)
+    const aktivPlan = await prisma.situationsplan.findFirst({
+      where: { istAktiv: true },
+      select: {
+        hintergrundbildUrl: true,
+        gamePositionen: {
+          where: { oeffentlich: true, nummer: { not: "" } },
+          select: { gameId: true, nummer: true },
+        },
+      },
+    });
+    const feldNummern = new Map(
+      (aktivPlan?.gamePositionen ?? []).map((p) => [p.gameId, p.nummer]),
+    );
+
     // Spielplan des Teams aus dem aktuellen Zeitplan
     const config = await getCurrentZeitplanConfig();
     let slots: Array<{
@@ -30,6 +45,8 @@ export async function GET(
       status: string;
       gameName: string;
       gameSlug: string;
+      gegner: string[];
+      feld: string | null;
     }> = [];
 
     if (config) {
@@ -43,7 +60,11 @@ export async function GET(
               endZeit: true,
               runde: true,
               status: true,
-              game: { select: { name: true, slug: true } },
+              game: { select: { id: true, name: true, slug: true } },
+              teams: {
+                where: { teamId: { not: team.id } },
+                select: { team: { select: { name: true } } },
+              },
             },
           },
         },
@@ -57,6 +78,8 @@ export async function GET(
           status: st.slot.status,
           gameName: st.slot.game?.name ?? "–",
           gameSlug: st.slot.game?.slug ?? "",
+          gegner: st.slot.teams.map((t) => t.team.name),
+          feld: st.slot.game ? (feldNummern.get(st.slot.game.id) ?? null) : null,
         }))
         .sort((a, b) => a.startZeit.localeCompare(b.startZeit));
     }
@@ -74,12 +97,6 @@ export async function GET(
       orderBy: { game: { name: "asc" } },
     });
     const rangPunkteSumme = ergebnisse.reduce((sum, e) => sum + (e.rangPunkte ?? 0), 0);
-
-    // Lageplan: Hintergrundbild des aktiven Situationsplans
-    const aktivPlan = await prisma.situationsplan.findFirst({
-      where: { istAktiv: true },
-      select: { hintergrundbildUrl: true },
-    });
 
     return NextResponse.json({
       teamId: team.id,
