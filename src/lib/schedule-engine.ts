@@ -37,6 +37,17 @@ export type MittagspauseConfig = {
   versatzMin: number;          // Versatz zwischen Schichten (z.B. 5)
 };
 
+/**
+ * Anti-Korrelation zweier Games (ungerichtetes Paar): Ein Team, das Game X
+ * früh spielt, soll Game Y spät spielen — und umgekehrt. Gleicht den
+ * Beobachtungsvorteil später Slots zwischen den beiden Games aus
+ * (z.B. Kisten stapeln ↔ Stack Attack).
+ */
+export type AntiKorrelationConfig = {
+  gameXId: string;
+  gameYId: string;
+};
+
 export type ScheduleConfig = {
   teams: { id: string; name: string; nummer: number }[];
   games: GameInput[];
@@ -45,6 +56,7 @@ export type ScheduleConfig = {
   startZeit: string;
   pausen: PauseInput[];
   mittagspause?: MittagspauseConfig;
+  antiKorrelationen?: AntiKorrelationConfig[];
 };
 
 export type SlotOutput = {
@@ -57,12 +69,22 @@ export type SlotOutput = {
   teamNames: string[];
 };
 
+export type AntiKorrelationStatistik = {
+  gameXId: string;
+  gameXName: string;
+  gameYId: string;
+  gameYName: string;
+  konformeTeams: number;     // beide Games in unterschiedlichen Hälften
+  verletzendeTeams: number;  // beide Games in derselben Hälfte
+};
+
 export type ScheduleStatistiken = {
   freirundenProTeam: Record<string, number>;
   duellGegnerVerteilung: Record<string, Record<string, number>>;
   rundenEffizienz: number;
   teamAuslastung: Record<string, number>;
   theoretischesMinimum: number;
+  antiKorrelation?: AntiKorrelationStatistik[];
 };
 
 export type MittagsSchicht = {
@@ -240,6 +262,49 @@ function computeOptimalDuellCount(
   return bestD;
 }
 
+// ─── Anti-Korrelation ────────────────────────────────────────────────
+
+/**
+ * Gewicht des Anti-Korrelations-Terms im Kandidaten-Scoring.
+ * Einordnung in die bestehende Gewichtungs-Konvention:
+ * Gegner-Wiederholung 1000 > Anti-Korrelation 300 > Dringlichkeit 100 > Byes 1-5.
+ */
+const ANTI_KORRELATION_WEIGHT = 300;
+
+/**
+ * Soft-Score für die Anti-Korrelation (kein harter Filter — Machbarkeit hat
+ * Vorrang, die Fallback-Kaskade bleibt unangetastet):
+ * - Hat Team t das Partner-Game von g bereits in Runde rP gespielt, werden
+ *   Zuteilungen bevorzugt, die den Rundenabstand |rP − r| maximieren.
+ *   Normalisiert über die geschätzte Gesamtrundenzahl (theoretisches Minimum),
+ *   zentriert: kleiner Abstand → negativer Score, grosser Abstand → positiver.
+ * - Ist das Partner-Game noch offen, wird t in der ersten Tageshälfte leicht
+ *   bevorzugt, damit eines der beiden Games früh liegt (nicht beide spät).
+ */
+function antiKorrelationScore(
+  t: number,
+  g: number,
+  r: number,
+  antiPartners: number[][],
+  playedRound: number[][],
+  estRounds: number,
+): number {
+  const partners = antiPartners[g];
+  if (partners.length === 0) return 0;
+  const horizon = Math.max(1, estRounds - 1);
+  let score = 0;
+  for (const p of partners) {
+    const rP = playedRound[t][p];
+    if (rP >= 0) {
+      const spread = Math.min(1, Math.abs(rP - r) / horizon);
+      score += ANTI_KORRELATION_WEIGHT * (spread - 0.5);
+    } else if (r < estRounds / 2) {
+      score += ANTI_KORRELATION_WEIGHT * 0.1;
+    }
+  }
+  return score;
+}
+
 // ─── Kern: Rundenweise Zuweisung ─────────────────────────────────────
 
 type RoundAssignment = { gameIdx: number; teamIdxs: number[] };
@@ -254,6 +319,10 @@ function assignRound(
   M: number,
   opponentCount: number[][],
   teamByeCount: number[],
+  runde: number,
+  antiPartners: number[][],
+  playedRound: number[][],
+  estRounds: number,
 ): RoundAssignment[] {
   const teamUrgency = new Array(N).fill(0);
   for (let t = 0; t < N; t++) {
@@ -314,6 +383,7 @@ function assignRound(
     const result = tryAssignment(
       D, activeDuellIdxs, activeSoloIdxs, duellAvailable,
       needed, games, N, M, opponentCount, teamByeCount, teamUrgency, gameTeamsLeft,
+      runde, antiPartners, playedRound, estRounds,
     );
     if (result !== null) {
       // Byes für freie Teams anhängen
@@ -359,6 +429,10 @@ function tryAssignment(
   teamByeCount: number[],
   teamUrgency: number[],
   gameTeamsLeft: number[],
+  runde: number,
+  antiPartners: number[][],
+  playedRound: number[][],
+  estRounds: number,
 ): RoundAssignment[] | null {
   const usedTeams = new Set<number>();
   const assignments: RoundAssignment[] = [];
@@ -377,9 +451,13 @@ function tryAssignment(
       const available = (duellAvailable.get(g) ?? []).filter(t => !usedTeams.has(t));
       if (available.length < 2) return null;
 
+      const antiScore = (t: number) =>
+        antiKorrelationScore(t, g, runde, antiPartners, playedRound, estRounds);
+
       available.sort((a, b) => {
-        const d = teamUrgency[b] - teamUrgency[a];
-        return d !== 0 ? d : teamByeCount[a] - teamByeCount[b];
+        const sa = teamUrgency[a] * 100 - teamByeCount[a] + antiScore(a);
+        const sb = teamUrgency[b] * 100 - teamByeCount[b] + antiScore(b);
+        return sb - sa;
       });
 
       const t1 = available[0];
@@ -387,7 +465,7 @@ function tryAssignment(
       let bestScore = -Infinity;
       for (let i = 1; i < available.length; i++) {
         const t2 = available[i];
-        const score = -opponentCount[t1][t2] * 1000 + teamUrgency[t2] * 10 - teamByeCount[t2] * 5;
+        const score = -opponentCount[t1][t2] * 1000 + teamUrgency[t2] * 10 - teamByeCount[t2] * 5 + antiScore(t2);
         if (score > bestScore) { bestScore = score; bestT2 = t2; }
       }
 
@@ -410,7 +488,11 @@ function tryAssignment(
       const candidates: { t: number; score: number }[] = [];
       for (let t = 0; t < N; t++) {
         if (needed[t][g] && !usedTeams.has(t)) {
-          candidates.push({ t, score: teamUrgency[t] * 100 - teamByeCount[t] });
+          candidates.push({
+            t,
+            score: teamUrgency[t] * 100 - teamByeCount[t]
+              + antiKorrelationScore(t, g, runde, antiPartners, playedRound, estRounds),
+          });
         }
       }
       candidates.sort((a, b) => b.score - a.score);
@@ -440,7 +522,7 @@ function tryAssignment(
 // ─── Hauptfunktion ───────────────────────────────────────────────────
 
 export function generateSchedule(config: ScheduleConfig): ScheduleResult {
-  const { teams, games, blockDauerMin, wechselzeitMin, startZeit, pausen, mittagspause } = config;
+  const { teams, games, blockDauerMin, wechselzeitMin, startZeit, pausen, mittagspause, antiKorrelationen } = config;
   const N = teams.length;
   const M = games.length;
 
@@ -455,9 +537,38 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
   const soloCount = games.filter(g => g.teamsProSlot === 1).length;
   const duellCount = games.filter(g => g.teamsProSlot >= 2).length;
 
+  // Anti-Korrelations-Paare auf Game-Indizes auflösen (ungerichtet)
+  const gameIdxById = new Map(games.map((g, i) => [g.id, i] as const));
+  const antiPartners: number[][] = Array.from({ length: M }, () => []);
+  const antiPairs: { x: number; y: number }[] = [];
+  const antiKonflikte: string[] = [];
+  for (const paar of antiKorrelationen ?? []) {
+    const x = gameIdxById.get(paar.gameXId);
+    const y = gameIdxById.get(paar.gameYId);
+    if (x === undefined || y === undefined) {
+      antiKonflikte.push(
+        `WARN: Anti-Korrelation ignoriert – unbekannte Game-ID (${paar.gameXId} / ${paar.gameYId})`,
+      );
+      continue;
+    }
+    if (x === y) {
+      antiKonflikte.push(
+        `WARN: Anti-Korrelation ignoriert – "${games[x].name}" ist mit sich selbst verknüpft`,
+      );
+      continue;
+    }
+    antiPairs.push({ x, y });
+    antiPartners[x].push(y);
+    antiPartners[y].push(x);
+  }
+  // Schätzung der Gesamtrundenzahl zur Normalisierung des Anti-Korrelations-Scores
+  const estRounds = theoretischesMinimum(N, soloCount, duellCount);
+
   const needed: boolean[][] = Array.from({ length: N }, () => new Array(M).fill(true));
   const opponentCount: number[][] = Array.from({ length: N }, () => new Array(N).fill(0));
   const teamByeCount = new Array(N).fill(0);
+  // playedRound[t][g] = Rundenindex (0-basiert), in dem Team t Game g gespielt hat; -1 = offen
+  const playedRound: number[][] = Array.from({ length: N }, () => new Array(M).fill(-1));
 
   const allRounds: RoundAssignment[][] = [];
   const MAX_ROUNDS = N + M + 20;
@@ -471,13 +582,17 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
     }
     if (remaining === 0) break;
 
-    const roundResult = assignRound(needed, games, N, M, opponentCount, teamByeCount);
+    const roundResult = assignRound(
+      needed, games, N, M, opponentCount, teamByeCount,
+      r, antiPartners, playedRound, estRounds,
+    );
     if (roundResult.length === 0) break;
 
     // Zuweisungen anwenden
     for (const a of roundResult) {
       for (const t of a.teamIdxs) {
         needed[t][a.gameIdx] = false;
+        playedRound[t][a.gameIdx] = r;
       }
       // Gegner-Tracking
       if (games[a.gameIdx].teamsProSlot >= 2 && a.teamIdxs.length === 2) {
@@ -526,6 +641,23 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
     for (const a of allRounds[r]) {
       if (seen.has(a.gameIdx)) konflikte.push(`HART: "${games[a.gameIdx].name}" in Runde ${r + 1} doppelt`);
       seen.add(a.gameIdx);
+    }
+  }
+
+  // ── Anti-Korrelation validieren (weiche WARN-Konflikte) ──
+  konflikte.push(...antiKonflikte);
+  const istFrueheRunde = (r: number): boolean => r < allRounds.length / 2;
+  for (const { x, y } of antiPairs) {
+    for (let t = 0; t < N; t++) {
+      const rx = playedRound[t][x];
+      const ry = playedRound[t][y];
+      if (rx < 0 || ry < 0) continue; // fehlende Zuteilung ist bereits ein HART-Konflikt
+      const xFrueh = istFrueheRunde(rx);
+      if (xFrueh === istFrueheRunde(ry)) {
+        konflikte.push(
+          `WARN: ${teams[t].name} hat "${games[x].name}" (Runde ${rx + 1}) und "${games[y].name}" (Runde ${ry + 1}) beide ${xFrueh ? "früh" : "spät"}`,
+        );
+      }
     }
   }
 
@@ -639,6 +771,30 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
       ? (teamZeitplaene[teams[t].id]?.length ?? 0) / allRounds.length : 0;
   }
 
+  // Anti-Korrelation: pro Paar Anzahl konformer/verletzender Teams
+  let antiKorrelation: AntiKorrelationStatistik[] | undefined;
+  if (antiPairs.length > 0) {
+    antiKorrelation = antiPairs.map(({ x, y }) => {
+      let konformeTeams = 0;
+      let verletzendeTeams = 0;
+      for (let t = 0; t < N; t++) {
+        const rx = playedRound[t][x];
+        const ry = playedRound[t][y];
+        if (rx < 0 || ry < 0) continue;
+        if (istFrueheRunde(rx) === istFrueheRunde(ry)) verletzendeTeams++;
+        else konformeTeams++;
+      }
+      return {
+        gameXId: games[x].id,
+        gameXName: games[x].name,
+        gameYId: games[y].id,
+        gameYName: games[y].name,
+        konformeTeams,
+        verletzendeTeams,
+      };
+    });
+  }
+
   return {
     slots,
     runden: allRounds.length,
@@ -651,6 +807,7 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
       rundenEffizienz: maxPossible > 0 ? totalAssignments / maxPossible : 0,
       teamAuslastung,
       theoretischesMinimum: theoretischesMinimum(N, soloCount, duellCount),
+      antiKorrelation,
     },
     mittagsSchichten,
   };

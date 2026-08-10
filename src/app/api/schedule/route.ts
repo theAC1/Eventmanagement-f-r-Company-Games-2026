@@ -1,18 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
+import { ZeitplanSaveSchema, zodValidationError } from "@/lib/schemas";
+import { getGamedayModus } from "@/lib/zeitplan-config";
+import { pruefeGamedaySperre } from "@/lib/zeitplan-sperre";
 
-// GET /api/schedule – Alle gespeicherten Zeitpläne
+/** Listenfelder: genug, um Parameter eines Plans ohne Nachladen anzuzeigen. */
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  anzahlTeams: true,
+  blockDauerMin: true,
+  wechselzeitMin: true,
+  startZeit: true,
+  endZeit: true,
+  pausen: true,
+  mittagspause: true,
+  istAktiv: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: { select: { slots: true } },
+} as const;
+
+// GET /api/schedule – Alle gespeicherten Zeitpläne inkl. Parameter
 export async function GET() {
   const { error: authError } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
 
   try {
     const configs = await prisma.zeitplanConfig.findMany({
-      include: {
-        _count: { select: { slots: true } },
-      },
-      orderBy: { createdAt: "desc" },
+      select: LIST_SELECT,
+      orderBy: [{ istAktiv: "desc" }, { createdAt: "desc" }],
     });
     return NextResponse.json(configs);
   } catch (error) {
@@ -27,40 +46,70 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    const body = await request.json();
-    const { name, blockDauerMin, wechselzeitMin, startZeit, endZeit, mittagspause, pausen, slots } = body;
+    const parsed = ZeitplanSaveSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+    }
 
-    // Anzahl Teams aus Slots ableiten
+    const {
+      name,
+      blockDauerMin,
+      wechselzeitMin,
+      startZeit,
+      endZeit,
+      mittagspause,
+      pausen,
+      slots,
+      istAktiv,
+    } = parsed.data;
+
+    // POST legt immer einen NEUEN Plan an (Ersetzen läuft über PUT /:id).
+    // Ein neuer, inaktiver Entwurfsplan berührt keine bestehenden Slot-IDs —
+    // die Gameday-Sperre greift hier nur, wenn der Plan sofort aktiv werden
+    // soll und damit den laufenden Tag umhängen würde.
+    if (istAktiv) {
+      const sperre = pruefeGamedaySperre(await getGamedayModus(), "AKTIVIERUNG");
+      if (!sperre.erlaubt) {
+        return NextResponse.json({ error: sperre.grund }, { status: 409 });
+      }
+    }
+
+    // Anzahl Teams aus den Slots ableiten
     const teamIds = new Set<string>();
     for (const slot of slots) {
       for (const tid of slot.teamIds) teamIds.add(tid);
     }
 
-    const config = await prisma.zeitplanConfig.create({
-      data: {
-        name,
-        anzahlTeams: teamIds.size,
-        blockDauerMin,
-        wechselzeitMin,
-        startZeit,
-        endZeit,
-        pausen: pausen ?? [],
-        mittagspause: mittagspause ?? null,
-        slots: {
-          create: slots.map((slot: { runde: number; startZeit: string; endZeit: string; gameId: string; teamIds: string[] }) => ({
-            runde: slot.runde,
-            startZeit: slot.startZeit,
-            endZeit: slot.endZeit,
-            gameId: slot.gameId,
-            teams: {
-              create: slot.teamIds.map((teamId: string) => ({ teamId })),
-            },
-          })),
+    const config = await prisma.$transaction(async (tx) => {
+      if (istAktiv) {
+        await tx.zeitplanConfig.updateMany({ data: { istAktiv: false } });
+      }
+
+      return tx.zeitplanConfig.create({
+        data: {
+          name,
+          anzahlTeams: teamIds.size,
+          blockDauerMin,
+          wechselzeitMin,
+          startZeit,
+          endZeit,
+          pausen,
+          mittagspause: mittagspause ?? Prisma.DbNull,
+          istAktiv: istAktiv ?? false,
+          slots: {
+            create: slots.map((slot) => ({
+              runde: slot.runde,
+              startZeit: slot.startZeit,
+              endZeit: slot.endZeit,
+              gameId: slot.gameId,
+              teams: {
+                create: slot.teamIds.map((teamId) => ({ teamId })),
+              },
+            })),
+          },
         },
-      },
-      include: {
-        _count: { select: { slots: true } },
-      },
+        select: LIST_SELECT,
+      });
     });
 
     return NextResponse.json(config, { status: 201 });

@@ -6,26 +6,18 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle, CloudArrowUp } from "@phosphor-icons/react";
 import { enqueueErgebnis } from "@/lib/offline-queue";
 import { KORREKTUR_FENSTER_MS } from "@/lib/ergebnis-sperre";
+import {
+  berechneGamePunkteAusRohdaten,
+  berechneKleinbegegnungenStatistik,
+  parseKleinbegegnungen,
+} from "@/lib/game-punkte-berechnung";
+import { ZEIT_DNF_SENTINEL, type Wertungslogik } from "@/lib/wertungslogik-types";
 import { ProgressBar } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { formatPunktzahl, formatSekundenMSS, formatSiege } from "@/components/wertung/format";
+import { formatRohdaten } from "@/components/wertung/rohdaten-format";
 
 // ─── Types ───
-
-type EingabeFeld = { name: string; typ: string; label: string };
-type Level = { name: string; grundpunkte: number };
-type Option = { name: string; punkte_erfolg: number; punkte_fail: number };
-
-type Wertungslogik = {
-  typ?: string;
-  einheit?: string;
-  richtung?: string;
-  messung?: string;
-  eingabefelder?: EingabeFeld[];
-  levels?: Level[];
-  optionen?: Option[];
-  strafen?: Record<string, number>;
-  nicht_geschafft?: string;
-};
 
 type EntryData = {
   ergebnisId: string;
@@ -45,113 +37,17 @@ type BestaetigungPayload = {
 
 // ─── Helpers ───
 
-function berechneGamePunkte(
-  rohdaten: Record<string, unknown>,
-  wl: Wertungslogik,
-): number {
-  switch (wl.typ) {
-    case "max_value": {
-      const feld = wl.messung ?? wl.eingabefelder?.[0]?.name;
-      return feld ? (Number(rohdaten[feld]) || 0) : 0;
-    }
-    case "zeit": {
-      const zeit = Number(rohdaten.zeit_sekunden ?? rohdaten.durchgang_1 ?? 0);
-      let strafzeit = 0;
-      if (wl.strafen) {
-        for (const [key, sek] of Object.entries(wl.strafen)) {
-          strafzeit += (Number(rohdaten[key]) || 0) * sek;
-        }
-      }
-      if (rohdaten.nicht_geschafft === true) return 99999;
-      return zeit + strafzeit;
-    }
-    case "punkte_duell": {
-      const felder = wl.eingabefelder ?? [];
-      return felder.length > 0 ? (Number(rohdaten[felder[0].name]) || 0) : 0;
-    }
-    case "formel": {
-      const felder = wl.eingabefelder ?? [];
-      let summe = 0;
-      for (const f of felder) {
-        const val = Number(rohdaten[f.name] ?? 0);
-        summe += val * val;
-      }
-      return summe;
-    }
-    case "multi_level": {
-      const level = wl.levels?.find((l) => l.name === rohdaten.level);
-      if (!level) return 0;
-      const zeit = Number(rohdaten.zeit_sekunden ?? 0);
-      return Math.max(0, level.grundpunkte - zeit * 0.1);
-    }
-    case "risiko_wahl": {
-      const option = wl.optionen?.find((o) => o.name === rohdaten.option);
-      if (!option) return 0;
-      const erfolg = rohdaten.erfolg === true;
-      return erfolg ? option.punkte_erfolg : option.punkte_fail;
-    }
-    default:
-      return 0;
-  }
-}
-
-function formatRohdaten(
-  rohdaten: Record<string, unknown>,
+/**
+ * Punkte-Vorschau formatieren: Zeit-Games als m:ss (DNF-Sentinel als "DNF"),
+ * alle anderen als Zahl mit Einheit.
+ */
+function punkteAnzeige(
+  punkte: number,
   wl: Wertungslogik | null,
-): { label: string; value: string }[] {
-  if (!wl) return [];
-  const items: { label: string; value: string }[] = [];
-
-  // Eingabefelder
-  for (const f of wl.eingabefelder ?? []) {
-    if (rohdaten[f.name] !== undefined) {
-      items.push({ label: f.label, value: String(rohdaten[f.name]) });
-    }
-  }
-
-  // Time
-  if (wl.typ === "zeit" && rohdaten.zeit_sekunden !== undefined) {
-    const sek = Number(rohdaten.zeit_sekunden);
-    const min = Math.floor(sek / 60);
-    const rest = sek % 60;
-    items.push({
-      label: "Zeit",
-      value: min > 0 ? `${min}:${String(rest).padStart(2, "0")} min` : `${sek}s`,
-    });
-  }
-
-  // Level
-  if (wl.typ === "multi_level" && rohdaten.level) {
-    items.push({ label: "Level", value: String(rohdaten.level) });
-  }
-
-  // Option + Erfolg
-  if (wl.typ === "risiko_wahl") {
-    if (rohdaten.option) items.push({ label: "Wahl", value: String(rohdaten.option) });
-    if (rohdaten.erfolg !== undefined) {
-      items.push({ label: "Erfolg", value: rohdaten.erfolg ? "Ja" : "Nein" });
-    }
-  }
-
-  // Penalties
-  if (wl.strafen) {
-    for (const [key, sek] of Object.entries(wl.strafen)) {
-      const count = Number(rohdaten[key] ?? 0);
-      if (count > 0) {
-        items.push({
-          label: key.replace(/_/g, " "),
-          value: `${count}x (+${count * sek}s)`,
-        });
-      }
-    }
-  }
-
-  // Nicht geschafft
-  if (rohdaten.nicht_geschafft === true) {
-    items.push({ label: "Status", value: "Nicht geschafft" });
-  }
-
-  return items;
+): { text: string; einheit: string | null } {
+  if (punkte === ZEIT_DNF_SENTINEL) return { text: "DNF", einheit: null };
+  if (wl?.typ === "zeit") return { text: formatSekundenMSS(punkte), einheit: "min" };
+  return { text: formatPunktzahl(punkte), einheit: wl?.einheit ?? "P" };
 }
 
 // ─── Component ───
@@ -414,7 +310,16 @@ export default function BestaetigungPage() {
 
       {/* Punkte-Vorschau pro Team */}
       {payload.entries.map((entry) => {
-        const punkte = wl ? berechneGamePunkte(entry.rohdaten, wl) : null;
+        // Cornhole/Viergewinnt: Die Gewichtung ist dem Client unbekannt
+        // (Server filtert sie) — deshalb KEINE Punktzahl, nur die
+        // Rohdaten-Zusammenfassung anzeigen. Der Server rechnet verbindlich.
+        const istKleinbegegnungen = wl?.typ === "duell_kleinbegegnungen";
+        const hatVerdeckteGewichtung =
+          istKleinbegegnungen || wl?.typ === "sieg_zuege";
+        const punkte =
+          wl && !hatVerdeckteGewichtung
+            ? berechneGamePunkteAusRohdaten(entry.rohdaten, wl)
+            : null;
         const details = formatRohdaten(entry.rohdaten, wl);
 
         return (
@@ -424,16 +329,35 @@ export default function BestaetigungPage() {
           >
             <div className="flex items-center justify-between gap-3">
               <p className="font-medium text-ink">{entry.teamName}</p>
-              {punkte !== null && (
-                <span className="tnum text-[22px] font-bold text-ink">
-                  {punkte === 99999 ? "DNF" : punkte.toFixed(1)}
-                  {punkte !== 99999 && (
-                    <span className="ml-1 text-[13px] font-medium text-ink-3">
-                      {wl?.einheit ?? "P"}
+              {istKleinbegegnungen ? (
+                (() => {
+                  const stat = berechneKleinbegegnungenStatistik(
+                    parseKleinbegegnungen(entry.rohdaten),
+                  );
+                  return (
+                    <span className="tnum text-right text-[13px] font-medium leading-[1.4] text-ink-2">
+                      {stat.gespielt}{" "}
+                      {stat.gespielt === 1 ? "Kleinbegegnung" : "Kleinbegegnungen"} ·{" "}
+                      {formatSiege(stat.siege)} {stat.siege === 1 ? "Sieg" : "Siege"} · Ø{" "}
+                      {stat.mittelwert.toFixed(1)} Punkte
                     </span>
-                  )}
-                </span>
-              )}
+                  );
+                })()
+              ) : punkte !== null ? (
+                (() => {
+                  const anzeige = punkteAnzeige(punkte, wl);
+                  return (
+                    <span className="tnum text-[22px] font-bold text-ink">
+                      {anzeige.text}
+                      {anzeige.einheit && (
+                        <span className="ml-1 text-[13px] font-medium text-ink-3">
+                          {anzeige.einheit}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()
+              ) : null}
             </div>
 
             {details.length > 0 && (

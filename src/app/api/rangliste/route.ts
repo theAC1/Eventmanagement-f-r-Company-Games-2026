@@ -20,6 +20,9 @@ export async function GET() {
     const ergebnisWhere: Prisma.ErgebnisWhereInput = {
       gamePunkte: { not: null },
       rangImGame: { not: null },
+      // Eierfall-Opt-out: Ergebnisse von Games mit zaehltZurWertung=false
+      // fliessen nicht in die Gesamtwertung ein
+      game: { zaehltZurWertung: true },
       ...(includeTest ? {} : { istTest: false }),
     };
 
@@ -41,7 +44,8 @@ export async function GET() {
         orderBy: { nummer: "asc" },
       }),
       prisma.game.findMany({
-        where: { status: { in: ["BEREIT", "AKTIV"] } },
+        // gamesTotal zählt nur Games, die zur Gesamtwertung zählen
+        where: { status: { in: ["BEREIT", "AKTIV"] }, zaehltZurWertung: true },
         select: { id: true },
       }),
     ]);

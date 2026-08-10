@@ -5,14 +5,19 @@ import { SavedConfig } from "./types";
 type GespeicherteZeitplaeneProps = {
   configs: SavedConfig[];
   loadedConfigId: string | null;
+  /** Gameday läuft — Aktivieren und Löschen sind gesperrt. */
+  gesperrt: boolean;
   onLoad: (configId: string) => void;
   onDelete: (configId: string) => void;
   onSetActive: (configId: string) => void;
 };
 
+const SPERR_HINWEIS = "Gameday läuft — gesperrt";
+
 export function GespeicherteZeitplaene({
   configs,
   loadedConfigId,
+  gesperrt,
   onLoad,
   onDelete,
   onSetActive,
@@ -38,18 +43,41 @@ export function GespeicherteZeitplaene({
             >
               {c.name}
             </button>
-            <span className="text-[11px] text-ink-3">
-              <span className="tnum">{c.anzahlTeams}</span> Teams &middot;{" "}
-              <span className="tnum">{c._count.slots}</span> Slots
-            </span>
             {c.istAktiv && <StatusPill tone="done">Aktiv</StatusPill>}
+
+            <span className="text-[11px] text-ink-3">
+              <span className="tnum">{c.startZeit}</span>&ndash;
+              <span className="tnum">{c.endZeit}</span> &middot; Takt{" "}
+              <span className="tnum">{c.blockDauerMin + c.wechselzeitMin}</span> min
+              &middot; <span className="tnum">{c.anzahlTeams}</span> Teams &middot;{" "}
+              <span className="tnum">{c._count.slots}</span> Slots
+              {c.mittagspause && (
+                <>
+                  {" "}
+                  &middot; Mittag nach R
+                  <span className="tnum">{c.mittagspause.nachRunde}</span>
+                </>
+              )}
+            </span>
+
             <span className="flex-1" aria-hidden />
+
             {!c.istAktiv && (
-              <Button variant="ghost" onClick={() => onSetActive(c.id)}>
+              <Button
+                variant="ghost"
+                disabled={gesperrt}
+                title={gesperrt ? SPERR_HINWEIS : undefined}
+                onClick={() => onSetActive(c.id)}
+              >
                 Aktivieren
               </Button>
             )}
-            <Button variant="danger-ghost" onClick={() => onDelete(c.id)}>
+            <Button
+              variant="danger-ghost"
+              disabled={gesperrt}
+              title={gesperrt ? SPERR_HINWEIS : undefined}
+              onClick={() => onDelete(c.id)}
+            >
               L&ouml;schen
             </Button>
           </div>

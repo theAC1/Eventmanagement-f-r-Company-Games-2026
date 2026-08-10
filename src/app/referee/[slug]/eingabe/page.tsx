@@ -6,18 +6,10 @@ import Link from "next/link";
 import jsQR from "jsqr";
 import { ArrowLeft, Warning } from "@phosphor-icons/react";
 import { ErgebnisFormular } from "@/components/ergebnis-formular";
+import { KleinbegegnungenEditor } from "@/components/wertung/kleinbegegnungen-editor";
+import { spiegleKleinbegegnungen } from "@/lib/game-punkte-berechnung";
+import type { KleinbegegnungRoh, Wertungslogik } from "@/lib/wertungslogik-types";
 import { parseQrToken, resolveScanResult, applyScannedTeam } from "@/lib/qr-scan";
-
-type Wertungslogik = {
-  typ?: string;
-  einheit?: string;
-  richtung?: string;
-  eingabefelder?: { name: string; typ: string; label: string }[];
-  levels?: { name: string; grundpunkte: number }[];
-  optionen?: { name: string; punkte_erfolg: number; punkte_fail: number }[];
-  strafen?: Record<string, number>;
-  nicht_geschafft?: string;
-};
 
 type Game = {
   id: string;
@@ -65,6 +57,9 @@ export default function EingabePage() {
   const [selectedTeamId2, setSelectedTeamId2] = useState(""); // Für Duell
   const [rohdaten, setRohdaten] = useState<Record<string, unknown>>({});
   const [rohdaten2, setRohdaten2] = useState<Record<string, unknown>>({}); // Für Duell Team B
+  // Für duell_kleinbegegnungen (Cornhole): EINE gemeinsame Liste,
+  // Team B erhält beim Speichern die gespiegelte Sicht.
+  const [kleinbegegnungen, setKleinbegegnungen] = useState<KleinbegegnungRoh[]>([]);
 
   // QR-Scanner-State
   const [scanTarget, setScanTarget] = useState<"A" | "B" | null>(null);
@@ -256,6 +251,11 @@ export default function EingabePage() {
       setError("Beide Teams auswählen");
       return false;
     }
+    const istKleinbegegnungen = game?.wertungslogik?.typ === "duell_kleinbegegnungen";
+    if (istKleinbegegnungen && kleinbegegnungen.length === 0) {
+      setError("Mindestens eine Kleinbegegnung erfassen");
+      return false;
+    }
     setSaving(true);
     setError(null);
     setConflict(null);
@@ -267,9 +267,11 @@ export default function EingabePage() {
         body: JSON.stringify({
           gameId: game!.id,
           teamAId: selectedTeamId,
-          rohdatenA: rohdaten,
+          rohdatenA: istKleinbegegnungen ? { kleinbegegnungen } : rohdaten,
           teamBId: selectedTeamId2,
-          rohdatenB: rohdaten2,
+          rohdatenB: istKleinbegegnungen
+            ? { kleinbegegnungen: spiegleKleinbegegnungen(kleinbegegnungen) }
+            : rohdaten2,
         }),
       });
       if (!res.ok) {
@@ -297,6 +299,7 @@ export default function EingabePage() {
           setSuccess(null);
           setRohdaten({});
           setRohdaten2({});
+          setKleinbegegnungen([]);
           setSelectedTeamId("");
           setSelectedTeamId2("");
         }, 1500);
@@ -451,7 +454,18 @@ export default function EingabePage() {
       </section>
 
       {/* Ergebnis-Formular */}
-      {isDuell ? (
+      {isDuell && wl?.typ === "duell_kleinbegegnungen" ? (
+        /* Cornhole: EIN gemeinsamer Editor statt zwei getrennter Formulare */
+        <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
+          <h3 className="text-sm font-semibold text-ink">Kleinbegegnungen</h3>
+          <KleinbegegnungenEditor
+            kleinbegegnungen={kleinbegegnungen}
+            onChange={setKleinbegegnungen}
+            labelEigene={teams.find((t) => t.id === selectedTeamId)?.name ?? "Team A"}
+            labelGegner={teams.find((t) => t.id === selectedTeamId2)?.name ?? "Team B"}
+          />
+        </section>
+      ) : isDuell ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ErgebnisFormular
             label={teams.find((t) => t.id === selectedTeamId)?.name ?? "Team A"}

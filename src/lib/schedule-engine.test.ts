@@ -5,7 +5,7 @@
  * Ausführen: npx tsx src/lib/schedule-engine.test.ts
  */
 
-import { generateSchedule, type ScheduleConfig, type GameInput, type ScheduleResult } from "./schedule-engine";
+import { generateSchedule, type ScheduleConfig, type GameInput, type ScheduleResult, type AntiKorrelationConfig } from "./schedule-engine";
 
 // ─── Test-Helfer ─────────────────────────────────────────────────────
 
@@ -40,7 +40,11 @@ const SOLO_ONLY_GAMES: GameInput[] = STANDARD_GAMES.filter(g => g.teamsProSlot =
 
 const DUELL_ONLY_GAMES: GameInput[] = STANDARD_GAMES.filter(g => g.teamsProSlot === 2);
 
-function makeConfig(teamCount: number, games: GameInput[]): ScheduleConfig {
+function makeConfig(
+  teamCount: number,
+  games: GameInput[],
+  antiKorrelationen?: AntiKorrelationConfig[],
+): ScheduleConfig {
   return {
     teams: makeTeams(teamCount),
     games,
@@ -48,6 +52,7 @@ function makeConfig(teamCount: number, games: GameInput[]): ScheduleConfig {
     wechselzeitMin: 5,
     startZeit: "09:00",
     pausen: [],
+    antiKorrelationen,
   };
 }
 
@@ -248,10 +253,62 @@ function runAllTests() {
     if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
   }
 
+  // 8. Anti-Korrelation: 18 Teams, Standard-Games, Kisten Stappeln <-> Stack Attack
+  {
+    const config = makeConfig(18, STANDARD_GAMES, [{ gameXId: "g6", gameYId: "g5" }]);
+    const t0 = performance.now();
+    const result = generateSchedule(config);
+    const dt = performance.now() - t0;
+
+    const hardErrors = validateHardConstraints(result, config);
+    const hartKonflikte = result.konflikte.filter(k => k.startsWith("HART:"));
+    const warnKonflikte = result.konflikte.filter(k => k.startsWith("WARN:"));
+
+    // Konformitaet: beide Games in unterschiedlichen Haelften der Gesamtrundenzahl
+    const half = result.runden / 2;
+    let konform = 0;
+    let beideZugeteilt = 0;
+    for (const team of config.teams) {
+      const rundeX = result.slots.find(
+        s => s.gameId === "g6" && s.teamIds.includes(team.id)
+      )?.runde;
+      const rundeY = result.slots.find(
+        s => s.gameId === "g5" && s.teamIds.includes(team.id)
+      )?.runde;
+      if (rundeX === undefined || rundeY === undefined) continue;
+      beideZugeteilt++;
+      const xFrueh = rundeX - 1 < half;
+      const yFrueh = rundeY - 1 < half;
+      if (xFrueh !== yFrueh) konform++;
+    }
+    const quote = beideZugeteilt > 0 ? konform / beideZugeteilt : 0;
+
+    console.log(`\n${"═".repeat(60)}`);
+    console.log(`  Test 8: Anti-Korrelation (18 Teams, Kisten Stappeln <-> Stack Attack)`);
+    console.log(`${"═".repeat(60)}`);
+    console.log(`  Teams: ${config.teams.length} | Games: ${config.games.length} | Runden: ${result.runden}`);
+    console.log(`  Konformitaet: ${konform}/${beideZugeteilt} Teams (${(quote * 100).toFixed(1)}%) spielen beide Games in unterschiedlichen Haelften`);
+    console.log(`  WARN-Konflikte (beide frueh/spaet): ${warnKonflikte.length}`);
+    const antiStats = result.statistiken?.antiKorrelation?.[0];
+    if (antiStats) {
+      console.log(`  Statistik antiKorrelation: konform=${antiStats.konformeTeams}, verletzend=${antiStats.verletzendeTeams} (${antiStats.gameXName} <-> ${antiStats.gameYName})`);
+    }
+    console.log(`  Harte Constraint-Verletzungen: ${hardErrors.length} | HART-Konflikte (Engine): ${hartKonflikte.length}`);
+    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
+
+    const passed = hardErrors.length === 0 && hartKonflikte.length === 0 && quote >= 0.7;
+    if (passed) {
+      console.log(`\n  ✅ BESTANDEN (keine harten Konflikte, Konformitaet >= 70%)`);
+    } else {
+      console.log(`\n  ❌ FEHLGESCHLAGEN (hart=${hardErrors.length + hartKonflikte.length}, Konformitaet=${(quote * 100).toFixed(1)}%)`);
+      allPassed = false;
+    }
+  }
+
   // Zusammenfassung
   console.log(`\n${"═".repeat(60)}`);
   if (allPassed) {
-    console.log("  🎉 ALLE 7 TESTS BESTANDEN – 0 Constraint-Verletzungen");
+    console.log("  🎉 ALLE 8 TESTS BESTANDEN – 0 Constraint-Verletzungen");
   } else {
     console.log("  ⚠️  MINDESTENS EIN TEST HAT CONSTRAINT-VERLETZUNGEN");
   }

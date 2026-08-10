@@ -4,9 +4,13 @@ import { requireRole } from "@/lib/auth-helpers";
 import { hasMinRole } from "@/lib/roles";
 import { ErgebnisCreateSchema, zodValidationError } from "@/lib/schemas";
 import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
+import { validiereRohdaten } from "@/lib/rohdaten-validierung";
 import { istGesperrt } from "@/lib/ergebnis-sperre";
 import { Prisma } from "@prisma/client";
-import type { Wertungslogik } from "@/lib/wertungslogik-types";
+import {
+  sanitizeWertungslogikFuerSchiedsrichter,
+  type Wertungslogik,
+} from "@/lib/wertungslogik-types";
 
 // Sperrfrist abgelaufen: Schiedsrichter darf nicht mehr selbst korrigieren
 class LockedError extends Error {
@@ -18,16 +22,31 @@ class LockedError extends Error {
   }
 }
 
+// Vertrauliche Gewichtungs-Keys (gewichtungG/gewichtungSieg) aus dem
+// eingebetteten Game strippen — Schiedsrichter sehen die Gewichtung nicht
+function sanitizeErgebnisRows<T extends { game: { wertungslogik: unknown } }>(
+  rows: T[],
+): T[] {
+  return rows.map((e) => ({
+    ...e,
+    game: {
+      ...e.game,
+      wertungslogik: sanitizeWertungslogikFuerSchiedsrichter(
+        e.game.wertungslogik as Wertungslogik | null,
+      ),
+    },
+  }));
+}
+
 // GET /api/ergebnisse
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const teamIdParam = searchParams.get("teamId");
+  // Immer authentifiziert: das Team-Portal nutzt /api/team/[token], nicht diese
+  // Liste — ein öffentlicher ?teamId-Zweig würde die Wertungslogik leaken.
+  const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
 
-  // Require auth for general listing; per-team results remain public (used by team portal)
-  if (!teamIdParam) {
-    const { error: authError } = await requireRole("SCHIEDSRICHTER");
-    if (authError) return authError;
-  }
+  const istOrga = hasMinRole(session?.user?.rolle ?? "", "ORGA");
+  const { searchParams } = new URL(request.url);
 
   try {
     const activity = searchParams.get("activity") === "true";
@@ -65,7 +84,12 @@ export async function GET(request: NextRequest) {
         prisma.ergebnis.count({ where: where as Prisma.ErgebnisWhereInput }),
       ]);
 
-      return NextResponse.json({ data, total, page, limit });
+      return NextResponse.json({
+        data: istOrga ? data : sanitizeErgebnisRows(data),
+        total,
+        page,
+        limit,
+      });
     }
 
     const ergebnisse = await prisma.ergebnis.findMany({
@@ -77,7 +101,7 @@ export async function GET(request: NextRequest) {
       orderBy: [{ game: { name: "asc" } }, { rangImGame: "asc" }],
     });
 
-    return NextResponse.json(ergebnisse);
+    return NextResponse.json(istOrga ? ergebnisse : sanitizeErgebnisRows(ergebnisse));
   } catch (error) {
     console.error("GET /api/ergebnisse error:", error);
     return NextResponse.json({ error: "Fehler beim Laden" }, { status: 500 });
@@ -123,6 +147,14 @@ export async function POST(request: NextRequest) {
     }
 
     const wertungslogik = game.wertungslogik as Wertungslogik | null;
+
+    // Strukturierte Wertungstypen: Rohdaten-Form an der Grenze prüfen,
+    // statt fehlerhafte Eingaben still als 0 Punkte zu werten
+    const validierung = validiereRohdaten(wertungslogik, rohdaten as Record<string, unknown>);
+    if (!validierung.ok) {
+      return NextResponse.json({ error: validierung.fehler }, { status: 400 });
+    }
+
     const gamePunkte = berechneGamePunkteAusRohdaten(
       rohdaten as Record<string, unknown>,
       wertungslogik,
@@ -148,8 +180,12 @@ export async function POST(request: NextRequest) {
         where: { gameId_teamId: { gameId, teamId } },
       });
 
+      // LAUFEND-Platzhalter aus /api/partie/start sind kein echtes Ergebnis:
+      // die Sperrfrist läuft erst ab dem ersten echten Eintrag, nicht ab Partie-Start
+      const istPlatzhalter = existing?.status === "LAUFEND";
+
       // Sperrfrist: Schiedsrichter dürfen nur innerhalb des Korrekturfensters ändern
-      if (existing && !istOrga && istGesperrt(existing.eingetragenUm)) {
+      if (existing && !istPlatzhalter && !istOrga && istGesperrt(existing.eingetragenUm)) {
         throw new LockedError(existing.eingetragenUm);
       }
 
@@ -170,10 +206,13 @@ export async function POST(request: NextRequest) {
         update: {
           rohdaten,
           gamePunkte,
-          status: "KORRIGIERT",
+          // Erster echter Eintrag ersetzt den Platzhalter (EINGETRAGEN);
+          // erst danach ist eine Änderung eine Korrektur
+          status: istPlatzhalter ? "EINGETRAGEN" : "KORRIGIERT",
           eingetragenVonId: userId,
-          // Sperrfrist-Timer läuft ab dem ursprünglichen Eintrag weiter
-          eingetragenUm: existing?.eingetragenUm ?? now,
+          // Korrekturfenster beginnt mit dem ersten echten Eintrag —
+          // bei echten Korrekturen läuft der Sperrfrist-Timer ab dem ursprünglichen Eintrag weiter
+          eingetragenUm: istPlatzhalter ? now : (existing?.eingetragenUm ?? now),
           istTest,
           commitId: commitId || null,
         },

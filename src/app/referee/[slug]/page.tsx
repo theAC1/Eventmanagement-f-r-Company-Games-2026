@@ -6,26 +6,20 @@ import Link from "next/link";
 import { ArrowLeft } from "@phosphor-icons/react";
 import { ModusChip } from "@/components/ui/pills";
 import { ButtonLink } from "@/components/ui/button";
+import { berechneTuermeMaximum } from "@/lib/game-punkte-berechnung";
+import type { Wertungslogik } from "@/lib/wertungslogik-types";
+import { formatSekundenMSS } from "@/components/wertung/format";
 
-type WertungslogikField = {
-  name: string;
-  typ: string;
-  label: string;
-};
-
-type Wertungslogik = {
-  typ?: string;
-  einheit?: string;
-  richtung?: string;
-  messung?: string;
+/**
+ * Anzeige-Erweiterung des gemeinsamen Typs um Legacy-Felder,
+ * die nur auf dieser Briefing-Seite gerendert werden.
+ * Vertrauliche Felder (gewichtungG/gewichtungSieg) filtert der Server;
+ * sie werden hier bewusst NIE gerendert.
+ */
+type WertungslogikAnzeige = Wertungslogik & {
   tiebreaker?: string;
-  eingabefelder?: WertungslogikField[];
   formel?: string;
-  strafen?: Record<string, number>;
-  nicht_geschafft?: string;
-  levels?: { name: string; grundpunkte: number }[];
   zeit_bonus?: string;
-  optionen?: { name: string; punkte_erfolg: number; punkte_fail: number }[];
   show_modus?: boolean;
 };
 
@@ -57,7 +51,7 @@ type Game = {
   reserveMin: number;
   regeln: string | null;
   wertungstyp: string | null;
-  wertungslogik: Wertungslogik | null;
+  wertungslogik: WertungslogikAnzeige | null;
   flaecheLaengeM: number | null;
   flaecheBreiteM: number | null;
   helferAnzahl: number;
@@ -238,10 +232,80 @@ export default function RefereeGamePage() {
                     key={i}
                     className="flex items-center justify-between rounded-[9px] border border-line-soft px-3.5 py-2.5"
                   >
-                    <span className="text-sm font-medium text-ink">{f.label}</span>
-                    <span className="tnum text-[11px] text-ink-3">{f.typ}</span>
+                    <span className="text-sm font-medium text-ink">{f.label ?? f.name}</span>
+                    <span className="tnum text-[11px] text-ink-3">{f.typ ?? "number"}</span>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Sieg + Züge (XXL Viergewinnt) */}
+            {wl.typ === "sieg_zuege" && (
+              <p className="text-sm leading-[1.45] text-ink-2">
+                Pro Team werden die gewonnenen Partien und die Zügezahl der Siegpartien
+                eingetragen — auch für das unterlegene Team (0 Siege). Der Sieg zählt
+                primär, weniger Züge sind besser.
+              </p>
+            )}
+
+            {/* Kleinbegegnungen (Cornhole) */}
+            {wl.typ === "duell_kleinbegegnungen" && (
+              <div className="flex flex-col gap-1.5">
+                <p className="cg-label text-label">Erfassung</p>
+                <p className="text-sm leading-[1.45] text-ink-2">
+                  Pro Kleinbegegnung werden beide Rohpunktzahlen eingetragen
+                  (z. B. 16 : 13) — kein Cancellation Scoring. Der Sieg zählt primär,
+                  der Punkteschnitt wirkt als Feinwertung. Unentschieden zählt als
+                  halber Sieg für beide.
+                </p>
+              </div>
+            )}
+
+            {/* Runden + Strafpunkte (ChaosQuadrant) */}
+            {wl.typ === "runden_strafpunkte" && (
+              <div className="flex flex-col gap-1.5">
+                <p className="cg-label text-label">Erfassung</p>
+                <p className="text-sm leading-[1.45] text-ink-2">
+                  Fix {wl.runden ?? 3} Runden. Pro Runde und Team werden die Bälle im
+                  eigenen Quadranten und die laufend gezählten Strafpunkte erfasst.
+                  Alle Punkte werden addiert — das Team mit den wenigsten Punkten gewinnt.
+                </p>
+              </div>
+            )}
+
+            {/* Türme (Robert Huber Radio) */}
+            {wl.typ === "tuerme_punkte" && wl.tuerme && (
+              <div className="flex flex-col gap-1.5">
+                <p className="cg-label text-label">Türme</p>
+                {wl.tuerme.map((t) => (
+                  <div
+                    key={t.name}
+                    className="flex items-center justify-between gap-3 rounded-[9px] border border-line-soft px-3.5 py-2.5"
+                  >
+                    <span className="text-sm font-medium text-ink">{t.name}</span>
+                    <span className="tnum text-right text-sm text-ink-2">
+                      {t.sektionen} Sektionen
+                      {t.bonus > 0 ? ` · ${t.bonus} ${t.bonusLabel ?? "Bonusklötze"}` : ""}
+                      {" · max "}
+                      {t.sektionen + t.bonus + 1} P
+                    </span>
+                  </div>
+                ))}
+                <p className="mt-1 text-[12px] text-ink-3">
+                  Der 100-%-Bonus pro Turm wird automatisch vergeben, wenn alle Sektionen
+                  und Bonusklötze korrekt sind. Maximum gesamt:{" "}
+                  {berechneTuermeMaximum(wl.tuerme)} Punkte.
+                </p>
+              </div>
+            )}
+
+            {/* Zeitlimit (zeit mit Maximalzeit) */}
+            {wl.typ === "zeit" && wl.maxSekunden !== undefined && (
+              <div className="flex items-center justify-between rounded-[9px] border border-line-soft px-3.5 py-2.5">
+                <span className="text-sm font-medium text-ink">Maximalzeit</span>
+                <span className="tnum text-sm text-ink-2">
+                  {formatSekundenMSS(wl.maxSekunden)} · wird bei Nichtabschluss eingetragen
+                </span>
               </div>
             )}
 

@@ -3,12 +3,18 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { GameUpdateSchema, zodValidationError } from "@/lib/schemas";
+import { berechneGamePunkteNeu } from "@/lib/game-punkte";
+import { hasMinRole } from "@/lib/roles";
+import {
+  sanitizeWertungslogikFuerSchiedsrichter,
+  type Wertungslogik,
+} from "@/lib/wertungslogik-types";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // GET /api/games/:id – Einzelnes Game mit Varianten
 export async function GET(_request: NextRequest, { params }: RouteParams) {
-  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
 
   const { id } = await params;
@@ -25,6 +31,17 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     if (!game) {
       return NextResponse.json({ error: "Game nicht gefunden" }, { status: 404 });
+    }
+
+    // Protokoll: Schiedsrichter sehen die Gewichtung (G etc.) nicht —
+    // vertrauliche Wertungs-Keys nur an ORGA+ ausliefern
+    if (!hasMinRole(session?.user.rolle ?? "", "ORGA")) {
+      return NextResponse.json({
+        ...game,
+        wertungslogik: sanitizeWertungslogikFuerSchiedsrichter(
+          game.wertungslogik as Wertungslogik | null,
+        ),
+      });
     }
 
     return NextResponse.json(game);
@@ -58,7 +75,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       data: {
         ...restData,
         ...(wertungslogik !== undefined
-          ? { wertungslogik: wertungslogik === null ? Prisma.JsonNull : wertungslogik }
+          ? {
+              wertungslogik:
+                wertungslogik === null
+                  ? Prisma.JsonNull
+                  : (wertungslogik as Prisma.InputJsonValue),
+            }
           : {}),
         updatedById: userId,
       },
@@ -66,6 +88,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         varianten: { orderBy: { name: "asc" } },
       },
     });
+
+    // Geänderte Wertungslogik (z. B. Gewichtungsfaktor G im Leitstand justiert):
+    // bestehende Ergebnisse aus den Rohdaten neu bewerten und Ränge aktualisieren
+    if (wertungslogik !== undefined) {
+      await prisma.$transaction((tx) =>
+        berechneGamePunkteNeu(id, (wertungslogik ?? null) as Wertungslogik | null, tx)
+      );
+    }
 
     return NextResponse.json(game);
   } catch (error) {

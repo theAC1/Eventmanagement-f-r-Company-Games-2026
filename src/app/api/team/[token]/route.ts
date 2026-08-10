@@ -92,11 +92,16 @@ export async function GET(
         gamePunkte: true,
         rangPunkte: true,
         status: true,
-        game: { select: { name: true, slug: true } },
+        game: { select: { name: true, slug: true, zaehltZurWertung: true } },
       },
       orderBy: { game: { name: "asc" } },
     });
-    const rangPunkteSumme = ergebnisse.reduce((sum, e) => sum + (e.rangPunkte ?? 0), 0);
+    // Eierfall-Opt-out: Bonus-Games (zaehltZurWertung=false) werden angezeigt,
+    // fliessen aber nicht in die Rangpunkte-Summe ein
+    const rangPunkteSumme = ergebnisse.reduce(
+      (sum, e) => (e.game.zaehltZurWertung ? sum + (e.rangPunkte ?? 0) : sum),
+      0,
+    );
 
     return NextResponse.json({
       teamId: team.id,
@@ -112,6 +117,7 @@ export async function GET(
         gamePunkte: e.gamePunkte,
         rangPunkte: e.rangPunkte,
         status: e.status,
+        zaehltZurWertung: e.game.zaehltZurWertung,
       })),
       rangPunkteSumme,
       lageplanUrl: aktivPlan?.hintergrundbildUrl ?? null,

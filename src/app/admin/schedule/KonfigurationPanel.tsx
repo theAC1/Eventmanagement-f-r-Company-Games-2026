@@ -13,19 +13,29 @@ type MittagConfig = {
   mittagVersatz: number;
 };
 
+type AntiKorrConfig = {
+  antiKorrAktiv: boolean;
+  antiKorrGameX: string;
+  antiKorrGameY: string;
+};
+
 type KonfigurationPanelProps = {
   teams: Team[];
   games: Game[];
   loading: boolean;
+  /** Gameday läuft — Parameter sind schreibgeschützt. */
+  gesperrt: boolean;
   blockDauer: number;
   wechselzeit: number;
   startZeit: string;
   mittag: MittagConfig;
+  antiKorr: AntiKorrConfig;
   quickTeamCount: number;
   onBlockDauerChange: (val: number) => void;
   onWechselzeitChange: (val: number) => void;
   onStartZeitChange: (val: string) => void;
   onMittagChange: (update: Partial<MittagConfig>) => void;
+  onAntiKorrChange: (update: Partial<AntiKorrConfig>) => void;
   onQuickTeamCountChange: (val: number) => void;
   onGenerateQuickTeams: () => void;
 };
@@ -34,15 +44,18 @@ export function KonfigurationPanel({
   teams,
   games,
   loading,
+  gesperrt,
   blockDauer,
   wechselzeit,
   startZeit,
   mittag,
+  antiKorr,
   quickTeamCount,
   onBlockDauerChange,
   onWechselzeitChange,
   onStartZeitChange,
   onMittagChange,
+  onAntiKorrChange,
   onQuickTeamCountChange,
   onGenerateQuickTeams,
 }: KonfigurationPanelProps) {
@@ -51,94 +64,111 @@ export function KonfigurationPanel({
   );
 
   return (
-    <section className="space-y-5 rounded-[10px] border border-line bg-surface p-5">
-      <h2 className="cg-label">Konfiguration</h2>
+    <section className="rounded-[10px] border border-line bg-surface p-5">
+      {/* fieldset: sperrt im Gameday alle Eingaben in einem Zug */}
+      <fieldset disabled={gesperrt} className="min-w-0 space-y-5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h2 className="cg-label">Konfiguration</h2>
+          {gesperrt && (
+            <span className="text-[11px] text-warn">
+              Gameday l&auml;uft &mdash; schreibgesch&uuml;tzt
+            </span>
+          )}
+        </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="space-y-1.5">
-          <label className="cg-label">Blockdauer (min)</label>
-          <input
-            type="number"
-            value={blockDauer}
-            onChange={(e) => onBlockDauerChange(parseInt(e.target.value) || 15)}
-            className={`${INPUT_CLASS} tnum`}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="cg-label">Wechselzeit (min)</label>
-          <input
-            type="number"
-            value={wechselzeit}
-            onChange={(e) => onWechselzeitChange(parseInt(e.target.value) || 5)}
-            className={`${INPUT_CLASS} tnum`}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="cg-label">Startzeit</label>
-          <input
-            type="time"
-            value={startZeit}
-            onChange={(e) => onStartZeitChange(e.target.value)}
-            className={`${INPUT_CLASS} tnum`}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="cg-label">Takt</label>
-          <div className="tnum flex h-[38px] items-center rounded-[9px] border border-line bg-sunken px-3 text-sm text-ink-3">
-            {blockDauer + wechselzeit} min
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="space-y-1.5">
+            <label className="cg-label">Blockdauer (min)</label>
+            <input
+              type="number"
+              value={blockDauer}
+              onChange={(e) => onBlockDauerChange(parseInt(e.target.value) || 15)}
+              className={`${INPUT_CLASS} tnum`}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="cg-label">Wechselzeit (min)</label>
+            <input
+              type="number"
+              value={wechselzeit}
+              onChange={(e) => onWechselzeitChange(parseInt(e.target.value) || 5)}
+              className={`${INPUT_CLASS} tnum`}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="cg-label">Startzeit</label>
+            <input
+              type="time"
+              value={startZeit}
+              onChange={(e) => onStartZeitChange(e.target.value)}
+              className={`${INPUT_CLASS} tnum`}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="cg-label">Takt</label>
+            <div className="tnum flex h-[38px] items-center rounded-[9px] border border-line bg-sunken px-3 text-sm text-ink-3">
+              {blockDauer + wechselzeit} min
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Mittagspause */}
-      <MittagspauseSection
-        mittag={mittag}
-        teamsCount={teams.length}
-        onMittagChange={onMittagChange}
-      />
+        {/* Mittagspause */}
+        <MittagspauseSection
+          mittag={mittag}
+          teamsCount={teams.length}
+          onMittagChange={onMittagChange}
+        />
 
-      {/* Status */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[13px] text-ink-3">
-        <span>
-          Teams:{" "}
-          <strong className="tnum font-semibold text-ink">{teams.length}</strong>
-        </span>
-        <span>
-          Games (bereit):{" "}
-          <strong className="tnum font-semibold text-ink">
-            {readyGames.length}
-          </strong>
-          <span className="tnum text-faint">/{games.length} total</span>
-        </span>
-      </div>
+        {/* Anti-Korrelation */}
+        <AntiKorrelationSection
+          antiKorr={antiKorr}
+          games={games}
+          onAntiKorrChange={onAntiKorrChange}
+        />
 
-      {/* Quick team generator */}
-      {teams.length === 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-line bg-sunken p-3">
-          <span className="text-[13px] text-ink-3">Keine Teams vorhanden.</span>
-          <input
-            type="number"
-            min={2}
-            max={30}
-            value={quickTeamCount}
-            onChange={(e) => onQuickTeamCountChange(parseInt(e.target.value) || 16)}
-            className="tnum h-[34px] w-16 rounded-[9px] border border-line-strong bg-surface px-2 text-center text-sm text-ink outline-none transition-colors duration-150 focus:border-action"
-          />
-          <Button variant="ghost" onClick={onGenerateQuickTeams} disabled={loading}>
-            Teams generieren
-          </Button>
-        </div>
-      )}
-
-      {readyGames.length === 0 && games.length > 0 && (
-        <div className="flex items-start gap-2.5 rounded-[10px] border border-[var(--warn-border)] bg-warn-dim px-3.5 py-2.5 text-[13px] text-ink-2">
-          <Warning size={15} weight="bold" className="mt-0.5 shrink-0 text-warn" />
+        {/* Status */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[13px] text-ink-3">
           <span>
-            Keine Games auf &quot;Bereit&quot; gesetzt. Geh zur Game-Verwaltung
-            und setze den Status mindestens eines Games auf &quot;Bereit&quot;.
+            Teams:{" "}
+            <strong className="tnum font-semibold text-ink">{teams.length}</strong>
+          </span>
+          <span>
+            Games (bereit):{" "}
+            <strong className="tnum font-semibold text-ink">
+              {readyGames.length}
+            </strong>
+            <span className="tnum text-faint">/{games.length} total</span>
           </span>
         </div>
-      )}
+
+        {/* Quick team generator */}
+        {teams.length === 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-line bg-sunken p-3">
+            <span className="text-[13px] text-ink-3">Keine Teams vorhanden.</span>
+            <input
+              type="number"
+              min={2}
+              max={30}
+              value={quickTeamCount}
+              onChange={(e) => onQuickTeamCountChange(parseInt(e.target.value) || 16)}
+              className="tnum h-[34px] w-16 rounded-[9px] border border-line-strong bg-surface px-2 text-center text-sm text-ink outline-none transition-colors duration-150 focus:border-action"
+            />
+            <Button variant="ghost" onClick={onGenerateQuickTeams} disabled={loading}>
+              Teams generieren
+            </Button>
+          </div>
+        )}
+
+        {readyGames.length === 0 && games.length > 0 && (
+          <div className="flex items-start gap-2.5 rounded-[10px] border border-[var(--warn-border)] bg-warn-dim px-3.5 py-2.5 text-[13px] text-ink-2">
+            <Warning size={15} weight="bold" className="mt-0.5 shrink-0 text-warn" />
+            <span>
+              Keine Games auf &quot;Bereit&quot; gesetzt. Geh zur Game-Verwaltung
+              und setze den Status mindestens eines Games auf &quot;Bereit&quot;.
+            </span>
+          </div>
+        )}
+      </fieldset>
     </section>
   );
 }
@@ -254,6 +284,107 @@ function MittagspauseSection({
           Schichten mit je <span className="tnum">{mittagVersatz}</span> min
           Versatz
         </p>
+      )}
+    </div>
+  );
+}
+
+function AntiKorrelationSection({
+  antiKorr,
+  games,
+  onAntiKorrChange,
+}: {
+  antiKorr: AntiKorrConfig;
+  games: Game[];
+  onAntiKorrChange: (update: Partial<AntiKorrConfig>) => void;
+}) {
+  const { antiKorrAktiv, antiKorrGameX, antiKorrGameY } = antiKorr;
+  const gleichesGame =
+    antiKorrGameX !== "" && antiKorrGameX === antiKorrGameY;
+  const istBereit = (g: Game) => g.status === "BEREIT" || g.status === "AKTIV";
+
+  // Die Generate-Route akzeptiert nur Paare aus BEREIT/AKTIV-Games — ein
+  // nicht-bereites Paar wird beim Generieren/Speichern ignoriert (page.tsx).
+  const gewaehlteGames = [antiKorrGameX, antiKorrGameY]
+    .filter((id) => id !== "")
+    .map((id) => games.find((g) => g.id === id))
+    .filter((g): g is Game => g !== undefined);
+  const nichtBereiteNamen = gewaehlteGames
+    .filter((g) => !istBereit(g))
+    .map((g) => g.name);
+  const paarNichtBereit = !gleichesGame && nichtBereiteNamen.length > 0;
+
+  const gameSelect = (
+    label: string,
+    value: string,
+    field: "antiKorrGameX" | "antiKorrGameY",
+  ) => (
+    <div className="space-y-1.5">
+      <label className="cg-label">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onAntiKorrChange({ [field]: e.target.value })}
+        className={INPUT_CLASS}
+      >
+        <option value="">Game w&auml;hlen...</option>
+        {games.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.name}
+            {istBereit(g) ? "" : " (nicht bereit)"}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 rounded-[10px] border border-line p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[13px] font-semibold text-ink">Anti-Korrelation</h3>
+        <div className="flex items-center gap-2.5">
+          <span className="text-[11px] text-ink-3">
+            {antiKorrAktiv ? "Aktiv" : "Aus"}
+          </span>
+          <Switch
+            checked={antiKorrAktiv}
+            onToggle={() => onAntiKorrChange({ antiKorrAktiv: !antiKorrAktiv })}
+            label="Anti-Korrelation"
+          />
+        </div>
+      </div>
+      {antiKorrAktiv && (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {gameSelect("Game A", antiKorrGameX, "antiKorrGameX")}
+            {gameSelect("Game B", antiKorrGameY, "antiKorrGameY")}
+          </div>
+          <p className="text-[11px] text-ink-3">
+            Ein Team, das Game A fr&uuml;h spielt, spielt Game B sp&auml;t – und
+            umgekehrt. Gleicht den Beobachtungsvorteil sp&auml;ter Slots
+            zwischen den beiden Games aus.
+          </p>
+          {gleichesGame && (
+            <div className="flex items-start gap-2.5 rounded-[10px] border border-[var(--warn-border)] bg-warn-dim px-3.5 py-2.5 text-[13px] text-ink-2">
+              <Warning size={15} weight="bold" className="mt-0.5 shrink-0 text-warn" />
+              <span>
+                Game A und Game B sind identisch. W&auml;hle zwei
+                unterschiedliche Games, sonst wird die Anti-Korrelation bei der
+                Generierung ignoriert.
+              </span>
+            </div>
+          )}
+          {paarNichtBereit && (
+            <div className="flex items-start gap-2.5 rounded-[10px] border border-[var(--warn-border)] bg-warn-dim px-3.5 py-2.5 text-[13px] text-ink-2">
+              <Warning size={15} weight="bold" className="mt-0.5 shrink-0 text-warn" />
+              <span>
+                {nichtBereiteNamen.join(" und ")}{" "}
+                {nichtBereiteNamen.length === 1 ? "ist" : "sind"} nicht auf
+                &quot;Bereit&quot; oder &quot;Aktiv&quot;. Das Paar wird bei der
+                Generierung ignoriert, bis beide Games bereit sind.
+              </span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

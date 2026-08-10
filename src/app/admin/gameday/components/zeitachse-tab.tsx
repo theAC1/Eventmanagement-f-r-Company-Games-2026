@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 
 type GameErgebnis = {
   id: string;
@@ -34,8 +34,11 @@ type EinsatzplanSlot = {
 type EinsatzplanConfig = {
   id: string;
   name: string;
+  istAktiv: boolean;
   startZeit: string;
   endZeit: string;
+  blockDauerMin: number;
+  wechselzeitMin: number;
 };
 
 type ZeitachseTabProps = {
@@ -184,6 +187,16 @@ export function ZeitachseTab({ games, ergebnisse, onInspectGame }: ZeitachseTabP
               : "Zeitachse"}
           </span>
           <span className="text-xs text-ink-3">
+            {config && (
+              <>
+                <span className="font-medium text-ink-2">{config.name}</span>
+                {!config.istAktiv && (
+                  <span className="text-warn"> (nicht aktiv gesetzt)</span>
+                )}{" "}
+                &middot; <span className="tnum">{config.startZeit}</span>&ndash;
+                <span className="tnum">{config.endZeit}</span> &middot;{" "}
+              </>
+            )}
             <span className="tnum">{erfasst.length}</span> Ergebnisse erfasst ·{" "}
             <span className="tnum">{laufendePartien.length}</span> laufen gerade
           </span>
@@ -205,9 +218,16 @@ export function ZeitachseTab({ games, ergebnisse, onInspectGame }: ZeitachseTabP
           {planError}
         </p>
       ) : !hasRaster ? (
-        <p className="border-b border-line px-4 py-6 text-sm text-ink-3 sm:px-[22px]">
-          Kein Zeitplan hinterlegt — das Slot-Raster ist nicht verfügbar.
-        </p>
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-6 sm:px-[22px]">
+          <p className="text-sm text-ink-3">
+            {config
+              ? `„${config.name}" enthält keine Slots für die bereiten Games — das Raster ist leer.`
+              : "Kein Zeitplan gespeichert — das Slot-Raster ist nicht verfügbar."}
+          </p>
+          <ButtonLink variant="ghost" href="/admin/schedule">
+            Zum Zeitplan
+          </ButtonLink>
+        </div>
       ) : (
         <div className="overflow-x-auto border-b border-line px-4 pb-3.5 pt-2.5 sm:px-[22px]">
           <div className="min-w-[640px]">

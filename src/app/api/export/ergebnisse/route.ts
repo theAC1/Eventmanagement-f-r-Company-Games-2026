@@ -17,13 +17,15 @@ export async function GET(request: NextRequest) {
     const ergebnisse = await prisma.ergebnis.findMany({
       where,
       include: {
-        game: { select: { name: true } },
+        game: { select: { name: true, zaehltZurWertung: true } },
         team: { select: { name: true, nummer: true } },
       },
       orderBy: [{ game: { name: "asc" } }, { rangImGame: "asc" }],
       take: 10000,
     });
 
+    // Vollexport für die Orga: bewusst KEIN Filter auf istTest/zaehltZurWertung —
+    // beide Flags werden stattdessen als Spalten ausgewiesen
     const csv = generateErgebnisseCSV(
       ergebnisse.map((e) => ({
         gameName: e.game.name,
@@ -33,6 +35,8 @@ export async function GET(request: NextRequest) {
         rangImGame: e.rangImGame,
         status: e.status,
         eingetragenUm: e.eingetragenUm?.toISOString() ?? null,
+        istTest: e.istTest,
+        zaehltZurWertung: e.game.zaehltZurWertung,
       })),
     );
 

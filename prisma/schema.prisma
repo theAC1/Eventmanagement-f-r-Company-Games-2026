@@ -32,6 +32,10 @@ model Game {
   schiedsrichterAnzahl Int     @default(1)
   stromNoetig    Boolean @default(false)
 
+  // Game findet statt, fliesst aber nicht in die Gesamtwertung ein
+  // (Protokoll-Anforderung: Eierfall muss abschaltbar sein)
+  zaehltZurWertung Boolean @default(true)
+
   createdById String?
   createdBy   Person? @relation("gameCreatedBy", fields: [createdById], references: [id])
   updatedById String?

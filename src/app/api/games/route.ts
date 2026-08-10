@@ -3,10 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { GameCreateSchema, zodValidationError } from "@/lib/schemas";
+import { hasMinRole } from "@/lib/roles";
+import {
+  sanitizeWertungslogikFuerSchiedsrichter,
+  type Wertungslogik,
+} from "@/lib/wertungslogik-types";
 
 // GET /api/games
 export async function GET() {
-  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
 
   try {
@@ -16,6 +21,20 @@ export async function GET() {
       },
       orderBy: { name: "asc" },
     });
+
+    // Protokoll: Schiedsrichter sehen die Gewichtung (G etc.) nicht —
+    // vertrauliche Wertungs-Keys nur an ORGA+ ausliefern
+    if (!hasMinRole(session?.user.rolle ?? "", "ORGA")) {
+      return NextResponse.json(
+        games.map((game) => ({
+          ...game,
+          wertungslogik: sanitizeWertungslogikFuerSchiedsrichter(
+            game.wertungslogik as Wertungslogik | null,
+          ),
+        })),
+      );
+    }
+
     return NextResponse.json(games);
   } catch (error) {
     console.error("GET /api/games error:", error);
@@ -71,7 +90,10 @@ export async function POST(request: NextRequest) {
         reserveMin: data.reserveMin ?? 2,
         regeln: data.regeln ?? null,
         wertungstyp: data.wertungstyp ?? null,
-        wertungslogik: data.wertungslogik === null ? Prisma.JsonNull : (data.wertungslogik ?? Prisma.JsonNull),
+        wertungslogik:
+          data.wertungslogik == null
+            ? Prisma.JsonNull
+            : (data.wertungslogik as Prisma.InputJsonValue),
         flaecheLaengeM: data.flaecheLaengeM ?? null,
         flaecheBreiteM: data.flaecheBreiteM ?? null,
         helferAnzahl: data.helferAnzahl ?? 1,

@@ -10,9 +10,24 @@ export async function GET() {
   if (authError) return authError;
 
   try {
+    // Identische Logik wie /api/rangliste: Test-Ergebnisse fliessen nur im
+    // Gameday-Modus TEST ein, in HOT/INAKTIV werden sie ausgeschlossen.
+    const gamedayConfig = await prisma.gamedayConfig.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { modus: true },
+    });
+    const includeTest = (gamedayConfig?.modus ?? "INAKTIV") === "TEST";
+
     const [ergebnisse, teams, games] = await Promise.all([
       prisma.ergebnis.findMany({
-        where: { gamePunkte: { not: null }, rangImGame: { not: null } },
+        where: {
+          gamePunkte: { not: null },
+          rangImGame: { not: null },
+          // Eierfall-Opt-out: Ergebnisse von Games mit zaehltZurWertung=false
+          // fliessen nicht in die Gesamtwertung ein
+          game: { zaehltZurWertung: true },
+          ...(includeTest ? {} : { istTest: false }),
+        },
         select: {
           id: true, gameId: true, teamId: true,
           gamePunkte: true, rangImGame: true, rangPunkte: true,
@@ -25,7 +40,8 @@ export async function GET() {
         take: 1000,
       }),
       prisma.game.findMany({
-        where: { status: { in: ["BEREIT", "AKTIV"] } },
+        // gamesTotal zählt nur Games, die zur Gesamtwertung zählen
+        where: { status: { in: ["BEREIT", "AKTIV"] }, zaehltZurWertung: true },
         select: { id: true },
         take: 200,
       }),

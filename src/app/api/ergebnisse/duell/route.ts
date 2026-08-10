@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
 import { zodValidationError } from "@/lib/schemas";
 import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
+import { validiereRohdaten } from "@/lib/rohdaten-validierung";
 import { Prisma } from "@prisma/client";
 import type { Wertungslogik } from "@/lib/wertungslogik-types";
 import { z } from "zod/v4";
@@ -70,12 +72,24 @@ export async function POST(request: NextRequest) {
     }
 
     const wertungslogik = game.wertungslogik as Wertungslogik | null;
+
+    // Strukturierte Wertungstypen: Rohdaten-Form beider Teams an der Grenze prüfen
+    for (const [label, daten] of [["Team A", rohdatenA], ["Team B", rohdatenB]] as const) {
+      const validierung = validiereRohdaten(wertungslogik, daten);
+      if (!validierung.ok) {
+        return NextResponse.json({ error: `${label}: ${validierung.fehler}` }, { status: 400 });
+      }
+    }
+
     const punksteA = berechneGamePunkteAusRohdaten(rohdatenA, wertungslogik);
     const punkteB = berechneGamePunkteAusRohdaten(rohdatenB, wertungslogik);
     const userId = session?.user?.id ?? null;
     const now = new Date();
     const slotId = zeitplanSlotId ?? null;
-    const commit = commitId ?? null;
+    // Jedes Duell-Paar ist über einen gemeinsamen commitId verknüpft —
+    // fehlt er im Request, wird er serverseitig generiert (Spiegel-Korrektur
+    // findet das Partner-Ergebnis darüber)
+    const commit = commitId ?? randomUUID();
 
     // Idempotenz: Retry mit demselben commitId gibt die bestehenden Ergebnisse zurück
     if (commit) {
@@ -89,43 +103,7 @@ export async function POST(request: NextRequest) {
     }
 
     const [ergebnisA, ergebnisB] = await prisma.$transaction(async (tx) => {
-      const createTeam = async (
-        teamId: string,
-        rohdaten: Record<string, unknown>,
-        gamePunkte: number,
-      ) => {
-        const result = await tx.ergebnis.create({
-          data: {
-            gameId,
-            teamId,
-            zeitplanSlotId: slotId,
-            rohdaten: rohdaten as Prisma.InputJsonValue,
-            gamePunkte,
-            status: "EINGETRAGEN",
-            eingetragenVonId: userId,
-            eingetragenUm: now,
-            istTest,
-            commitId: commit,
-          },
-        });
-
-        await tx.ergebnisHistory.create({
-          data: {
-            ergebnisId: result.id,
-            vorher: Prisma.JsonNull,
-            nachher: rohdaten as Prisma.InputJsonValue,
-            gamePunkteVorher: null,
-            gamePunkteNachher: gamePunkte,
-            statusVorher: null,
-            statusNachher: result.status,
-            geaendertVonId: userId,
-          },
-        });
-
-        return result;
-      };
-
-      // Konfliktprüfung: existiert bereits ein Ergebnis für eines der Teams,
+      // Konfliktprüfung: existiert bereits ein echtes Ergebnis für eines der Teams,
       // wird NICHT überschrieben, sondern die Transaktion mit Konflikt abgebrochen.
       const [existingA, existingB] = await Promise.all([
         tx.ergebnis.findUnique({
@@ -144,12 +122,71 @@ export async function POST(request: NextRequest) {
         }),
       ]);
 
-      if (existingA || existingB) {
-        throw new DuellConflictError([existingA, existingB].filter(Boolean));
+      // LAUFEND-Platzhalter aus /api/partie/start sind kein echtes Ergebnis —
+      // sie werden überschrieben statt als Konflikt gewertet.
+      const konflikte = [existingA, existingB].filter(
+        (e): e is NonNullable<typeof existingA> => e !== null && e.status !== "LAUFEND",
+      );
+      if (konflikte.length > 0) {
+        throw new DuellConflictError(konflikte);
       }
 
-      const a = await createTeam(teamAId, rohdatenA, punksteA);
-      const b = await createTeam(teamBId, rohdatenB, punkteB);
+      const speichereTeam = async (
+        teamId: string,
+        rohdaten: Record<string, unknown>,
+        gamePunkte: number,
+        platzhalter: typeof existingA,
+      ) => {
+        const result = platzhalter
+          ? await tx.ergebnis.update({
+              where: { id: platzhalter.id },
+              data: {
+                rohdaten: rohdaten as Prisma.InputJsonValue,
+                gamePunkte,
+                status: "EINGETRAGEN",
+                eingetragenVonId: userId,
+                eingetragenUm: now,
+                // Slot-Zuordnung des Platzhalters beibehalten, falls schon gesetzt
+                zeitplanSlotId: platzhalter.zeitplanSlotId ?? slotId,
+                istTest,
+                commitId: commit,
+              },
+            })
+          : await tx.ergebnis.create({
+              data: {
+                gameId,
+                teamId,
+                zeitplanSlotId: slotId,
+                rohdaten: rohdaten as Prisma.InputJsonValue,
+                gamePunkte,
+                status: "EINGETRAGEN",
+                eingetragenVonId: userId,
+                eingetragenUm: now,
+                istTest,
+                commitId: commit,
+              },
+            });
+
+        await tx.ergebnisHistory.create({
+          data: {
+            ergebnisId: result.id,
+            vorher: platzhalter
+              ? (platzhalter.rohdaten as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+            nachher: rohdaten as Prisma.InputJsonValue,
+            gamePunkteVorher: platzhalter?.gamePunkte ?? null,
+            gamePunkteNachher: gamePunkte,
+            statusVorher: platzhalter?.status ?? null,
+            statusNachher: result.status,
+            geaendertVonId: userId,
+          },
+        });
+
+        return result;
+      };
+
+      const a = await speichereTeam(teamAId, rohdatenA, punksteA, existingA);
+      const b = await speichereTeam(teamBId, rohdatenB, punkteB, existingB);
 
       await updateGameRaenge(gameId, wertungslogik, tx);
 

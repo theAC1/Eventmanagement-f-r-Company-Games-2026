@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
+import {
+  ZeitplanPatchSchema,
+  ZeitplanSaveSchema,
+  zodValidationError,
+} from "@/lib/schemas";
+import {
+  getGamedayModus,
+  getZeitplanAbhaengigkeiten,
+} from "@/lib/zeitplan-config";
+import {
+  pruefeGamedaySperre,
+  pruefeNeuaufbau,
+  warnungen,
+} from "@/lib/zeitplan-sperre";
+import { pruefeZeitplanKonflikte } from "@/lib/zeitplan-konflikte";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -13,6 +29,22 @@ type DbSlot = {
   game: { id: string; name: string; slug: string } | null;
   teams: Array<{ team: { id: string; name: string; nummer: number } }>;
 };
+
+const LIST_SELECT = {
+  id: true,
+  name: true,
+  anzahlTeams: true,
+  blockDauerMin: true,
+  wechselzeitMin: true,
+  startZeit: true,
+  endZeit: true,
+  pausen: true,
+  mittagspause: true,
+  istAktiv: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: { select: { slots: true } },
+} as const;
 
 // GET /api/schedule/:id – Gespeicherten Zeitplan laden (mit Slots + Teams)
 export async function GET(_request: NextRequest, { params }: RouteParams) {
@@ -64,6 +96,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         .sort((a, b) => a.runde - b.runde);
     }
 
+    // Sperr-Status mitliefern, damit die UI Buttons korrekt deaktiviert
+    const abhaengigkeiten = await getZeitplanAbhaengigkeiten(id);
+    const gamedayModus = await getGamedayModus();
+    const neuaufbau = pruefeNeuaufbau(gamedayModus, abhaengigkeiten);
+
     return NextResponse.json({
       id: config.id,
       name: config.name,
@@ -76,10 +113,20 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       mittagspause: config.mittagspause,
       istAktiv: config.istAktiv,
       createdAt: config.createdAt,
+      updatedAt: config.updatedAt,
       runden: Math.max(...slots.map((s) => s.runde), 0),
       slots,
       teamZeitplaene,
-      konflikte: [],
+      // Aus den gespeicherten Slots neu geprüft — sonst meldete jeder geladene
+      // Zeitplan "0 Konflikte", unabhängig von seinem tatsächlichen Zustand.
+      konflikte: pruefeZeitplanKonflikte(slots),
+      abhaengigkeiten,
+      sperre: {
+        gamedayModus,
+        neuaufbauErlaubt: neuaufbau.erlaubt,
+        grund: neuaufbau.grund,
+        warnungen: warnungen(abhaengigkeiten),
+      },
     });
   } catch (error) {
     console.error(`GET /api/schedule/${id} error:`, error);
@@ -87,15 +134,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-type SlotInput = {
-  runde: number;
-  startZeit: string;
-  endZeit: string;
-  gameId: string;
-  teamIds: string[];
-};
-
-// PUT /api/schedule/:id – Zeitplan aktualisieren (Name, aktiv, oder Slots ersetzen)
+/**
+ * PUT /api/schedule/:id
+ *
+ * Zwei Modi, unterschieden am Feld `slots`:
+ * - mit `slots`  → vollständiger Neuaufbau (Parameter + Slots ersetzen)
+ * - ohne `slots` → nur Metadaten (umbenennen / aktiv setzen)
+ */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { error: authError } = await requireRole("ORGA");
   if (authError) return authError;
@@ -103,24 +148,84 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
     const body = await request.json();
+    const gamedayModus = await getGamedayModus();
 
-    if (body.nameOnly) {
-      const updated = await prisma.zeitplanConfig.update({
-        where: { id },
-        data: { name: body.name, istAktiv: body.istAktiv },
+    const exists = await prisma.zeitplanConfig.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!exists) {
+      return NextResponse.json({ error: "Zeitplan nicht gefunden" }, { status: 404 });
+    }
+
+    // ── Metadaten-Patch (kein Slot-Neuaufbau) ──
+    if (body.slots === undefined) {
+      const parsed = ZeitplanPatchSchema.safeParse(body);
+      if (!parsed.success) {
+        return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+      }
+      const { name, istAktiv } = parsed.data;
+
+      if (istAktiv !== undefined) {
+        const sperre = pruefeGamedaySperre(gamedayModus, "AKTIVIERUNG");
+        if (!sperre.erlaubt) {
+          return NextResponse.json({ error: sperre.grund }, { status: 409 });
+        }
+      }
+
+      const updated = await prisma.$transaction(async (tx) => {
+        // Genau ein Zeitplan darf aktiv sein — sonst greift der Leitstand
+        // auf einen zufälligen zu.
+        if (istAktiv === true) {
+          await tx.zeitplanConfig.updateMany({
+            where: { id: { not: id } },
+            data: { istAktiv: false },
+          });
+        }
+        return tx.zeitplanConfig.update({
+          where: { id },
+          data: {
+            ...(name !== undefined ? { name } : {}),
+            ...(istAktiv !== undefined ? { istAktiv } : {}),
+          },
+          select: LIST_SELECT,
+        });
       });
+
       return NextResponse.json(updated);
     }
 
-    const { name, blockDauerMin, wechselzeitMin, startZeit, endZeit, mittagspause, pausen, slots, istAktiv } = body;
+    // ── Vollständiger Neuaufbau ──
+    const parsed = ZeitplanSaveSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+    }
+
+    const abhaengigkeiten = await getZeitplanAbhaengigkeiten(id);
+    const erlaubt = pruefeNeuaufbau(gamedayModus, abhaengigkeiten);
+    if (!erlaubt.erlaubt) {
+      return NextResponse.json({ error: erlaubt.grund }, { status: 409 });
+    }
+
+    const {
+      name,
+      blockDauerMin,
+      wechselzeitMin,
+      startZeit,
+      endZeit,
+      mittagspause,
+      pausen,
+      slots,
+      istAktiv,
+    } = parsed.data;
 
     const teamIds = new Set<string>();
-    for (const slot of slots as SlotInput[]) {
+    for (const slot of slots) {
       for (const tid of slot.teamIds) teamIds.add(tid);
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      if (istAktiv) {
+      if (istAktiv === true) {
         await tx.zeitplanConfig.updateMany({
           where: { id: { not: id } },
           data: { istAktiv: false },
@@ -138,11 +243,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           wechselzeitMin,
           startZeit,
           endZeit,
-          pausen: pausen ?? [],
-          mittagspause: mittagspause ?? null,
-          istAktiv: istAktiv ?? false,
+          pausen,
+          mittagspause: mittagspause ?? Prisma.DbNull,
+          ...(istAktiv !== undefined ? { istAktiv } : {}),
           slots: {
-            create: (slots as SlotInput[]).map((slot) => ({
+            create: slots.map((slot) => ({
               runde: slot.runde,
               startZeit: slot.startZeit,
               endZeit: slot.endZeit,
@@ -153,11 +258,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             })),
           },
         },
-        include: { _count: { select: { slots: true } } },
+        select: LIST_SELECT,
       });
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({
+      ...updated,
+      verworfeneEinsaetze: abhaengigkeiten.einsaetze,
+    });
   } catch (error) {
     console.error(`PUT /api/schedule/${id} error:`, error);
     return NextResponse.json({ error: "Fehler beim Aktualisieren" }, { status: 500 });
@@ -171,6 +279,22 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
   const { id } = await params;
   try {
+    const sperre = pruefeGamedaySperre(await getGamedayModus(), "LOESCHEN");
+    if (!sperre.erlaubt) {
+      return NextResponse.json({ error: sperre.grund }, { status: 409 });
+    }
+
+    const abhaengigkeiten = await getZeitplanAbhaengigkeiten(id);
+    if (abhaengigkeiten.qrScans > 0 || abhaengigkeiten.ergebnisse > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Am Zeitplan hängen bereits Ergebnisse oder QR-Verifikationen — er kann nicht gelöscht werden.",
+        },
+        { status: 409 },
+      );
+    }
+
     await prisma.zeitplanConfig.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

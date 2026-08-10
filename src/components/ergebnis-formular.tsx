@@ -1,19 +1,24 @@
 "use client";
 
-type EingabeFeld = { name: string; typ: string; label: string };
-type Level = { name: string; grundpunkte: number };
-type Option = { name: string; punkte_erfolg: number; punkte_fail: number };
-
-type Wertungslogik = {
-  typ?: string;
-  einheit?: string;
-  richtung?: string;
-  eingabefelder?: EingabeFeld[];
-  levels?: Level[];
-  optionen?: Option[];
-  strafen?: Record<string, number>;
-  nicht_geschafft?: string;
-};
+import { useEffect } from "react";
+import {
+  parseKleinbegegnungen,
+  parseRunden,
+  parseTuerme,
+} from "@/lib/game-punkte-berechnung";
+import type { Wertungslogik } from "@/lib/wertungslogik-types";
+import { padRunden, padTuerme } from "@/components/wertung/rohdaten-init";
+import { KleinbegegnungenEditor } from "@/components/wertung/kleinbegegnungen-editor";
+import { RundenEditor } from "@/components/wertung/runden-editor";
+import { TuermeEditor } from "@/components/wertung/tuerme-editor";
+import { ZeitEditor } from "@/components/wertung/zeit-editor";
+import {
+  inputClass,
+  jaButtonClass,
+  labelClass,
+  neinButtonClass,
+  optionButtonClass,
+} from "@/components/wertung/styles";
 
 export type ErgebnisFormularProps = {
   wertungslogik: Wertungslogik | null;
@@ -26,34 +31,6 @@ export type ErgebnisFormularProps = {
   isDuellTeamA?: boolean;
 };
 
-const inputClass =
-  "tnum h-12 w-full rounded-[9px] border border-line-strong bg-sunken px-3 text-lg text-ink placeholder:text-faint focus:border-action focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
-
-const labelClass = "cg-label text-label";
-
-/** Options-/Level-Taste: aktiv = Aktionsblau, idle = ruhiger Rand. */
-const optionButtonClass = (aktiv: boolean) =>
-  `min-h-12 flex-1 rounded-[9px] px-2 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
-    aktiv
-      ? "bg-action font-semibold text-on-action"
-      : "border border-line-strong font-medium text-ink-2"
-  }`;
-
-/** Erfolg-Toggle: Ja = done-Stil, Nein = hot-Stil (jeweils dim-Hintergrund). */
-const jaButtonClass = (aktiv: boolean) =>
-  `min-h-12 flex-1 rounded-[9px] px-2 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
-    aktiv
-      ? "border-[1.5px] border-done bg-done-dim font-semibold text-done-tint"
-      : "border border-line-strong font-medium text-ink-3"
-  }`;
-
-const neinButtonClass = (aktiv: boolean) =>
-  `min-h-12 flex-1 rounded-[9px] px-2 text-sm transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60 ${
-    aktiv
-      ? "border-[1.5px] border-[var(--hot-border)] bg-hot-dim font-semibold text-hot-tint"
-      : "border border-line-strong font-medium text-ink-3"
-  }`;
-
 export function ErgebnisFormular({
   wertungslogik,
   rohdaten,
@@ -63,6 +40,40 @@ export function ErgebnisFormular({
   isDuellTeamA,
 }: ErgebnisFormularProps) {
   const wl = wertungslogik;
+
+  // sieg_zuege: beide Schlüssel mit 0 vorbelegen,
+  // damit auch ein 0:0-Verlierer speicherbar ist.
+  const siegZuegeInitNoetig =
+    !readOnly &&
+    wl?.typ === "sieg_zuege" &&
+    (rohdaten.siege === undefined || rohdaten.zuege === undefined);
+
+  useEffect(() => {
+    if (!siegZuegeInitNoetig) return;
+    onChange({
+      ...rohdaten,
+      siege: rohdaten.siege ?? 0,
+      zuege: rohdaten.zuege ?? 0,
+    });
+  });
+
+  // runden_strafpunkte / tuerme_punkte: Listen in voller Länge mit 0 vorbelegen,
+  // damit auch ein unberührtes Formular die vom Server verlangte Form liefert.
+  const rundenSoll = wl?.typ === "runden_strafpunkte" ? (wl.runden ?? 3) : null;
+  const rundenInitNoetig =
+    !readOnly && rundenSoll !== null && parseRunden(rohdaten).length !== rundenSoll;
+
+  const tuermeSoll = wl?.typ === "tuerme_punkte" && wl.tuerme ? wl.tuerme.length : null;
+  const tuermeInitNoetig =
+    !readOnly && tuermeSoll !== null && parseTuerme(rohdaten).length !== tuermeSoll;
+
+  useEffect(() => {
+    if (rundenInitNoetig && rundenSoll !== null) {
+      onChange({ ...rohdaten, runden: padRunden(parseRunden(rohdaten), rundenSoll) });
+    } else if (tuermeInitNoetig && tuermeSoll !== null) {
+      onChange({ ...rohdaten, tuerme: padTuerme(parseTuerme(rohdaten), tuermeSoll) });
+    }
+  });
 
   if (!wl) {
     return (
@@ -77,6 +88,16 @@ export function ErgebnisFormular({
     onChange({ ...rohdaten, [key]: value });
   };
 
+  // punkte_duell ohne Team-Kontext (z. B. Korrektur-Modal): Ist genau ein
+  // Team-Feld gesetzt, nur dieses zeigen — sonst könnte ein Wert im anderen
+  // Feld die Erstes-gesetztes-Feld-Regel der Berechnung verfälschen.
+  const duellFelder = wl.typ === "punkte_duell" ? (wl.eingabefelder ?? []) : [];
+  const gesetzteDuellFelder = duellFelder.filter((f) => rohdaten[f.name] !== undefined);
+  const einzigesDuellFeld =
+    isDuellTeamA === undefined && gesetzteDuellFelder.length === 1
+      ? gesetzteDuellFelder[0]
+      : null;
+
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4">
       {label && (
@@ -86,14 +107,18 @@ export function ErgebnisFormular({
       {/* Eingabefelder */}
       {wl.eingabefelder?.map((f) => {
         // Für Duell: nur das relevante Feld zeigen
-        if (isDuellTeamA !== undefined && wl.typ === "punkte_duell") {
-          const felder = wl.eingabefelder ?? [];
-          const idx = isDuellTeamA ? 0 : 1;
-          if (felder.indexOf(f) !== idx) return null;
+        if (wl.typ === "punkte_duell") {
+          if (isDuellTeamA !== undefined) {
+            const felder = wl.eingabefelder ?? [];
+            const idx = isDuellTeamA ? 0 : 1;
+            if (felder.indexOf(f) !== idx) return null;
+          } else if (einzigesDuellFeld !== null && f.name !== einzigesDuellFeld.name) {
+            return null;
+          }
         }
         return (
           <div key={f.name} className="flex flex-col gap-1.5">
-            <label className={labelClass}>{f.label}</label>
+            <label className={labelClass}>{f.label ?? f.name}</label>
             {readOnly ? (
               <div className="tnum px-1 py-1 text-lg text-ink">
                 {(rohdaten[f.name] as string) ?? "–"}
@@ -177,6 +202,37 @@ export function ErgebnisFormular({
         </>
       )}
 
+      {/* Kleinbegegnungen (Cornhole) — per-Team-Sicht: eigene vs. gegnerische Punkte */}
+      {wl.typ === "duell_kleinbegegnungen" && (
+        <KleinbegegnungenEditor
+          kleinbegegnungen={parseKleinbegegnungen(rohdaten)}
+          onChange={(next) => update("kleinbegegnungen", next)}
+          readOnly={readOnly}
+          labelEigene="Eigene"
+          labelGegner="Gegner"
+        />
+      )}
+
+      {/* Runden + Strafpunkte (ChaosQuadrant) */}
+      {wl.typ === "runden_strafpunkte" && (
+        <RundenEditor
+          anzahlRunden={wl.runden ?? 3}
+          runden={parseRunden(rohdaten)}
+          onChange={(next) => update("runden", next)}
+          readOnly={readOnly}
+        />
+      )}
+
+      {/* Türme (Robert Huber Radio) */}
+      {wl.typ === "tuerme_punkte" && wl.tuerme && (
+        <TuermeEditor
+          tuerme={wl.tuerme}
+          werte={parseTuerme(rohdaten)}
+          onChange={(next) => update("tuerme", next)}
+          readOnly={readOnly}
+        />
+      )}
+
       {/* Strafen (Lava Becken) */}
       {wl.strafen && (
         <>
@@ -228,26 +284,14 @@ export function ErgebnisFormular({
         </>
       )}
 
-      {/* Zeit-Eingabe (wenn kein Eingabefeld definiert aber Typ=zeit) */}
+      {/* Zeit-Eingabe als mm:ss (wenn kein Eingabefeld definiert aber Typ=zeit) */}
       {wl.typ === "zeit" && !wl.eingabefelder?.length && (
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass}>Zeit (Sekunden)</label>
-          {readOnly ? (
-            <div className="tnum px-1 py-1 text-lg text-ink">
-              {(rohdaten.zeit_sekunden as number) ?? "–"}
-            </div>
-          ) : (
-            <input
-              type="number"
-              value={(rohdaten.zeit_sekunden as number) ?? ""}
-              onChange={(e) =>
-                update("zeit_sekunden", Number(e.target.value) || 0)
-              }
-              disabled={readOnly}
-              className={inputClass}
-            />
-          )}
-        </div>
+        <ZeitEditor
+          rohdaten={rohdaten}
+          onUpdate={(key, value) => update(key, value)}
+          maxSekunden={wl.maxSekunden}
+          readOnly={readOnly}
+        />
       )}
     </section>
   );

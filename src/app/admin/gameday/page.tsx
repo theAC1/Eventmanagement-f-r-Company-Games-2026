@@ -12,6 +12,11 @@ import { ZeitachseTab } from "./components/zeitachse-tab";
 import { AktivitaetTab } from "./components/aktivitaet-tab";
 import { KorrekturenTab } from "./components/korrekturen-tab";
 import { DemoSeed } from "./components/demo-seed";
+import { WertungConfig } from "./components/wertung-config";
+import { useViewState } from "@/hooks/use-view-state";
+
+/** Ansicht, die sich der Leitstand fuer die Dauer der Browser-Sitzung merkt. */
+const DEFAULT_VIEW = { activeTab: "uebersicht" };
 
 type RanglisteEntry = {
   teamId: string; teamName: string; rangPunkteSumme: number;
@@ -27,6 +32,9 @@ type GameErgebnis = {
 
 type GameInfo = {
   id: string; name: string; slug: string; modus: string; status: string;
+  // Der Leitstand ist ORGA-gated und erhält die Wertungslogik ungefiltert
+  // (inkl. vertraulicher Gewichtungs-Keys) — Basis für WertungConfig.
+  wertungslogik?: Record<string, unknown> | null;
 };
 
 type TeamInfo = {
@@ -96,7 +104,13 @@ function ExportMenu() {
 }
 
 export default function GamedayDashboard() {
-  const [activeTab, setActiveTab] = useState("uebersicht");
+  const { view, setView } = useViewState("admin:gameday", DEFAULT_VIEW);
+  const activeTab = view.activeTab;
+  const setActiveTab = useCallback(
+    (tab: string) => setView({ activeTab: tab }),
+    [setView],
+  );
+
   const [rangliste, setRangliste] = useState<RanglisteEntry[]>([]);
   const [ergebnisse, setErgebnisse] = useState<GameErgebnis[]>([]);
   const [games, setGames] = useState<GameInfo[]>([]);
@@ -166,10 +180,13 @@ export default function GamedayDashboard() {
   }, [loadData]);
 
   /** Aus der Zeitachse heraus: Aktivität-Tab mit Game-Filter öffnen. */
-  const handleInspectGame = useCallback((gameId: string) => {
-    setAktivitaetGameFilter(gameId);
-    setActiveTab("aktivitaet");
-  }, []);
+  const handleInspectGame = useCallback(
+    (gameId: string) => {
+      setAktivitaetGameFilter(gameId);
+      setActiveTab("aktivitaet");
+    },
+    [setActiveTab],
+  );
 
   if (loading) {
     return (
@@ -225,6 +242,8 @@ export default function GamedayDashboard() {
       <GamedayControls onStatusChange={loadData} />
 
       <DemoSeed onSeeded={loadData} />
+
+      <WertungConfig games={games} onSaved={loadData} />
 
       {activeTab === "uebersicht" && gamedayModus === "INAKTIV" && (
         <div className="px-4 py-10 sm:px-[22px]">

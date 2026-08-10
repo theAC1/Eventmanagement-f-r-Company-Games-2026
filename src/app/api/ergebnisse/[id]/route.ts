@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
+import { hasMinRole } from "@/lib/roles";
 import { ErgebnisUpdateSchema, zodValidationError } from "@/lib/schemas";
-import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
+import {
+  berechneGamePunkteAusRohdaten,
+  synchronisiereDuellSpiegel,
+  updateGameRaenge,
+} from "@/lib/game-punkte";
+import { validiereRohdaten } from "@/lib/rohdaten-validierung";
 import type { Prisma } from "@prisma/client";
-import type { Wertungslogik } from "@/lib/wertungslogik-types";
+import {
+  sanitizeWertungslogikFuerSchiedsrichter,
+  type Wertungslogik,
+} from "@/lib/wertungslogik-types";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // GET /api/ergebnisse/:id
 export async function GET(_request: NextRequest, { params }: RouteParams) {
-  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
   if (authError) return authError;
 
   const { id } = await params;
@@ -32,6 +41,20 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     if (!ergebnis) {
       return NextResponse.json({ error: "Ergebnis nicht gefunden" }, { status: 404 });
+    }
+
+    // Protokoll: Schiedsrichter sehen die Gewichtung nicht — vertrauliche
+    // Wertungs-Keys (gewichtungG/gewichtungSieg) nur an ORGA+ ausliefern
+    if (!hasMinRole(session?.user.rolle ?? "", "ORGA")) {
+      return NextResponse.json({
+        ...ergebnis,
+        game: {
+          ...ergebnis.game,
+          wertungslogik: sanitizeWertungslogikFuerSchiedsrichter(
+            ergebnis.game.wertungslogik as Wertungslogik | null,
+          ),
+        },
+      });
     }
 
     return NextResponse.json(ergebnis);
@@ -71,14 +94,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const wertungslogik = existing.game.wertungslogik as Wertungslogik | null;
+
+    const validierung = validiereRohdaten(wertungslogik, rohdaten as Record<string, unknown>);
+    if (!validierung.ok) {
+      return NextResponse.json({ error: validierung.fehler }, { status: 400 });
+    }
+
     const gamePunkte = berechneGamePunkteAusRohdaten(
       rohdaten as Record<string, unknown>,
       wertungslogik,
     );
 
     const userId = session?.user?.id ?? null;
+    const istCornholeDuell = wertungslogik?.typ === "duell_kleinbegegnungen";
 
-    const ergebnis = await prisma.$transaction(async (tx) => {
+    const { ergebnis, spiegelOk } = await prisma.$transaction(async (tx) => {
       const result = await tx.ergebnis.update({
         where: { id },
         data: {
@@ -103,10 +133,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         },
       });
 
+      // Cornhole-Duell: das Partner-Ergebnis ist eine gespiegelte Kopie
+      // derselben Kleinbegegnungen — Spiegel-Invariante mitkorrigieren
+      const partnerSynchronisiert = istCornholeDuell
+        ? await synchronisiereDuellSpiegel(
+            result,
+            rohdaten as Record<string, unknown>,
+            wertungslogik,
+            userId,
+            tx,
+          )
+        : true;
+
       await updateGameRaenge(existing.game.id, wertungslogik, tx);
 
-      return result;
+      return { ergebnis: result, spiegelOk: partnerSynchronisiert };
     });
+
+    if (istCornholeDuell && !spiegelOk) {
+      return NextResponse.json({
+        ...ergebnis,
+        spiegelHinweis: "Gegner-Ergebnis konnte nicht automatisch angepasst werden",
+      });
+    }
 
     return NextResponse.json(ergebnis);
   } catch (error) {

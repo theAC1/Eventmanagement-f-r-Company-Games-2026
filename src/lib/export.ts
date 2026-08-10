@@ -88,6 +88,8 @@ type ErgebnisEntry = {
   rangImGame: number | null;
   status: string;
   eingetragenUm: string | null;
+  istTest: boolean;
+  zaehltZurWertung: boolean;
 };
 
 export function generateErgebnisseCSV(ergebnisse: ErgebnisEntry[]): string {
@@ -98,6 +100,8 @@ export function generateErgebnisseCSV(ergebnisse: ErgebnisEntry[]): string {
     "Punkte",
     "Rang",
     "Status",
+    "Test",
+    "Zählt zur Wertung",
     "Eingetragen",
   ]);
 
@@ -109,6 +113,8 @@ export function generateErgebnisseCSV(ergebnisse: ErgebnisEntry[]): string {
       e.gamePunkte ?? "",
       e.rangImGame ?? "",
       e.status,
+      e.istTest ? "Ja" : "Nein",
+      e.zaehltZurWertung ? "Ja" : "Nein",
       e.eingetragenUm
         ? new Date(e.eingetragenUm).toLocaleString("de-CH")
         : "",

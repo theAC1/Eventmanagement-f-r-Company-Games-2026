@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateSchedule, type PauseInput, type MittagspauseConfig } from "@/lib/schedule-engine";
+import { generateSchedule } from "@/lib/schedule-engine";
 import { requireRole } from "@/lib/auth-helpers";
+import { ZeitplanParameterSchema, zodValidationError } from "@/lib/schemas";
+
+// Die Preview war schon immer mit leerem Body aufrufbar — Defaults ergänzen
+// die Pflichtfelder des Parameter-Schemas, ohne dessen Grenzen zu lockern.
+const GenerateBodySchema = ZeitplanParameterSchema.extend({
+  blockDauerMin: ZeitplanParameterSchema.shape.blockDauerMin.default(15),
+  wechselzeitMin: ZeitplanParameterSchema.shape.wechselzeitMin.default(5),
+  startZeit: ZeitplanParameterSchema.shape.startZeit.default("09:00"),
+});
 
 // POST /api/schedule/generate – Zeitplan generieren (Preview, ohne DB-Speicherung)
 export async function POST(request: NextRequest) {
@@ -9,20 +18,22 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    const body = await request.json();
+    // Unvalidierte Werte (z. B. mittagspause.maxTeamsGleichzeitig = 0) würden
+    // die Engine in eine Endlosschleife treiben — deshalb Zod vor der Engine.
+    const body = await request.json().catch(() => null);
+    const parsed = GenerateBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
+    }
+
     const {
-      blockDauerMin = 15,
-      wechselzeitMin = 5,
-      startZeit = "09:00",
-      pausen = [] as PauseInput[],
+      blockDauerMin,
+      wechselzeitMin,
+      startZeit,
+      pausen,
       mittagspause,
-    } = body as {
-      blockDauerMin?: number;
-      wechselzeitMin?: number;
-      startZeit?: string;
-      pausen?: PauseInput[];
-      mittagspause?: MittagspauseConfig;
-    };
+      antiKorrelationen,
+    } = parsed.data;
 
     // Load all active/ready games
     const games = await prisma.game.findMany({
@@ -51,6 +62,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Anti-Korrelations-Paare gegen die geladenen Games validieren
+    const gameIds = new Set(games.map((g) => g.id));
+    for (const paar of antiKorrelationen) {
+      if (paar.gameXId === paar.gameYId) {
+        return NextResponse.json(
+          { error: "Anti-Korrelation: Game A und Game B müssen unterschiedlich sein." },
+          { status: 400 }
+        );
+      }
+      if (!gameIds.has(paar.gameXId) || !gameIds.has(paar.gameYId)) {
+        return NextResponse.json(
+          { error: "Anti-Korrelation verweist auf ein Game, das nicht den Status BEREIT oder AKTIV hat." },
+          { status: 400 }
+        );
+      }
+    }
+
     const result = generateSchedule({
       teams,
       games,
@@ -58,7 +86,8 @@ export async function POST(request: NextRequest) {
       wechselzeitMin,
       startZeit,
       pausen,
-      mittagspause,
+      mittagspause: mittagspause ?? undefined,
+      antiKorrelationen,
     });
 
     return NextResponse.json(result);

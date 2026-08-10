@@ -38,9 +38,24 @@ export async function POST(request: NextRequest) {
     const userId = session?.user?.id ?? null;
 
     const ergebnisse = await prisma.$transaction(async (tx) => {
-      const results = await Promise.all(
-        teamIds.map((teamId) =>
-          tx.ergebnis.upsert({
+      const bestehende = await tx.ergebnis.findMany({
+        where: { gameId, teamId: { in: teamIds } },
+      });
+      const bestehendeProTeam = new Map(bestehende.map((e) => [e.teamId, e]));
+
+      const results: typeof bestehende = [];
+      for (const teamId of teamIds) {
+        const vorhanden = bestehendeProTeam.get(teamId);
+
+        // Echte Ergebnisse (EINGETRAGEN/VERIFIZIERT/KORRIGIERT) überlebt ein
+        // Partie-Neustart unverändert — nur Platzhalter werden aufgefrischt
+        if (vorhanden && vorhanden.status !== "LAUFEND" && vorhanden.status !== "AUSSTEHEND") {
+          results.push(vorhanden);
+          continue;
+        }
+
+        results.push(
+          await tx.ergebnis.upsert({
             where: { gameId_teamId: { gameId, teamId } },
             create: {
               gameId,
@@ -56,14 +71,15 @@ export async function POST(request: NextRequest) {
             update: {
               status: "LAUFEND",
               rohdaten: {},
+              gamePunkte: null,
               zeitplanSlotId: zeitplanSlotId ?? null,
               eingetragenVonId: userId,
               eingetragenUm: new Date(),
               istTest,
             },
           }),
-        ),
-      );
+        );
+      }
 
       if (zeitplanSlotId) {
         await tx.zeitplanSlot.update({

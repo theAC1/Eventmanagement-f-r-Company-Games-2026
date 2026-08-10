@@ -26,6 +26,7 @@ type Ergebnis = {
   gamePunkte: number | null;
   rangPunkte: number | null;
   status: string;
+  zaehltZurWertung: boolean;
 };
 
 type TeamPortal = {
@@ -247,14 +248,21 @@ export default function TeamPortalPage() {
                   key={e.id}
                   className="flex h-12 items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4"
                 >
-                  <span className="min-w-0 truncate text-sm font-medium text-ink">
-                    {e.gameName}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm font-medium text-ink">
+                      {e.gameName}
+                    </span>
+                    {!e.zaehltZurWertung && (
+                      <span className="truncate text-[11px] text-ink-3">
+                        Bonus — zählt nicht zur Wertung
+                      </span>
+                    )}
                   </span>
                   <span className="flex shrink-0 items-baseline gap-3">
                     {e.gamePunkte !== null && (
                       <span className="tnum text-xs text-ink-3">{e.gamePunkte} Pkt</span>
                     )}
-                    {e.rangPunkte !== null && (
+                    {e.zaehltZurWertung && e.rangPunkte !== null && (
                       <span className="tnum text-sm font-semibold text-ink">+{e.rangPunkte}</span>
                     )}
                   </span>

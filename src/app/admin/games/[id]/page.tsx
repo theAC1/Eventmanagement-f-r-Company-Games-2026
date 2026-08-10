@@ -36,6 +36,7 @@ type Game = {
   helferAnzahl: number;
   schiedsrichterAnzahl: number;
   stromNoetig: boolean;
+  zaehltZurWertung: boolean;
   varianten: GameVariante[];
   _count: { materialItems: number; ergebnisse: number };
   createdBy?: { id: string; name: string } | null;
@@ -398,15 +399,36 @@ export default function GameDetailPage() {
                 Typ: {game.wertungstyp ?? "–"}
               </span>
             </div>
-            <Field label="Wertungstyp">
-              <input
-                type="text"
-                value={game.wertungstyp ?? ""}
-                onChange={(e) => updateField("wertungstyp", e.target.value || null)}
-                placeholder="z.B. punkte, zeit, laenge, hoehe..."
-                className={`${INPUT_CLASS} tnum`}
-              />
-            </Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Wertungstyp">
+                <input
+                  type="text"
+                  value={game.wertungstyp ?? ""}
+                  onChange={(e) => updateField("wertungstyp", e.target.value || null)}
+                  placeholder="z.B. punkte, zeit, laenge, hoehe..."
+                  className={`${INPUT_CLASS} tnum`}
+                />
+              </Field>
+              <Field label="Zählt zur Gesamtwertung">
+                <button
+                  type="button"
+                  onClick={() => updateField("zaehltZurWertung", !game.zaehltZurWertung)}
+                  className={`h-[38px] w-full rounded-[9px] border text-sm font-medium transition-colors duration-150 ${
+                    game.zaehltZurWertung
+                      ? "border-line-strong bg-sunken text-ink"
+                      : "border-[var(--warn-border)] bg-warn-dim text-warn"
+                  }`}
+                >
+                  {game.zaehltZurWertung ? "Ja" : "Nein — Bonus-Game"}
+                </button>
+              </Field>
+            </div>
+            {!game.zaehltZurWertung && (
+              <p className="text-xs text-ink-3">
+                Ergebnisse dieses Games werden angezeigt, fliessen aber nicht in
+                die Gesamtwertung ein.
+              </p>
+            )}
             <Field label="Wertungslogik (JSON)">
               <WertungslogikEditor
                 value={game.wertungslogik}

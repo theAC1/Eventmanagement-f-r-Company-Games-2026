@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
 import { ErgebnisUpdateSchema, zodValidationError } from "@/lib/schemas";
-import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
+import {
+  berechneGamePunkteAusRohdaten,
+  synchronisiereDuellSpiegel,
+  updateGameRaenge,
+} from "@/lib/game-punkte";
+import { validiereRohdaten } from "@/lib/rohdaten-validierung";
 import { Prisma } from "@prisma/client";
 import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
@@ -32,12 +37,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const wertungslogik = existing.game.wertungslogik as Wertungslogik | null;
+
+    const validierung = validiereRohdaten(wertungslogik, rohdaten as Record<string, unknown>);
+    if (!validierung.ok) {
+      return NextResponse.json({ error: validierung.fehler }, { status: 400 });
+    }
+
     const gamePunkte = berechneGamePunkteAusRohdaten(
       rohdaten as Record<string, unknown>,
       wertungslogik,
     );
 
-    const ergebnis = await prisma.$transaction(async (tx) => {
+    const istCornholeDuell = wertungslogik?.typ === "duell_kleinbegegnungen";
+
+    const { ergebnis, spiegelOk } = await prisma.$transaction(async (tx) => {
       const result = await tx.ergebnis.update({
         where: { id },
         data: {
@@ -59,9 +72,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           geaendertVonId: session!.user.id,
         },
       });
+
+      // Cornhole-Duell: das Partner-Ergebnis ist eine gespiegelte Kopie
+      // derselben Kleinbegegnungen — Spiegel-Invariante mitkorrigieren
+      const partnerSynchronisiert = istCornholeDuell
+        ? await synchronisiereDuellSpiegel(
+            result,
+            rohdaten as Record<string, unknown>,
+            wertungslogik,
+            session!.user.id,
+            tx,
+          )
+        : true;
+
       await updateGameRaenge(existing.game.id, wertungslogik, tx);
-      return result;
+      return { ergebnis: result, spiegelOk: partnerSynchronisiert };
     });
+
+    if (istCornholeDuell && !spiegelOk) {
+      return NextResponse.json({
+        ...ergebnis,
+        spiegelHinweis: "Gegner-Ergebnis konnte nicht automatisch angepasst werden",
+      });
+    }
 
     return NextResponse.json(ergebnis);
   } catch (error) {
