@@ -15,6 +15,9 @@ import { KpiBand, KpiCell } from "@/components/ui/kpi";
 import { StatusPill, type PillTone } from "@/components/ui/pills";
 import { ProgressBar } from "@/components/ui/progress";
 import { Button, ButtonLink } from "@/components/ui/button";
+import { useViewState } from "@/hooks/use-view-state";
+import { useScrollRestore } from "@/hooks/use-scroll-restore";
+import { toggleInList } from "@/lib/view-state";
 
 type MaterialItem = {
   id: string;
@@ -91,6 +94,26 @@ type BulkPatchState = {
   [K in BulkField]: { enabled: boolean; value: string };
 };
 
+/** Ansicht, die sich die Seite fuer die Dauer der Browser-Sitzung merkt. */
+type MaterialsView = {
+  filterGame: string;
+  filterStatus: string;
+  filterKat: string;
+  search: string;
+  /** Keys der zugeklappten Gruppen — als Liste, weil ein Set nicht serialisierbar ist. */
+  collapsed: string[];
+};
+
+const VIEW_ID = "admin:materials";
+
+const DEFAULT_VIEW: MaterialsView = {
+  filterGame: "",
+  filterStatus: "",
+  filterKat: "",
+  search: "",
+  collapsed: [],
+};
+
 const INITIAL_BULK_PATCH: BulkPatchState = {
   gameId: { enabled: false, value: "" },
   kategorie: { enabled: false, value: "SPONSOR" },
@@ -106,11 +129,12 @@ const INITIAL_BULK_PATCH: BulkPatchState = {
 export default function MaterialsPage() {
   const [items, setItems] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterGame, setFilterGame] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterKat, setFilterKat] = useState("");
-  const [search, setSearch] = useState("");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const { view, setView, ready } = useViewState(VIEW_ID, DEFAULT_VIEW);
+  const { filterGame, filterStatus, filterKat, search } = view;
+  const collapsed = useMemo(() => new Set(view.collapsed), [view.collapsed]);
+
+  useScrollRestore(VIEW_ID, ready && !loading);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -131,10 +155,13 @@ export default function MaterialsPage() {
       .finally(() => setLoading(false));
   };
 
+  // Erst laden, wenn die gemerkten Filter stehen — sonst holt der erste Fetch
+  // die ungefilterte Liste, die gleich darauf wieder verworfen wird.
   useEffect(() => {
+    if (!ready) return;
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterGame, filterKat]);
+  }, [ready, filterGame, filterKat]);
 
   useEffect(() => {
     fetch("/api/games")
@@ -226,12 +253,7 @@ export default function MaterialsPage() {
   }, [filtered]);
 
   const toggleGroup = (key: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setView((prev) => ({ collapsed: toggleInList(prev.collapsed, key) }));
   };
 
   const toggleOne = (id: string) => {
@@ -386,7 +408,7 @@ export default function MaterialsPage() {
           <input
             type="search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setView({ search: e.target.value })}
             placeholder="Position suchen"
             className="h-[34px] w-[200px] rounded-[9px] border border-line-strong bg-transparent pl-9 pr-3 text-[13px] text-ink placeholder:text-faint focus:border-action focus:outline-none transition-colors duration-150"
           />
@@ -445,7 +467,7 @@ export default function MaterialsPage() {
             <button
               key={c.value || "alle"}
               type="button"
-              onClick={() => setFilterStatus(c.value)}
+              onClick={() => setView({ filterStatus: c.value })}
               className={`inline-flex h-[30px] items-center gap-[7px] rounded-full px-3 text-xs transition-colors duration-150 ${
                 active
                   ? "border border-ink bg-ink font-semibold text-bg"
@@ -470,7 +492,7 @@ export default function MaterialsPage() {
             <Funnel size={13} weight="bold" />
             <select
               value={filterGame}
-              onChange={(e) => setFilterGame(e.target.value)}
+              onChange={(e) => setView({ filterGame: e.target.value })}
               className="h-full max-w-[150px] rounded-full bg-transparent pr-1 text-xs text-ink-3 focus:outline-none"
               aria-label="Nach Game filtern"
             >
@@ -485,7 +507,7 @@ export default function MaterialsPage() {
           <span className="inline-flex h-[30px] items-center rounded-full border border-line-strong px-1 text-xs text-ink-3">
             <select
               value={filterKat}
-              onChange={(e) => setFilterKat(e.target.value)}
+              onChange={(e) => setView({ filterKat: e.target.value })}
               className="h-full max-w-[140px] rounded-full bg-transparent px-2 text-xs text-ink-3 focus:outline-none"
               aria-label="Nach Kategorie filtern"
             >

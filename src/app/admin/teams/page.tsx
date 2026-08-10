@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { Button } from "@/components/ui/button";
+import { useScrollRestore } from "@/hooks/use-scroll-restore";
 
 type Team = {
   id: string; name: string; nummer: number; farbe: string;
@@ -22,6 +23,8 @@ export default function TeamsPage() {
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newNummer, setNewNummer] = useState(1);
+
+  useScrollRestore("admin:teams", !loading);
 
   const load = () => {
     fetch("/api/teams").then(r => r.json()).then(t => { setTeams(t); setLoading(false); });

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CaretDown } from "@phosphor-icons/react";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
+import { useViewState } from "@/hooks/use-view-state";
 
 type HistoryEntry = {
   id: string;
@@ -36,18 +37,25 @@ type KorrekturenTabProps = {
 const SELECT_CLASS =
   "h-[34px] rounded-[9px] border border-line-strong bg-sunken px-3 text-[13px] text-ink focus:border-action focus:outline-none";
 
+const VIEW_ID = "admin:gameday:korrekturen";
+
+/** Ansicht, die sich der Tab fuer die Dauer der Browser-Sitzung merkt. */
+const DEFAULT_VIEW = {
+  filterGame: "",
+  filterTeam: "",
+  expandedId: null as string | null,
+};
+
 export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
   const [entries, setEntries] = useState<KorrekturEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [histories, setHistories] = useState<Record<string, HistoryEntry[]>>({});
   const [historyLoading, setHistoryLoading] = useState<string | null>(null);
 
-  // Filters
-  const [filterGame, setFilterGame] = useState("");
-  const [filterTeam, setFilterTeam] = useState("");
+  const { view, setView, ready } = useViewState(VIEW_ID, DEFAULT_VIEW);
+  const { filterGame, filterTeam, expandedId } = view;
 
   const fetchKorrekturen = useCallback(
     async (pageNum: number, append: boolean) => {
@@ -78,36 +86,46 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
     [filterGame, filterTeam],
   );
 
+  // Erst laden, wenn die gemerkten Filter stehen.
   useEffect(() => {
+    if (!ready) return;
     setPage(1);
     fetchKorrekturen(1, false);
-  }, [fetchKorrekturen]);
+  }, [ready, fetchKorrekturen]);
 
-  const handleToggle = async (id: string) => {
-    if (expandedId === id) {
-      setExpandedId(null);
-      return;
+  /** Bereits angefragte Historien — verhindert Doppel-Fetches, ohne den Callback zu destabilisieren. */
+  const requestedHistories = useRef<Set<string>>(new Set());
+
+  const loadHistory = useCallback(async (id: string) => {
+    if (requestedHistories.current.has(id)) return;
+    requestedHistories.current.add(id);
+
+    setHistoryLoading(id);
+    try {
+      const res = await fetch(`/api/ergebnisse/${id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setHistories((prev) => ({
+        ...prev,
+        [id]: json.histories ?? [],
+      }));
+    } catch (err) {
+      // Freigeben, damit ein erneutes Aufklappen es nochmal versucht.
+      requestedHistories.current.delete(id);
+      console.error("History fetch failed:", err);
+    } finally {
+      setHistoryLoading(null);
     }
+  }, []);
 
-    setExpandedId(id);
+  // Deckt beides ab: frisch aufgeklappt und aus der Sitzung wiederhergestellt.
+  useEffect(() => {
+    if (!ready || !expandedId) return;
+    loadHistory(expandedId);
+  }, [ready, expandedId, loadHistory]);
 
-    // Load history if not cached
-    if (!histories[id]) {
-      setHistoryLoading(id);
-      try {
-        const res = await fetch(`/api/ergebnisse/${id}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        setHistories((prev) => ({
-          ...prev,
-          [id]: json.histories ?? [],
-        }));
-      } catch (err) {
-        console.error("History fetch failed:", err);
-      } finally {
-        setHistoryLoading(null);
-      }
-    }
+  const handleToggle = (id: string) => {
+    setView((prev) => ({ expandedId: prev.expandedId === id ? null : id }));
   };
 
   const handleLoadMore = () => {
@@ -124,7 +142,7 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
       <div className="flex flex-wrap gap-2.5">
         <select
           value={filterGame}
-          onChange={(e) => setFilterGame(e.target.value)}
+          onChange={(e) => setView({ filterGame: e.target.value })}
           className={SELECT_CLASS}
         >
           <option value="">Alle Spiele</option>
@@ -137,7 +155,7 @@ export function KorrekturenTab({ games, teams }: KorrekturenTabProps) {
 
         <select
           value={filterTeam}
-          onChange={(e) => setFilterTeam(e.target.value)}
+          onChange={(e) => setView({ filterTeam: e.target.value })}
           className={SELECT_CLASS}
         >
           <option value="">Alle Teams</option>

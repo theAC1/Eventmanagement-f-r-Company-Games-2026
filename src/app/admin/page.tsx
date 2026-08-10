@@ -7,6 +7,13 @@ import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { KpiBand, KpiCell } from "@/components/ui/kpi";
 import { ModusChip, StatusPill, type PillTone } from "@/components/ui/pills";
 import { ButtonLink } from "@/components/ui/button";
+import { useViewState } from "@/hooks/use-view-state";
+import { useScrollRestore } from "@/hooks/use-scroll-restore";
+
+const VIEW_ID = "admin:games";
+
+/** Ansicht, die sich die Seite fuer die Dauer der Browser-Sitzung merkt. */
+const DEFAULT_VIEW = { search: "" };
 
 type Game = {
   id: string;
@@ -107,7 +114,11 @@ export default function AdminGamesPage() {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+
+  const { view, setView, ready } = useViewState(VIEW_ID, DEFAULT_VIEW);
+  const { search } = view;
+
+  useScrollRestore(VIEW_ID, ready && !loading);
 
   useEffect(() => {
     fetch("/api/games")
@@ -195,7 +206,7 @@ export default function AdminGamesPage() {
           <input
             type="search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setView({ search: e.target.value })}
             placeholder="Game suchen"
             className="h-[34px] w-[160px] rounded-[9px] border border-line-strong bg-transparent pl-8 pr-3 text-[13px] text-ink outline-none transition-colors duration-150 placeholder:text-label focus:border-action sm:w-[200px]"
           />

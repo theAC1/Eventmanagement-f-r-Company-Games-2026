@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { StatusPill, type PillTone } from "@/components/ui/pills";
+import { useViewState } from "@/hooks/use-view-state";
+import { useScrollRestore } from "@/hooks/use-scroll-restore";
+
+const VIEW_ID = "admin:kvp";
+
+/** Ansicht, die sich die Seite fuer die Dauer der Browser-Sitzung merkt. */
+const DEFAULT_VIEW = { filterTyp: "", filterStatus: "" };
 
 type KvpEintrag = {
   id: string;
@@ -68,9 +75,12 @@ function FilterChip({
 export default function KvpPage() {
   const [eintraege, setEintraege] = useState<KvpEintrag[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterTyp, setFilterTyp] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const { view, setView, ready } = useViewState(VIEW_ID, DEFAULT_VIEW);
+  const { filterTyp, filterStatus } = view;
+
+  useScrollRestore(VIEW_ID, ready && !loading);
 
   const reload = () => {
     const params = new URLSearchParams();
@@ -84,10 +94,13 @@ export default function KvpPage() {
       .finally(() => setLoading(false));
   };
 
+  // Erst laden, wenn die gemerkten Filter stehen — sonst holt der erste Fetch
+  // die ungefilterte Liste, die gleich darauf wieder verworfen wird.
   useEffect(() => {
+    if (!ready) return;
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterTyp, filterStatus]);
+  }, [ready, filterTyp, filterStatus]);
 
   const cycleStatus = async (eintrag: KvpEintrag) => {
     const idx = STATUS_SEQUENCE.indexOf(eintrag.status);
@@ -139,23 +152,23 @@ export default function KvpPage() {
 
       {/* Filter-Chips */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3.5 sm:px-[22px]">
-        <FilterChip active={filterTyp === ""} onClick={() => setFilterTyp("")}>
+        <FilterChip active={filterTyp === ""} onClick={() => setView({ filterTyp: "" })}>
           Alle Typen
         </FilterChip>
         {(Object.keys(TYP_CONFIG) as KvpEintrag["typ"][]).map((typ) => (
-          <FilterChip key={typ} active={filterTyp === typ} onClick={() => setFilterTyp(typ)}>
+          <FilterChip key={typ} active={filterTyp === typ} onClick={() => setView({ filterTyp: typ })}>
             {TYP_CONFIG[typ].label}
           </FilterChip>
         ))}
         <span className="mx-1 hidden h-6 w-px bg-line sm:block" aria-hidden />
-        <FilterChip active={filterStatus === ""} onClick={() => setFilterStatus("")}>
+        <FilterChip active={filterStatus === ""} onClick={() => setView({ filterStatus: "" })}>
           Alle Status
         </FilterChip>
         {(Object.keys(STATUS_CONFIG) as KvpEintrag["status"][]).map((status) => (
           <FilterChip
             key={status}
             active={filterStatus === status}
-            onClick={() => setFilterStatus(status)}
+            onClick={() => setView({ filterStatus: status })}
           >
             {STATUS_CONFIG[status].label}
           </FilterChip>

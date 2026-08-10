@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { ModusChip } from "@/components/ui/pills";
 import { Button } from "@/components/ui/button";
 import { KorrekturModal } from "./korrektur-modal";
+import { useViewState } from "@/hooks/use-view-state";
 
 type GameInfo = {
   id: string;
@@ -71,6 +72,11 @@ type AktivitaetTabProps = {
 const SELECT_CLASS =
   "h-[34px] rounded-[9px] border border-line-strong bg-sunken px-3 text-[13px] text-ink focus:border-action focus:outline-none";
 
+const VIEW_ID = "admin:gameday:aktivitaet";
+
+/** Ansicht, die sich der Tab fuer die Dauer der Browser-Sitzung merkt. */
+const DEFAULT_VIEW = { filterGame: "", filterTeam: "", filterStatus: "" };
+
 export function AktivitaetTab({
   games,
   teams,
@@ -83,9 +89,19 @@ export function AktivitaetTab({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const [filterGame, setFilterGame] = useState(initialGameFilter ?? "");
-  const [filterTeam, setFilterTeam] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const { view, setView, ready } = useViewState(VIEW_ID, DEFAULT_VIEW);
+  const { filterGame, filterTeam, filterStatus } = view;
+
+  /**
+   * Kommt der Sprung aus der Zeitachse ("Game inspizieren"), gewinnt dieser
+   * Game-Filter gegen den gemerkten — sonst landet man auf der falschen Auswahl.
+   */
+  const [filtersReady, setFiltersReady] = useState(false);
+  useEffect(() => {
+    if (!ready || filtersReady) return;
+    if (initialGameFilter) setView({ filterGame: initialGameFilter });
+    setFiltersReady(true);
+  }, [ready, filtersReady, initialGameFilter, setView]);
 
   const [modalEntry, setModalEntry] = useState<ActivityEntry | null>(null);
 
@@ -119,9 +135,10 @@ export function AktivitaetTab({
   );
 
   useEffect(() => {
+    if (!filtersReady) return;
     setPage(1);
     fetchActivity(1, false);
-  }, [fetchActivity]);
+  }, [filtersReady, fetchActivity]);
 
   const handleLoadMore = () => {
     const nextPage = page + 1;
@@ -146,7 +163,7 @@ export function AktivitaetTab({
       <div className="flex flex-wrap gap-2.5">
         <select
           value={filterGame}
-          onChange={(e) => setFilterGame(e.target.value)}
+          onChange={(e) => setView({ filterGame: e.target.value })}
           className={SELECT_CLASS}
         >
           <option value="">Alle Spiele</option>
@@ -156,7 +173,7 @@ export function AktivitaetTab({
         </select>
         <select
           value={filterTeam}
-          onChange={(e) => setFilterTeam(e.target.value)}
+          onChange={(e) => setView({ filterTeam: e.target.value })}
           className={SELECT_CLASS}
         >
           <option value="">Alle Teams</option>
@@ -166,7 +183,7 @@ export function AktivitaetTab({
         </select>
         <select
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
+          onChange={(e) => setView({ filterStatus: e.target.value })}
           className={SELECT_CLASS}
         >
           <option value="">Alle Status</option>
