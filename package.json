@@ -1,6 +1,6 @@
 {
   "name": "company-games-2026",
-  "version": "0.17.3-alpha",
+  "version": "0.17.4-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",
