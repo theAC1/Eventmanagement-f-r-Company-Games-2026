@@ -8,6 +8,9 @@ import { AuditInfo } from "@/components/audit-info";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/pills";
+import { apiFetch, apiSend } from "@/lib/api-client";
+import { meldung } from "@/lib/api-fehler";
+import { PostenCrew } from "./posten-crew";
 
 type GameVariante = {
   id: string;
@@ -24,6 +27,8 @@ type Game = {
   status: "ENTWURF" | "BEREIT" | "AKTIV" | "ABGESCHLOSSEN";
   modus: "SOLO" | "DUELL";
   teamsProSlot: number;
+  durchgaenge: number;
+  teilnehmerProTeam: number | null;
   kurzbeschreibung: string | null;
   einfuehrungMin: number;
   playtimeMin: number;
@@ -69,22 +74,19 @@ export default function GameDetailPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  const loadGame = useCallback(() => {
-    fetch(`/api/games/${gameId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Game nicht gefunden");
-        return res.json();
-      })
-      .then((data) => {
-        setGame(data);
-        setDirty(false);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+  const loadGame = useCallback(async () => {
+    try {
+      setGame(await apiFetch<Game>(`/api/games/${gameId}`, { fehlerText: "Game nicht gefunden" }));
+      setDirty(false);
+    } catch (err) {
+      setError(meldung(err, "Game nicht gefunden"));
+    } finally {
+      setLoading(false);
+    }
   }, [gameId]);
 
   useEffect(() => {
-    loadGame();
+    void loadGame();
   }, [loadGame]);
 
   const updateField = <K extends keyof Game>(field: K, value: Game[K]) => {
@@ -99,19 +101,12 @@ export default function GameDetailPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/games/${gameId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(game),
-      });
-      if (!res.ok) throw new Error("Fehler beim Speichern");
-      const updated = await res.json();
-      setGame(updated);
+      setGame(await apiSend<Game>(`/api/games/${gameId}`, "PUT", game, "Fehler beim Speichern"));
       setDirty(false);
       setSuccessMsg("Gespeichert");
       setTimeout(() => setSuccessMsg(null), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unbekannter Fehler");
+      setError(meldung(err));
     } finally {
       setSaving(false);
     }
@@ -121,11 +116,18 @@ export default function GameDetailPage() {
     if (!confirm(`"${game?.name}" wirklich löschen? Das kann nicht rückgängig gemacht werden.`))
       return;
     try {
-      const res = await fetch(`/api/games/${gameId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Fehler beim Löschen");
+      const antwort = await apiSend<{ folgen?: string[] }>(
+        `/api/games/${gameId}`,
+        "DELETE",
+        undefined,
+        "Fehler beim Löschen",
+      );
+      if (antwort.folgen && antwort.folgen.length > 0) {
+        alert(antwort.folgen.join("\n"));
+      }
       router.push("/admin");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler beim Löschen");
+      setError(meldung(err, "Fehler beim Löschen"));
     }
   };
 
@@ -224,6 +226,52 @@ export default function GameDetailPage() {
                 className={`${TEXTAREA_CLASS} resize-none`}
               />
             </Field>
+
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+              <Field label="Durchgänge pro Team">
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={game.durchgaenge}
+                  onChange={(e) =>
+                    updateField("durchgaenge", Math.max(1, parseInt(e.target.value) || 1))
+                  }
+                  className={`${INPUT_CLASS} tnum`}
+                />
+                <p className="text-[11px] text-ink-3">
+                  Wie oft jedes Team diesen Posten absolviert. Zwei Doppel-Games
+                  machen aus 10 Games 12 Posten.
+                </p>
+              </Field>
+              <Field label="Teilnehmer pro Team">
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={game.teilnehmerProTeam ?? ""}
+                  placeholder="z.B. 5"
+                  onChange={(e) =>
+                    updateField(
+                      "teilnehmerProTeam",
+                      e.target.value ? parseInt(e.target.value) : null,
+                    )
+                  }
+                  className={`${INPUT_CLASS} tnum`}
+                />
+                <p className="text-[11px] text-ink-3">
+                  Spieler, die ein Team an diesem Posten stellt.
+                </p>
+              </Field>
+              <Field label="Posten-Belegung">
+                <div className="tnum flex h-[38px] items-center rounded-[9px] border border-line bg-sunken px-3 text-sm text-ink-3">
+                  {game.teamsProSlot} Team{game.teamsProSlot > 1 ? "s" : ""} pro Slot
+                  {game.teilnehmerProTeam
+                    ? ` · ${game.teamsProSlot * game.teilnehmerProTeam} Personen`
+                    : ""}
+                </div>
+              </Field>
+            </div>
 
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <Field label="Typ">
@@ -378,6 +426,14 @@ export default function GameDetailPage() {
               </Field>
             </div>
           </section>
+
+          {/* Posten-Crew */}
+          <PostenCrew
+            gameId={game.id}
+            gameName={game.name}
+            bedarfSchiedsrichter={game.schiedsrichterAnzahl}
+            bedarfHelfer={game.helferAnzahl}
+          />
 
           {/* Regeln */}
           <section className="space-y-4 rounded-[10px] border border-line bg-surface p-5">

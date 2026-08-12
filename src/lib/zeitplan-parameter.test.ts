@@ -10,11 +10,14 @@ const basis: ZeitplanParameter = {
   blockDauerMin: 15,
   wechselzeitMin: 5,
   startZeit: "09:00",
-  mittagspause: {
-    nachRunde: 6,
-    dauerMin: 45,
-    maxTeamsGleichzeitig: 8,
-    versatzMin: 5,
+  fensterEndeZeit: "16:30",
+  postenVormittag: 7,
+  mittagsfenster: {
+    von: "11:30",
+    bis: "13:30",
+    dauerMin: 30,
+    teamsProWelle: 3,
+    versatzMin: 10,
   },
 };
 
@@ -45,38 +48,54 @@ describe("parameterDiff", () => {
     expect(diff[1].nach).toBe("08:30");
   });
 
-  it("Mittagspause abgeschaltet ergibt genau eine Änderung", () => {
-    const diff = parameterDiff(basis, { ...basis, mittagspause: null });
+  it("meldet das Turnierfenster und das Vormittags-Ziel", () => {
+    const diff = parameterDiff(basis, {
+      ...basis,
+      fensterEndeZeit: "17:00",
+      postenVormittag: 8,
+    });
+    expect(diff.map((a) => a.feld)).toEqual(["fensterEndeZeit", "postenVormittag"]);
+    expect(diff[1].von).toBe("7");
+    expect(diff[1].nach).toBe("8");
+  });
+
+  it("zeigt nicht gesetzte Werte als solche an", () => {
+    const diff = parameterDiff(basis, { ...basis, fensterEndeZeit: null });
+    expect(diff[0].nach).toBe("nicht gesetzt");
+  });
+
+  it("Mittagsfenster abgeschaltet ergibt genau eine Änderung", () => {
+    const diff = parameterDiff(basis, { ...basis, mittagsfenster: null });
     expect(diff).toEqual([
-      { feld: "mittagspause", label: "Mittagspause", von: "aktiv", nach: "aus" },
+      { feld: "mittagsfenster", label: "Mittagsfenster", von: "aktiv", nach: "aus" },
     ]);
   });
 
-  it("Mittagspause eingeschaltet ergibt genau eine Änderung", () => {
-    const ohne: ZeitplanParameter = { ...basis, mittagspause: null };
+  it("Mittagsfenster eingeschaltet ergibt genau eine Änderung", () => {
+    const ohne: ZeitplanParameter = { ...basis, mittagsfenster: null };
     const diff = parameterDiff(ohne, basis);
     expect(diff).toEqual([
-      { feld: "mittagspause", label: "Mittagspause", von: "aus", nach: "aktiv" },
+      { feld: "mittagsfenster", label: "Mittagsfenster", von: "aus", nach: "aktiv" },
     ]);
   });
 
-  it("beidseitig abgeschaltete Mittagspause ergibt keine Änderung", () => {
-    const ohne: ZeitplanParameter = { ...basis, mittagspause: null };
+  it("beidseitig abgeschaltetes Mittagsfenster ergibt keine Änderung", () => {
+    const ohne: ZeitplanParameter = { ...basis, mittagsfenster: null };
     expect(parameterDiff(ohne, { ...ohne })).toEqual([]);
     expect(parameterDiff(ohne, { ...ohne, startZeit: "08:00" })).toHaveLength(1);
   });
 
-  it("meldet einzelne Mittagspausen-Felder", () => {
+  it("meldet einzelne Felder des Mittagsfensters", () => {
     const diff = parameterDiff(basis, {
       ...basis,
-      mittagspause: { ...basis.mittagspause!, dauerMin: 60, versatzMin: 10 },
+      mittagsfenster: { ...basis.mittagsfenster!, dauerMin: 45, versatzMin: 15 },
     });
     expect(diff.map((a) => a.feld)).toEqual([
-      "mittagspause.dauerMin",
-      "mittagspause.versatzMin",
+      "mittagsfenster.dauerMin",
+      "mittagsfenster.versatzMin",
     ]);
-    expect(diff[0].von).toBe("45 min");
-    expect(diff[0].nach).toBe("60 min");
+    expect(diff[0].von).toBe("30 min");
+    expect(diff[0].nach).toBe("45 min");
   });
 
   it("Feldschlüssel sind eindeutig", () => {
@@ -84,15 +103,18 @@ describe("parameterDiff", () => {
       blockDauerMin: 20,
       wechselzeitMin: 10,
       startZeit: "08:00",
-      mittagspause: {
-        nachRunde: 5,
-        dauerMin: 60,
-        maxTeamsGleichzeitig: 10,
-        versatzMin: 10,
+      fensterEndeZeit: "17:30",
+      postenVormittag: 8,
+      mittagsfenster: {
+        von: "11:00",
+        bis: "14:00",
+        dauerMin: 45,
+        teamsProWelle: 2,
+        versatzMin: 15,
       },
     });
     expect(new Set(diff.map((a) => a.feld)).size).toBe(diff.length);
-    expect(diff).toHaveLength(7);
+    expect(diff).toHaveLength(10);
   });
 });
 

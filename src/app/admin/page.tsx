@@ -23,16 +23,19 @@ type Game = {
   status: "ENTWURF" | "BEREIT" | "AKTIV" | "ABGESCHLOSSEN";
   modus: "SOLO" | "DUELL";
   teamsProSlot: number;
+  durchgaenge: number;
+  teilnehmerProTeam: number | null;
   kurzbeschreibung: string | null;
   playtimeMin: number;
   helferAnzahl: number;
+  schiedsrichterAnzahl: number;
   flaecheLaengeM: number | null;
   flaecheBreiteM: number | null;
   stromNoetig: boolean;
   regeln: string | null;
   wertungstyp: string | null;
   wertungslogik: Record<string, unknown> | null;
-  _count: { varianten: number; materialItems: number };
+  _count: { varianten: number; materialItems: number; crew: number };
 };
 
 const STATUS_TONES: Record<Game["status"], PillTone> = {
@@ -95,6 +98,33 @@ function flaecheLabel(game: Game): string {
 
 const GRID_COLS = "34px 1fr 96px 128px 74px 96px 70px 150px 116px";
 
+/** "2×" hinter dem Namen — dieses Game absolviert jedes Team mehrfach. */
+function DurchgangChip({ durchgaenge }: { durchgaenge: number }) {
+  if (durchgaenge <= 1) return null;
+  return (
+    <span
+      title={`Jedes Team spielt dieses Game ${durchgaenge}×`}
+      className="tnum shrink-0 rounded-full bg-action-dim px-1.5 py-0.5 text-[10px] font-semibold text-action-tint"
+    >
+      {durchgaenge}&times;
+    </span>
+  );
+}
+
+/** Zugeteilte Personen gegen den Sollbedarf des Postens. */
+function CrewZelle({ game }: { game: Game }) {
+  const soll = game.schiedsrichterAnzahl + game.helferAnzahl;
+  const ist = game._count.crew;
+  return (
+    <span
+      className={`tnum text-right text-xs ${ist < soll ? "text-warn" : "text-ink-3"}`}
+      title={`${ist} von ${soll} Personen zugeteilt`}
+    >
+      {ist}/{soll}
+    </span>
+  );
+}
+
 function ReadinessBar({ checks }: { checks: boolean[] }) {
   const done = checks.filter(Boolean).length;
   return (
@@ -148,9 +178,13 @@ export default function AdminGamesPage() {
 
   const stats = useMemo(() => {
     const solo = games.filter((g) => g.modus === "SOLO").length;
-    const bereit = games.filter(
+    const bereiteGames = games.filter(
       (g) => g.status === "BEREIT" || g.status === "AKTIV"
-    ).length;
+    );
+    const bereit = bereiteGames.length;
+    // Posten = was ein Team über den Tag absolviert; Doppel-Games zählen doppelt.
+    const posten = bereiteGames.reduce((sum, g) => sum + g.durchgaenge, 0);
+    const crewBesetzt = bereiteGames.filter((g) => g._count.crew > 0).length;
     const helferTotal = games.reduce((sum, g) => sum + g.helferAnzahl, 0);
     const flaecheTotal = games.reduce(
       (sum, g) =>
@@ -166,6 +200,8 @@ export default function AdminGamesPage() {
       solo,
       duell: games.length - solo,
       bereit,
+      posten,
+      crewBesetzt,
       helferTotal,
       flaecheTotal,
       strom,
@@ -222,7 +258,21 @@ export default function AdminGamesPage() {
           value={stats.bereit}
           denominator={`/${stats.total}`}
         />
-        <KpiCell label="Helfer total" value={stats.helferTotal} unit="Personen" />
+        <KpiCell
+          label="Posten pro Team"
+          value={stats.posten}
+          unit={stats.posten === stats.bereit ? "je 1×" : "inkl. Doppel"}
+        />
+        <KpiCell
+          label="Crew zugeteilt"
+          value={stats.crewBesetzt}
+          denominator={`/${stats.bereit}`}
+          valueColor={
+            stats.bereit > 0 && stats.crewBesetzt < stats.bereit
+              ? "var(--warn)"
+              : "var(--ink)"
+          }
+        />
         <KpiCell
           label="Fläche belegt"
           value={stats.flaecheTotal.toLocaleString("de-CH")}
@@ -248,7 +298,7 @@ export default function AdminGamesPage() {
         <span className="cg-label tracking-[0.1em]">Wertung</span>
         <span className="cg-label text-right tracking-[0.1em]">Zeit</span>
         <span className="cg-label text-right tracking-[0.1em]">Fläche</span>
-        <span className="cg-label text-right tracking-[0.1em]">Helfer</span>
+        <span className="cg-label text-right tracking-[0.1em]">Crew</span>
         <span className="cg-label tracking-[0.1em]">Bereitschaft</span>
         <span className="cg-label tracking-[0.1em]">Status</span>
       </div>
@@ -277,8 +327,11 @@ export default function AdminGamesPage() {
                   {nr}
                 </span>
                 <div className="flex min-w-0 flex-col gap-[3px]">
-                  <span className="truncate text-sm font-medium text-ink">
-                    {game.name}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-sm font-medium text-ink">
+                      {game.name}
+                    </span>
+                    <DurchgangChip durchgaenge={game.durchgaenge} />
                   </span>
                   <span className="truncate text-[11px] text-ink-3">
                     {game.kurzbeschreibung ?? "–"}
@@ -294,9 +347,7 @@ export default function AdminGamesPage() {
                 <span className="tnum text-right text-xs text-ink-3">
                   {flaecheLabel(game)}
                 </span>
-                <span className="tnum text-right text-xs text-ink-3">
-                  {game.helferAnzahl}
-                </span>
+                <CrewZelle game={game} />
                 <ReadinessBar checks={checks} />
                 <StatusPill
                   tone={STATUS_TONES[game.status]}
@@ -315,6 +366,7 @@ export default function AdminGamesPage() {
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
                     {game.name}
                   </span>
+                  <DurchgangChip durchgaenge={game.durchgaenge} />
                   <StatusPill tone={STATUS_TONES[game.status]}>
                     {STATUS_LABELS[game.status]}
                   </StatusPill>
@@ -329,7 +381,12 @@ export default function AdminGamesPage() {
                   <span>{wertungLabel(game)}</span>
                   <span className="tnum">{game.playtimeMin} min</span>
                   <span className="tnum">{flaecheLabel(game)}</span>
-                  <span className="tnum">{game.helferAnzahl} Helfer</span>
+                  <span className="tnum">
+                    {game._count.crew}/{game.schiedsrichterAnzahl + game.helferAnzahl} Crew
+                  </span>
+                  {game.teilnehmerProTeam && (
+                    <span className="tnum">{game.teilnehmerProTeam} Spieler/Team</span>
+                  )}
                 </div>
                 <ReadinessBar checks={checks} />
               </div>
@@ -341,7 +398,11 @@ export default function AdminGamesPage() {
       {/* Fussnote */}
       <div className="flex items-center gap-2.5 px-[22px] py-3 text-xs text-faint max-lg:px-4">
         <Info size={14} weight="bold" />
-        <span>Balken = Regeln · Material · Helfer · Fläche geklärt</span>
+        <span>
+          Balken = Regeln · Material · Helfer · Fläche geklärt &nbsp;·&nbsp; Crew =
+          zugeteilte Schiedsrichter und Helfer &nbsp;·&nbsp; 2× = jedes Team
+          absolviert diesen Posten zweimal
+        </span>
       </div>
     </div>
   );

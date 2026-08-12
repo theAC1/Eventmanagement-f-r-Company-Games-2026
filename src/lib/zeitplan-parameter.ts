@@ -4,10 +4,11 @@
  * statt nur "es ist etwas anders".
  */
 
-export type MittagspauseParameter = {
-  nachRunde: number;
+export type MittagsfensterParameter = {
+  von: string;
+  bis: string;
   dauerMin: number;
-  maxTeamsGleichzeitig: number;
+  teamsProWelle: number;
   versatzMin: number;
 };
 
@@ -15,7 +16,11 @@ export type ZeitplanParameter = {
   blockDauerMin: number;
   wechselzeitMin: number;
   startZeit: string;
-  mittagspause: MittagspauseParameter | null;
+  /** Spätestes Turnierende; null = kein Fenster gesetzt. */
+  fensterEndeZeit: string | null;
+  /** Ziel-Posten vor der eigenen Mittagswelle; null = Automatik. */
+  postenVormittag: number | null;
+  mittagsfenster: MittagsfensterParameter | null;
 };
 
 export type ParameterAenderung = {
@@ -26,16 +31,33 @@ export type ParameterAenderung = {
   nach: string;
 };
 
-const MITTAG_FELDER: {
-  key: keyof MittagspauseParameter;
+type FeldBeschreibung<T> = {
+  key: keyof T;
   label: string;
-  einheit: string;
-}[] = [
-  { key: "nachRunde", label: "Mittagspause nach Runde", einheit: "" },
-  { key: "dauerMin", label: "Mittagspause Dauer", einheit: " min" },
-  { key: "maxTeamsGleichzeitig", label: "Mittagspause max. Teams", einheit: "" },
-  { key: "versatzMin", label: "Mittagspause Versatz", einheit: " min" },
+  einheit?: string;
+};
+
+const BASIS_FELDER: FeldBeschreibung<ZeitplanParameter>[] = [
+  { key: "blockDauerMin", label: "Blockdauer", einheit: " min" },
+  { key: "wechselzeitMin", label: "Wechselzeit", einheit: " min" },
+  { key: "startZeit", label: "Turnierstart" },
+  { key: "fensterEndeZeit", label: "Turnierende (spätestens)" },
+  { key: "postenVormittag", label: "Posten vor dem Mittag" },
 ];
+
+const MITTAG_FELDER: FeldBeschreibung<MittagsfensterParameter>[] = [
+  { key: "von", label: "Mittagsfenster ab" },
+  { key: "bis", label: "Mittagsfenster bis" },
+  { key: "dauerMin", label: "Essenszeit pro Gruppe", einheit: " min" },
+  { key: "teamsProWelle", label: "Teams pro Welle" },
+  { key: "versatzMin", label: "Versatz zwischen Wellen", einheit: " min" },
+];
+
+/** null/undefined wird als "nicht gesetzt" angezeigt, nie als leerer String. */
+function anzeige(wert: unknown, einheit = ""): string {
+  if (wert === null || wert === undefined || wert === "") return "nicht gesetzt";
+  return `${wert}${einheit}`;
+}
 
 /**
  * Welche Parameter unterscheiden sich? Leeres Array = identisch.
@@ -46,40 +68,24 @@ export function parameterDiff(
 ): ParameterAenderung[] {
   const aenderungen: ParameterAenderung[] = [];
 
-  if (basis.blockDauerMin !== aktuell.blockDauerMin) {
-    aenderungen.push({
-      feld: "blockDauerMin",
-      label: "Blockdauer",
-      von: `${basis.blockDauerMin} min`,
-      nach: `${aktuell.blockDauerMin} min`,
-    });
+  for (const { key, label, einheit } of BASIS_FELDER) {
+    if (basis[key] !== aktuell[key]) {
+      aenderungen.push({
+        feld: String(key),
+        label,
+        von: anzeige(basis[key], einheit),
+        nach: anzeige(aktuell[key], einheit),
+      });
+    }
   }
 
-  if (basis.wechselzeitMin !== aktuell.wechselzeitMin) {
-    aenderungen.push({
-      feld: "wechselzeitMin",
-      label: "Wechselzeit",
-      von: `${basis.wechselzeitMin} min`,
-      nach: `${aktuell.wechselzeitMin} min`,
-    });
-  }
-
-  if (basis.startZeit !== aktuell.startZeit) {
-    aenderungen.push({
-      feld: "startZeit",
-      label: "Startzeit",
-      von: basis.startZeit,
-      nach: aktuell.startZeit,
-    });
-  }
-
-  const basisMittag = basis.mittagspause;
-  const aktuellMittag = aktuell.mittagspause;
+  const basisMittag = basis.mittagsfenster;
+  const aktuellMittag = aktuell.mittagsfenster;
 
   if (!basisMittag !== !aktuellMittag) {
     aenderungen.push({
-      feld: "mittagspause",
-      label: "Mittagspause",
+      feld: "mittagsfenster",
+      label: "Mittagsfenster",
       von: basisMittag ? "aktiv" : "aus",
       nach: aktuellMittag ? "aktiv" : "aus",
     });
@@ -90,10 +96,10 @@ export function parameterDiff(
     for (const { key, label, einheit } of MITTAG_FELDER) {
       if (basisMittag[key] !== aktuellMittag[key]) {
         aenderungen.push({
-          feld: `mittagspause.${key}`,
+          feld: `mittagsfenster.${key}`,
           label,
-          von: `${basisMittag[key]}${einheit}`,
-          nach: `${aktuellMittag[key]}${einheit}`,
+          von: anzeige(basisMittag[key], einheit),
+          nach: anzeige(aktuellMittag[key], einheit),
         });
       }
     }

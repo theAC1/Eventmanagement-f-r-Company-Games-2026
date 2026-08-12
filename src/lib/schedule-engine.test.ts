@@ -1,318 +1,310 @@
-/**
- * Tests für die Zeitplan-Engine v2
- *
- * 7 Szenarien aus der Spezifikation + Constraint-Validierung
- * Ausführen: npx tsx src/lib/schedule-engine.test.ts
- */
+import { describe, expect, it } from "vitest";
+import {
+  generateSchedule,
+  theoretischesMinimum,
+  type GameInput,
+  type ScheduleConfig,
+  type ScheduleResult,
+} from "./schedule-engine";
+import { MITTAG_DEFAULT } from "./mittagsplanung";
 
-import { generateSchedule, type ScheduleConfig, type GameInput, type ScheduleResult, type AntiKorrelationConfig } from "./schedule-engine";
+// ─── Testdaten ───────────────────────────────────────────────────────
 
-// ─── Test-Helfer ─────────────────────────────────────────────────────
-
-function makeTeams(count: number) {
-  return Array.from({ length: count }, (_, i) => ({
+function makeTeams(anzahl: number, teilnehmerAnzahl = 6) {
+  return Array.from({ length: anzahl }, (_, i) => ({
     id: `team-${i + 1}`,
     name: `Team ${i + 1}`,
     nummer: i + 1,
+    teilnehmerAnzahl,
   }));
 }
 
-const STANDARD_GAMES: GameInput[] = [
-  { id: "g1", name: "XXL Basketball", teamsProSlot: 2 },
-  { id: "g2", name: "Human Soccer", teamsProSlot: 2 },
-  { id: "g3", name: "Cornhole", teamsProSlot: 2 },
-  { id: "g4", name: "Quadrant Chaos", teamsProSlot: 2 },
-  { id: "g5", name: "Stack Attack", teamsProSlot: 1 },
-  { id: "g6", name: "Kisten Stappeln", teamsProSlot: 1 },
-  { id: "g7", name: "Lava Becken", teamsProSlot: 1 },
-  { id: "g8", name: "Eierfall", teamsProSlot: 1 },
-  { id: "g9", name: "Radio Runner", teamsProSlot: 1 },
-  { id: "g10", name: "Schwebender Architekt", teamsProSlot: 1 },
-  { id: "g11", name: "Geschicklichkeits Parcour", teamsProSlot: 1 },
+/**
+ * Der reale Stand nach dem Protokoll: 10 Games, davon Human Soccer und
+ * ChaosQuadrant zweimal ⇒ 12 Posten pro Team.
+ */
+const PROTOKOLL_GAMES: GameInput[] = [
+  { id: "cornhole", name: "Cornhole", teamsProSlot: 2, crewGroesse: 2 },
+  { id: "quadrant-chaos", name: "ChaosQuadrant", teamsProSlot: 2, durchgaenge: 2, crewGroesse: 2 },
+  { id: "human-soccer", name: "Human Soccer", teamsProSlot: 2, durchgaenge: 2, crewGroesse: 3 },
+  { id: "xxl-viergewinnt", name: "XXL Viergewinnt", teamsProSlot: 2, crewGroesse: 2 },
+  { id: "radio-runner", name: "Robert Huber Radio", teamsProSlot: 1, crewGroesse: 2 },
+  { id: "kisten-stappeln", name: "Kisten stapeln", teamsProSlot: 1, crewGroesse: 2 },
+  { id: "schwebender-architekt", name: "Schwebendes Labyrinth", teamsProSlot: 1, crewGroesse: 2 },
+  { id: "lava-becken", name: "Lavabecken", teamsProSlot: 1, crewGroesse: 2 },
+  { id: "stack-attack", name: "Stack Attack", teamsProSlot: 1, crewGroesse: 2 },
+  { id: "menschenkugelbahn", name: "Menschenkugelbahn", teamsProSlot: 1, crewGroesse: 2 },
 ];
 
-const SOLO_ONLY_GAMES: GameInput[] = STANDARD_GAMES.filter(g => g.teamsProSlot === 1).concat([
-  { id: "g12", name: "Solo Extra 1", teamsProSlot: 1 },
-  { id: "g13", name: "Solo Extra 2", teamsProSlot: 1 },
-  { id: "g14", name: "Solo Extra 3", teamsProSlot: 1 },
-  { id: "g15", name: "Solo Extra 4", teamsProSlot: 1 },
-]);
-
-const DUELL_ONLY_GAMES: GameInput[] = STANDARD_GAMES.filter(g => g.teamsProSlot === 2);
-
-function makeConfig(
-  teamCount: number,
-  games: GameInput[],
-  antiKorrelationen?: AntiKorrelationConfig[],
-): ScheduleConfig {
+function basisConfig(overrides: Partial<ScheduleConfig> = {}): ScheduleConfig {
   return {
-    teams: makeTeams(teamCount),
-    games,
+    teams: makeTeams(17),
+    games: PROTOKOLL_GAMES,
     blockDauerMin: 15,
     wechselzeitMin: 5,
     startZeit: "09:00",
     pausen: [],
-    antiKorrelationen,
+    ...overrides,
   };
 }
 
-// ─── Constraint-Prüfung ─────────────────────────────────────────────
+// ─── Prüf-Helfer ─────────────────────────────────────────────────────
 
-function validateHardConstraints(result: ScheduleResult, config: ScheduleConfig): string[] {
-  const errors: string[] = [];
-  const { teams, games } = config;
-
-  // 1. Jedes Team spielt jedes Game genau 1×
-  for (const team of teams) {
-    for (const game of games) {
-      const count = result.slots.filter(
-        s => s.gameId === game.id && s.teamIds.includes(team.id)
-      ).length;
-      if (count === 0) {
-        errors.push(`${team.name} hat ${game.name} nicht gespielt`);
-      } else if (count > 1) {
-        errors.push(`${team.name} hat ${game.name} ${count}× gespielt (statt 1×)`);
-      }
-    }
-  }
-
-  // 2. Kein Team in 2 Stationen gleichzeitig
-  const roundNums = [...new Set(result.slots.map(s => s.runde))];
-  for (const runde of roundNums) {
-    const roundSlots = result.slots.filter(s => s.runde === runde);
-    const teamCounts = new Map<string, number>();
-    for (const slot of roundSlots) {
-      for (const tid of slot.teamIds) {
-        teamCounts.set(tid, (teamCounts.get(tid) ?? 0) + 1);
-      }
-    }
-    for (const [tid, count] of teamCounts) {
-      if (count > 1) {
-        errors.push(`${tid} ist in Runde ${runde} ${count}× eingeteilt`);
-      }
-    }
-  }
-
-  // 3. Jede Station max 1× pro Runde
-  for (const runde of roundNums) {
-    const roundSlots = result.slots.filter(s => s.runde === runde);
-    const gameCounts = new Map<string, number>();
-    for (const slot of roundSlots) {
-      gameCounts.set(slot.gameId, (gameCounts.get(slot.gameId) ?? 0) + 1);
-    }
-    for (const [gid, count] of gameCounts) {
-      if (count > 1) {
-        errors.push(`Game ${gid} ist in Runde ${runde} ${count}× belegt`);
-      }
-    }
-  }
-
-  return errors;
+function harteKonflikte(result: ScheduleResult): string[] {
+  return result.konflikte.filter((k) => k.startsWith("HART"));
 }
 
-function analyzeResult(label: string, result: ScheduleResult, config: ScheduleConfig): void {
-  const hardErrors = validateHardConstraints(result, config);
-  const allErrors = [...result.konflikte, ...hardErrors];
-
-  const stats = result.statistiken!;
-  const freirunden = Object.values(stats.freirundenProTeam);
-  const minByes = Math.min(...freirunden);
-  const maxByes = Math.max(...freirunden);
-  const avgByes = freirunden.reduce((a, b) => a + b, 0) / freirunden.length;
-
-  // Gegner-Diversität: max Begegnungen zwischen 2 Teams
-  let maxOpponentMeetings = 0;
-  for (const [, gegner] of Object.entries(stats.duellGegnerVerteilung)) {
-    for (const count of Object.values(gegner)) {
-      if (count > maxOpponentMeetings) maxOpponentMeetings = count;
+/** Zählt, wie oft jedes Team jedes Game gespielt hat. */
+function einsaetze(result: ScheduleResult): Map<string, number> {
+  const zaehler = new Map<string, number>();
+  for (const slot of result.slots) {
+    for (const teamId of slot.teamIds) {
+      const key = `${teamId}|${slot.gameId}`;
+      zaehler.set(key, (zaehler.get(key) ?? 0) + 1);
     }
   }
-
-  console.log(`\n${"═".repeat(60)}`);
-  console.log(`  ${label}`);
-  console.log(`${"═".repeat(60)}`);
-  console.log(`  Teams: ${config.teams.length} | Games: ${config.games.length} (${config.games.filter(g => g.teamsProSlot >= 2).length} Duell + ${config.games.filter(g => g.teamsProSlot === 1).length} Solo)`);
-  console.log(`  Runden: ${result.runden} (theoretisches Minimum: ${stats.theoretischesMinimum})`);
-  console.log(`  Effizienz: ${(stats.rundenEffizienz * 100).toFixed(1)}%`);
-  console.log(`  Freirunden: min=${minByes} max=${maxByes} avg=${avgByes.toFixed(1)} (Spread: ${maxByes - minByes})`);
-  if (maxOpponentMeetings > 0) {
-    console.log(`  Max Duell-Begegnungen gleicher Gegner: ${maxOpponentMeetings}`);
-  }
-  console.log(`  Endzeit: ${result.endZeit}`);
-  console.log(`  Konflikte (Engine): ${result.konflikte.length}`);
-  console.log(`  Harte Constraint-Verletzungen: ${hardErrors.length}`);
-
-  if (allErrors.length > 0) {
-    console.log(`\n  ❌ FEHLER:`);
-    for (const e of allErrors.slice(0, 10)) {
-      console.log(`     - ${e}`);
-    }
-    if (allErrors.length > 10) {
-      console.log(`     ... und ${allErrors.length - 10} weitere`);
-    }
-  } else {
-    console.log(`\n  ✅ ALLE CONSTRAINTS ERFÜLLT`);
-  }
+  return zaehler;
 }
 
-// ─── Testszenarien ───────────────────────────────────────────────────
+// ─── Tests ───────────────────────────────────────────────────────────
 
-function runAllTests() {
-  console.log("\n🏟️  ZEITPLAN-ENGINE v2 – TESTLAUF\n");
+describe("theoretischesMinimum", () => {
+  it("bindet an der stärksten Schranke — hier den Solo-Stationen", () => {
+    // 6 Solo-Posten bedienen je ein Team pro Runde ⇒ 17 Teams = 17 Runden.
+    expect(theoretischesMinimum(17, PROTOKOLL_GAMES)).toBe(17);
+  });
 
-  let allPassed = true;
+  it("berücksichtigt Doppel-Durchgänge bei Duellen", () => {
+    // Ein Duell-Game mit 2 Durchgängen für 8 Teams: 16 Besuche / 2 = 8 Runden.
+    expect(
+      theoretischesMinimum(8, [
+        { id: "d", name: "Duell", teamsProSlot: 2, durchgaenge: 2 },
+      ]),
+    ).toBe(8);
+  });
 
-  // 1. Standard: 18 Teams, 11 Games (4 Duell + 7 Solo)
-  {
-    const config = makeConfig(18, STANDARD_GAMES);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-    analyzeResult("Test 1: Standard (18 Teams, 11 Games)", result, config);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
-    const errors = validateHardConstraints(result, config);
-    if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
-  }
+  it("ist 0 ohne Teams oder Games", () => {
+    expect(theoretischesMinimum(0, PROTOKOLL_GAMES)).toBe(0);
+    expect(theoretischesMinimum(17, [])).toBe(0);
+  });
+});
 
-  // 2. Minimum: 12 Teams, 11 Games
-  {
-    const config = makeConfig(12, STANDARD_GAMES);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-    analyzeResult("Test 2: Minimum (12 Teams, 11 Games)", result, config);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
-    const errors = validateHardConstraints(result, config);
-    if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
-  }
+describe("generateSchedule — Grundregeln", () => {
+  const result = generateSchedule(basisConfig());
 
-  // 3. Maximum: 20 Teams, 11 Games
-  {
-    const config = makeConfig(20, STANDARD_GAMES);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-    analyzeResult("Test 3: Maximum (20 Teams, 11 Games)", result, config);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
-    const errors = validateHardConstraints(result, config);
-    if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
-  }
-
-  // 4. Ungerade: 17 Teams, 11 Games (Bye-Runden bei Duell)
-  {
-    const config = makeConfig(17, STANDARD_GAMES);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-    analyzeResult("Test 4: Ungerade (17 Teams, 11 Games)", result, config);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
-    const errors = validateHardConstraints(result, config);
-    if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
-  }
-
-  // 5. Nur Solo: 16 Teams, 11 Solo-Games
-  {
-    const soloGames = STANDARD_GAMES.filter(g => g.teamsProSlot === 1).concat([
-      { id: "gs1", name: "Solo Extra 1", teamsProSlot: 1 },
-      { id: "gs2", name: "Solo Extra 2", teamsProSlot: 1 },
-      { id: "gs3", name: "Solo Extra 3", teamsProSlot: 1 },
-      { id: "gs4", name: "Solo Extra 4", teamsProSlot: 1 },
-    ]);
-    const config = makeConfig(16, soloGames);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-    analyzeResult("Test 5: Nur Solo (16 Teams, 11 Solo-Games)", result, config);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
-    const errors = validateHardConstraints(result, config);
-    if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
-  }
-
-  // 6. Nur Duell: 16 Teams, 4 Duell-Games
-  {
-    const duellGames = STANDARD_GAMES.filter(g => g.teamsProSlot >= 2);
-    const config = makeConfig(16, duellGames);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-    analyzeResult("Test 6: Nur Duell (16 Teams, 4 Duell-Games)", result, config);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
-    const errors = validateHardConstraints(result, config);
-    if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
-  }
-
-  // 7. Edge Case: 11 Teams, 11 Games
-  {
-    const config = makeConfig(11, STANDARD_GAMES);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-    analyzeResult("Test 7: Edge Case (11 Teams, 11 Games)", result, config);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
-    const errors = validateHardConstraints(result, config);
-    if (errors.length > 0 || result.konflikte.length > 0) allPassed = false;
-  }
-
-  // 8. Anti-Korrelation: 18 Teams, Standard-Games, Kisten Stappeln <-> Stack Attack
-  {
-    const config = makeConfig(18, STANDARD_GAMES, [{ gameXId: "g6", gameYId: "g5" }]);
-    const t0 = performance.now();
-    const result = generateSchedule(config);
-    const dt = performance.now() - t0;
-
-    const hardErrors = validateHardConstraints(result, config);
-    const hartKonflikte = result.konflikte.filter(k => k.startsWith("HART:"));
-    const warnKonflikte = result.konflikte.filter(k => k.startsWith("WARN:"));
-
-    // Konformitaet: beide Games in unterschiedlichen Haelften der Gesamtrundenzahl
-    const half = result.runden / 2;
-    let konform = 0;
-    let beideZugeteilt = 0;
-    for (const team of config.teams) {
-      const rundeX = result.slots.find(
-        s => s.gameId === "g6" && s.teamIds.includes(team.id)
-      )?.runde;
-      const rundeY = result.slots.find(
-        s => s.gameId === "g5" && s.teamIds.includes(team.id)
-      )?.runde;
-      if (rundeX === undefined || rundeY === undefined) continue;
-      beideZugeteilt++;
-      const xFrueh = rundeX - 1 < half;
-      const yFrueh = rundeY - 1 < half;
-      if (xFrueh !== yFrueh) konform++;
+  it("teilt jedem Team jeden Posten in der geforderten Anzahl zu", () => {
+    const zaehler = einsaetze(result);
+    for (const team of makeTeams(17)) {
+      for (const game of PROTOKOLL_GAMES) {
+        expect(zaehler.get(`${team.id}|${game.id}`) ?? 0).toBe(game.durchgaenge ?? 1);
+      }
     }
-    const quote = beideZugeteilt > 0 ? konform / beideZugeteilt : 0;
+  });
 
-    console.log(`\n${"═".repeat(60)}`);
-    console.log(`  Test 8: Anti-Korrelation (18 Teams, Kisten Stappeln <-> Stack Attack)`);
-    console.log(`${"═".repeat(60)}`);
-    console.log(`  Teams: ${config.teams.length} | Games: ${config.games.length} | Runden: ${result.runden}`);
-    console.log(`  Konformitaet: ${konform}/${beideZugeteilt} Teams (${(quote * 100).toFixed(1)}%) spielen beide Games in unterschiedlichen Haelften`);
-    console.log(`  WARN-Konflikte (beide frueh/spaet): ${warnKonflikte.length}`);
-    const antiStats = result.statistiken?.antiKorrelation?.[0];
-    if (antiStats) {
-      console.log(`  Statistik antiKorrelation: konform=${antiStats.konformeTeams}, verletzend=${antiStats.verletzendeTeams} (${antiStats.gameXName} <-> ${antiStats.gameYName})`);
+  it("erzeugt keine harten Konflikte", () => {
+    expect(harteKonflikte(result)).toEqual([]);
+  });
+
+  it("setzt kein Team und kein Game zweimal in dieselbe Runde", () => {
+    for (let runde = 1; runde <= result.runden; runde++) {
+      const derRunde = result.slots.filter((s) => s.runde === runde);
+      const teamIds = derRunde.flatMap((s) => s.teamIds);
+      const gameIds = derRunde.map((s) => s.gameId);
+      expect(new Set(teamIds).size).toBe(teamIds.length);
+      expect(new Set(gameIds).size).toBe(gameIds.length);
     }
-    console.log(`  Harte Constraint-Verletzungen: ${hardErrors.length} | HART-Konflikte (Engine): ${hartKonflikte.length}`);
-    console.log(`  Laufzeit: ${dt.toFixed(1)}ms`);
+  });
 
-    const passed = hardErrors.length === 0 && hartKonflikte.length === 0 && quote >= 0.7;
-    if (passed) {
-      console.log(`\n  ✅ BESTANDEN (keine harten Konflikte, Konformitaet >= 70%)`);
-    } else {
-      console.log(`\n  ❌ FEHLGESCHLAGEN (hart=${hardErrors.length + hartKonflikte.length}, Konformitaet=${(quote * 100).toFixed(1)}%)`);
-      allPassed = false;
+  it("legt die beiden Durchgänge eines Doppel-Games auseinander", () => {
+    for (const team of makeTeams(17)) {
+      const runden = result.teamZeitplaene[team.id]
+        .filter((s) => s.gameId === "human-soccer")
+        .map((s) => s.runde);
+      expect(runden).toHaveLength(2);
+      expect(runden[1] - runden[0]).toBeGreaterThan(1);
     }
-  }
+  });
 
-  // Zusammenfassung
-  console.log(`\n${"═".repeat(60)}`);
-  if (allPassed) {
-    console.log("  🎉 ALLE 8 TESTS BESTANDEN – 0 Constraint-Verletzungen");
-  } else {
-    console.log("  ⚠️  MINDESTENS EIN TEST HAT CONSTRAINT-VERLETZUNGEN");
-  }
-  console.log(`${"═".repeat(60)}\n`);
-}
+  it("bleibt nah am theoretischen Minimum", () => {
+    const minimum = result.statistiken!.theoretischesMinimum;
+    expect(result.runden).toBeGreaterThanOrEqual(minimum);
+    expect(result.runden).toBeLessThanOrEqual(minimum + 3);
+  });
 
-runAllTests();
+  it("rechnet 12 Posten pro Team", () => {
+    expect(result.statistiken!.postenProTeam).toBe(12);
+  });
+});
+
+describe("generateSchedule — Freirunden streuen", () => {
+  it("bündelt Pausen nicht zu langen Blöcken am Stück", () => {
+    const result = generateSchedule(basisConfig());
+    const serien = Object.values(result.statistiken!.laengsteSerieProTeam);
+    // Ohne Streuung spielen Teams 12 Runden am Stück durch und langweilen sich
+    // danach; mit Streuung bleibt die längste Serie kurz.
+    expect(Math.max(...serien)).toBeLessThanOrEqual(6);
+  });
+
+  it("gibt jedem Team mindestens eine Freirunde, wenn Runden übrig sind", () => {
+    const result = generateSchedule(basisConfig());
+    const frei = Object.values(result.statistiken!.freirundenProTeam);
+    expect(Math.min(...frei)).toBeGreaterThan(0);
+  });
+});
+
+describe("generateSchedule — Mittagsfenster", () => {
+  const result = generateSchedule(
+    basisConfig({
+      mittagsfenster: MITTAG_DEFAULT,
+      freieHelfer: [{ id: "h1", name: "Helfer 1" }],
+    }),
+  );
+
+  it("liefert Mittagswellen mit Teams, Posten und freien Helfern", () => {
+    expect(result.mittagsWellen).toBeDefined();
+    const wellen = result.mittagsWellen!;
+    expect(wellen.length).toBeGreaterThan(1);
+    expect(new Set(wellen.flatMap((w) => w.teamIds)).size).toBe(17);
+    expect(new Set(wellen.flatMap((w) => w.postenIds)).size).toBe(PROTOKOLL_GAMES.length);
+    expect(wellen.flatMap((w) => w.helferIds)).toEqual(["h1"]);
+  });
+
+  it("setzt kein Team ein, während es isst", () => {
+    const wellen = result.mittagsWellen!;
+    const welleVonTeam = new Map<string, (typeof wellen)[number]>();
+    for (const welle of wellen) {
+      for (const id of welle.teamIds) welleVonTeam.set(id, welle);
+    }
+
+    for (const slot of result.slots) {
+      for (const teamId of slot.teamIds) {
+        const welle = welleVonTeam.get(teamId);
+        if (!welle) continue;
+        const start = Number(slot.startZeit.slice(0, 2)) * 60 + Number(slot.startZeit.slice(3));
+        const ende = Number(slot.endZeit.slice(0, 2)) * 60 + Number(slot.endZeit.slice(3));
+        expect(start < welle.endeMin && welle.startMin < ende).toBe(false);
+      }
+    }
+  });
+
+  it("lässt den Posten pausieren, während seine Crew isst", () => {
+    const wellen = result.mittagsWellen!;
+    const welleVonPosten = new Map<string, (typeof wellen)[number]>();
+    for (const welle of wellen) {
+      for (const id of welle.postenIds) welleVonPosten.set(id, welle);
+    }
+
+    for (const slot of result.slots) {
+      const welle = welleVonPosten.get(slot.gameId);
+      if (!welle) continue;
+      const start = Number(slot.startZeit.slice(0, 2)) * 60 + Number(slot.startZeit.slice(3));
+      const ende = Number(slot.endZeit.slice(0, 2)) * 60 + Number(slot.endZeit.slice(3));
+      expect(start < welle.endeMin && welle.startMin < ende).toBe(false);
+    }
+  });
+
+  it("kommt trotz Mittagssperren ohne harte Konflikte durch", () => {
+    expect(harteKonflikte(result)).toEqual([]);
+  });
+
+  it("verteilt die Posten grob nach Ziel auf Vor- und Nachmittag", () => {
+    const vormittag = Object.values(result.statistiken!.postenVormittagProTeam);
+    // Ziel sind 7 von 12; Streuung von ±2 ist der Preis für die Machbarkeit.
+    for (const anzahl of vormittag) {
+      expect(anzahl).toBeGreaterThanOrEqual(5);
+      expect(anzahl).toBeLessThanOrEqual(9);
+    }
+  });
+});
+
+describe("generateSchedule — Turnierfenster", () => {
+  it("meldet, wenn der Plan über das Fenster hinausläuft", () => {
+    const result = generateSchedule(
+      basisConfig({ fensterEndeZeit: "12:00" }),
+    );
+    expect(result.fenster!.passt).toBe(false);
+    expect(result.fenster!.ueberzugMin).toBeGreaterThan(0);
+    expect(result.konflikte.some((k) => k.includes("Turnierfenster"))).toBe(true);
+  });
+
+  it("bestätigt ein Fenster, das reicht", () => {
+    const result = generateSchedule(basisConfig({ fensterEndeZeit: "18:00" }));
+    expect(result.fenster!.passt).toBe(true);
+    expect(result.fenster!.ueberzugMin).toBe(0);
+  });
+
+  it("ohne Fenster gibt es nichts zu beanstanden", () => {
+    const result = generateSchedule(basisConfig());
+    expect(result.fenster!.endeSoll).toBeNull();
+    expect(result.fenster!.passt).toBe(true);
+  });
+});
+
+describe("generateSchedule — Randfälle", () => {
+  it("meldet fehlende Teams statt zu rechnen", () => {
+    const result = generateSchedule(basisConfig({ teams: [] }));
+    expect(result.konflikte).toEqual(["Keine Teams vorhanden"]);
+    expect(result.slots).toEqual([]);
+  });
+
+  it("meldet fehlende Games statt zu rechnen", () => {
+    const result = generateSchedule(basisConfig({ games: [] }));
+    expect(result.konflikte).toEqual(["Keine Games vorhanden"]);
+  });
+
+  it("kommt mit ungerader Teamzahl an Duellen klar (Bye)", () => {
+    const result = generateSchedule(
+      basisConfig({
+        teams: makeTeams(5),
+        games: [{ id: "d", name: "Duell", teamsProSlot: 2 }],
+      }),
+    );
+    expect(harteKonflikte(result)).toEqual([]);
+    const zaehler = einsaetze(result);
+    for (let i = 1; i <= 5; i++) expect(zaehler.get(`team-${i}|d`)).toBe(1);
+  });
+
+  it("liefert dasselbe Ergebnis bei gleicher Eingabe", () => {
+    const a = generateSchedule(basisConfig({ mittagsfenster: MITTAG_DEFAULT }));
+    const b = generateSchedule(basisConfig({ mittagsfenster: MITTAG_DEFAULT }));
+    expect(a.slots).toEqual(b.slots);
+    expect(a.endZeit).toBe(b.endZeit);
+  });
+
+  it("schiebt feste Pausen ins Zeitraster", () => {
+    const ohne = generateSchedule(
+      basisConfig({ teams: makeTeams(4), games: [{ id: "s", name: "Solo", teamsProSlot: 1 }] }),
+    );
+    const mit = generateSchedule(
+      basisConfig({
+        teams: makeTeams(4),
+        games: [{ id: "s", name: "Solo", teamsProSlot: 1 }],
+        pausen: [{ nachRunde: 2, dauerMin: 30, name: "Kaffee" }],
+      }),
+    );
+    expect(ohne.runden).toBe(mit.runden);
+    const endeOhne = Number(ohne.endZeit.slice(0, 2)) * 60 + Number(ohne.endZeit.slice(3));
+    const endeMit = Number(mit.endZeit.slice(0, 2)) * 60 + Number(mit.endZeit.slice(3));
+    expect(endeMit - endeOhne).toBe(30);
+  });
+});
+
+describe("generateSchedule — Anti-Korrelation", () => {
+  it("meldet unbekannte Game-IDs, statt sie stillschweigend zu schlucken", () => {
+    const result = generateSchedule(
+      basisConfig({ antiKorrelationen: [{ gameXId: "gibts-nicht", gameYId: "cornhole" }] }),
+    );
+    expect(result.konflikte.some((k) => k.includes("unbekannte Game-ID"))).toBe(true);
+  });
+
+  it("liefert eine Statistik je Paar", () => {
+    const result = generateSchedule(
+      basisConfig({
+        antiKorrelationen: [{ gameXId: "kisten-stappeln", gameYId: "stack-attack" }],
+      }),
+    );
+    const stat = result.statistiken!.antiKorrelation!;
+    expect(stat).toHaveLength(1);
+    expect(stat[0].konformeTeams + stat[0].verletzendeTeams).toBe(17);
+  });
+});

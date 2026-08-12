@@ -328,7 +328,7 @@ export default function RefereeGamePage() {
               </div>
             )}
 
-            {/* Optionen (Eierfall) */}
+            {/* Optionen (Risiko-Wahl) */}
             {wl.optionen && (
               <div className="flex flex-col gap-1.5">
                 <p className="cg-label text-label">Risikowahl</p>

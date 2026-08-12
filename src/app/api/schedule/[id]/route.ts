@@ -17,6 +17,11 @@ import {
   warnungen,
 } from "@/lib/zeitplan-sperre";
 import { pruefeZeitplanKonflikte } from "@/lib/zeitplan-konflikte";
+import {
+  durchgaengeAusSlots,
+  pruefeZeitplanAktualitaet,
+} from "@/lib/zeitplan-aktualitaet";
+import { ladeAktuellenStand, ladeSollDurchgaenge } from "@/lib/zeitplan-eingaben";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -38,8 +43,11 @@ const LIST_SELECT = {
   wechselzeitMin: true,
   startZeit: true,
   endZeit: true,
+  fensterEndeZeit: true,
+  postenVormittag: true,
   pausen: true,
   mittagspause: true,
+  mittagswellen: true,
   istAktiv: true,
   createdAt: true,
   updatedAt: true,
@@ -97,9 +105,23 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     }
 
     // Sperr-Status mitliefern, damit die UI Buttons korrekt deaktiviert
-    const abhaengigkeiten = await getZeitplanAbhaengigkeiten(id);
-    const gamedayModus = await getGamedayModus();
+    const [abhaengigkeiten, gamedayModus, sollDurchgaenge, stammdaten] =
+      await Promise.all([
+        getZeitplanAbhaengigkeiten(id),
+        getGamedayModus(),
+        ladeSollDurchgaenge(),
+        ladeAktuellenStand(),
+      ]);
     const neuaufbau = pruefeNeuaufbau(gamedayModus, abhaengigkeiten);
+
+    // Passt der gespeicherte Plan noch zu den heutigen Teams und Posten?
+    const aktualitaet = pruefeZeitplanAktualitaet(
+      {
+        teamIds: Object.keys(teamZeitplaene),
+        durchgaengeProGame: durchgaengeAusSlots(slots),
+      },
+      stammdaten,
+    );
 
     return NextResponse.json({
       id: config.id,
@@ -109,8 +131,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       wechselzeitMin: config.wechselzeitMin,
       startZeit: config.startZeit,
       endZeit: config.endZeit,
+      fensterEndeZeit: config.fensterEndeZeit,
+      postenVormittag: config.postenVormittag,
       pausen: config.pausen,
-      mittagspause: config.mittagspause,
+      mittagsfenster: config.mittagspause,
+      mittagsWellen: config.mittagswellen,
       istAktiv: config.istAktiv,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
@@ -119,8 +144,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       teamZeitplaene,
       // Aus den gespeicherten Slots neu geprüft — sonst meldete jeder geladene
       // Zeitplan "0 Konflikte", unabhängig von seinem tatsächlichen Zustand.
-      konflikte: pruefeZeitplanKonflikte(slots),
+      konflikte: pruefeZeitplanKonflikte(slots, sollDurchgaenge),
       abhaengigkeiten,
+      aktualitaet,
       sperre: {
         gamedayModus,
         neuaufbauErlaubt: neuaufbau.erlaubt,
@@ -213,7 +239,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       wechselzeitMin,
       startZeit,
       endZeit,
-      mittagspause,
+      fensterEndeZeit,
+      postenVormittag,
+      mittagsfenster,
+      mittagswellen,
       pausen,
       slots,
       istAktiv,
@@ -243,8 +272,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           wechselzeitMin,
           startZeit,
           endZeit,
+          fensterEndeZeit: fensterEndeZeit ?? null,
+          postenVormittag: postenVormittag ?? null,
           pausen,
-          mittagspause: mittagspause ?? Prisma.DbNull,
+          mittagspause: mittagsfenster ?? Prisma.DbNull,
+          mittagswellen,
           ...(istAktiv !== undefined ? { istAktiv } : {}),
           slots: {
             create: slots.map((slot) => ({

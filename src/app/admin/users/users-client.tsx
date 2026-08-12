@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Warning } from "@phosphor-icons/react";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { StatusPill, type PillTone } from "@/components/ui/pills";
 import { Button } from "@/components/ui/button";
+import { apiFetch, apiSend } from "@/lib/api-client";
+import { meldung } from "@/lib/api-fehler";
+import { darfBenutzerVerwalten, vergebbareRollen } from "@/lib/benutzer-rechte";
 
 type User = {
   id: string;
@@ -14,11 +17,11 @@ type User = {
   rolle: string;
   istAktiv: boolean;
   mussPasswortAendern?: boolean;
+  isstMittag: boolean;
   createdAt: string;
+  posten?: { id: string; name: string }[];
 };
 
-// Im UI neu vergebbare Rollen (ORGA/HELFER bleiben im Schema, werden nicht neu exponiert)
-const ROLLEN = ["ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"] as const;
 
 const ROLE_LABELS: Record<string, string> = {
   OWNER: "Owner",
@@ -72,7 +75,55 @@ function ActiveTogglePill({
   );
 }
 
-export function UsersClient({ isOwner }: { isOwner: boolean }) {
+/**
+ * Verpflegung: Posten-Crew isst immer mit (sie pausiert mit ihrem Posten),
+ * alle anderen brauchen eine ausdrückliche Angabe — sonst fehlt die Person in
+ * der Zahl, mit der die Küche plant.
+ */
+function MittagPill({
+  user,
+  disabled,
+  onToggle,
+}: {
+  user: User;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const amPosten = (user.posten?.length ?? 0) > 0;
+  if (amPosten) {
+    return (
+      <StatusPill tone="neutral">
+        Mittag: Posten-Welle
+      </StatusPill>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      title="Isst diese Person am Turniertag mit?"
+      className="inline-flex items-center rounded-full px-[9px] py-1 text-[11px] font-semibold tracking-[0.04em] transition-opacity duration-150 hover:opacity-80 disabled:cursor-not-allowed disabled:hover:opacity-100"
+      style={
+        user.isstMittag
+          ? { color: "var(--done-tint)", background: "var(--done-dim)" }
+          : { color: "var(--ink-3)", background: "var(--sunken)" }
+      }
+    >
+      {user.isstMittag ? "Isst mit" : "Kein Mittag"}
+    </button>
+  );
+}
+
+type UsersClientProps = {
+  /** Rolle des angemeldeten Accounts — bestimmt, wen er verwalten darf. */
+  eigeneRolle: string;
+  eigeneId: string;
+};
+
+type AktivierungsAntwort = User & { aktivierungsCode?: string };
+
+export function UsersClient({ eigeneRolle, eigeneId }: UsersClientProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -83,29 +134,42 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
   const [activationCode, setActivationCode] = useState<{ code: string; username: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Rollen, die dieser Account vergeben darf (Admins z. B. keine Admins)
+  const rollen = vergebbareRollen(eigeneRolle);
+  const darfAnlegen = rollen.length > 0;
+  const standardRolle = rollen.includes("SCHIEDSRICHTER")
+    ? "SCHIEDSRICHTER"
+    : (rollen[rollen.length - 1] ?? "");
+
   // Form state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
-  const [rolle, setRolle] = useState<string>("SCHIEDSRICHTER");
+  const [rolle, setRolle] = useState<string>(standardRolle);
 
-  useEffect(() => {
-    loadUsers();
+  const loadUsers = useCallback(async () => {
+    try {
+      setUsers(await apiFetch<User[]>("/api/users"));
+      setError("");
+    } catch (err) {
+      setError(meldung(err, "Benutzer konnten nicht geladen werden."));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  async function loadUsers() {
-    const res = await fetch("/api/users");
-    if (res.ok) {
-      setUsers(await res.json());
-    }
-    setLoading(false);
-  }
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  /** Darf dieser Account den gezeigten Benutzer bearbeiten oder löschen? */
+  const darfVerwalten = (user: User) => darfBenutzerVerwalten(eigeneRolle, user.rolle);
 
   function resetForm() {
     setName("");
     setEmail("");
     setUsername("");
-    setRolle("SCHIEDSRICHTER");
+    setRolle(standardRolle);
     setEditingId(null);
     setShowForm(false);
     setError("");
@@ -115,7 +179,7 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
     setName(user.name);
     setEmail(user.email || "");
     setUsername(user.username || "");
-    setRolle(ROLLEN.includes(user.rolle as (typeof ROLLEN)[number]) ? user.rolle : "SCHIEDSRICHTER");
+    setRolle(rollen.includes(user.rolle) ? user.rolle : standardRolle);
     setEditingId(user.id);
     setShowForm(true);
     setError("");
@@ -125,75 +189,79 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
     e.preventDefault();
     setError("");
 
-    if (editingId) {
-      const payload: Record<string, unknown> = { name, email, username, rolle };
-      const res = await fetch(`/api/users/${editingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Fehler beim Speichern.");
+    try {
+      if (editingId) {
+        await apiSend(`/api/users/${editingId}`, "PUT", { name, email, username, rolle });
+        resetForm();
+        await loadUsers();
         return;
       }
-      resetForm();
-      loadUsers();
-      return;
-    }
 
-    // Neuer Account: Owner erhält einmalig einen Aktivierungscode
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, username, rolle }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Fehler beim Speichern.");
-      return;
-    }
-    const created = await res.json();
-    resetForm();
-    loadUsers();
-    if (created.aktivierungsCode) {
-      setActivationCode({ code: created.aktivierungsCode, username: created.username });
-      setCopied(false);
+      // Neuer Account: der Ersteller erhält einmalig einen Aktivierungscode
+      const created = await apiSend<AktivierungsAntwort>("/api/users", "POST", {
+        name,
+        email,
+        username,
+        rolle,
+      });
+      resetForm();
+      await loadUsers();
+      if (created.aktivierungsCode) {
+        setActivationCode({
+          code: created.aktivierungsCode,
+          username: created.username ?? username,
+        });
+        setCopied(false);
+      }
+    } catch (err) {
+      setError(meldung(err, "Fehler beim Speichern."));
     }
   }
 
   async function resetActivation(user: User) {
     if (!confirm(`Neuen Aktivierungscode für ${user.name} erzeugen? Das bisherige Passwort wird ungültig.`)) return;
-    const res = await fetch(`/api/users/${user.id}/reset-activation`, { method: "POST" });
-    if (!res.ok) {
-      const data = await res.json();
-      alert(data.error || "Fehler beim Zurücksetzen.");
-      return;
+    try {
+      const updated = await apiSend<AktivierungsAntwort>(
+        `/api/users/${user.id}/reset-activation`,
+        "POST",
+      );
+      await loadUsers();
+      setActivationCode({
+        code: updated.aktivierungsCode ?? "",
+        username: updated.username ?? user.username ?? "",
+      });
+      setCopied(false);
+    } catch (err) {
+      setError(meldung(err, "Fehler beim Zurücksetzen."));
     }
-    const updated = await res.json();
-    loadUsers();
-    setActivationCode({ code: updated.aktivierungsCode, username: updated.username });
-    setCopied(false);
   }
 
   async function toggleActive(user: User) {
-    await fetch(`/api/users/${user.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ istAktiv: !user.istAktiv }),
-    });
-    loadUsers();
+    try {
+      await apiSend(`/api/users/${user.id}`, "PUT", { istAktiv: !user.istAktiv });
+      await loadUsers();
+    } catch (err) {
+      setError(meldung(err, "Status konnte nicht geändert werden."));
+    }
+  }
+
+  async function toggleMittag(user: User) {
+    try {
+      await apiSend(`/api/users/${user.id}`, "PUT", { isstMittag: !user.isstMittag });
+      await loadUsers();
+    } catch (err) {
+      setError(meldung(err, "Mittag-Angabe konnte nicht geändert werden."));
+    }
   }
 
   async function handleDelete(user: User) {
     if (!confirm(`${user.name} wirklich löschen?`)) return;
-    const res = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const data = await res.json();
-      alert(data.error || "Fehler beim Löschen.");
-      return;
+    try {
+      await apiSend(`/api/users/${user.id}`, "DELETE");
+      await loadUsers();
+    } catch (err) {
+      setError(meldung(err, "Fehler beim Löschen."));
     }
-    loadUsers();
   }
 
   async function copyCode() {
@@ -219,7 +287,7 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
       <TopBar title="Benutzer">
         <span className="tnum text-xs text-ink-3">{users.length} Benutzer registriert</span>
         <TopBarSpacer />
-        {isOwner && (
+        {darfAnlegen && (
           <Button
             variant="primary"
             onClick={() => {
@@ -232,14 +300,14 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
         )}
       </TopBar>
 
-      {!isOwner && (
+      {!darfAnlegen && (
         <p className="mx-4 mt-4 rounded-[10px] border border-line bg-surface px-3.5 py-2.5 text-xs text-ink-3 sm:mx-[22px]">
-          Nur der Owner kann Accounts anlegen oder Aktivierungscodes zurücksetzen.
+          Deine Rolle kann keine Accounts anlegen — dafür braucht es mindestens Admin.
         </p>
       )}
 
       {/* Formular */}
-      {showForm && isOwner && (
+      {showForm && darfAnlegen && (
         <div className="mx-4 mt-4 rounded-[10px] border border-line bg-surface p-5 sm:mx-[22px]">
           <h2 className="cg-label mb-4">
             {editingId ? "Benutzer bearbeiten" : "Neuer Benutzer"}
@@ -288,9 +356,9 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
                 onChange={(e) => setRolle(e.target.value)}
                 className={INPUT_CLASS}
               >
-                {ROLLEN.map((r) => (
+                {rollen.map((r) => (
                   <option key={r} value={r}>
-                    {ROLE_LABELS[r]}
+                    {ROLE_LABELS[r] ?? r}
                   </option>
                 ))}
               </select>
@@ -332,17 +400,18 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
       <div className="max-lg:space-y-3 max-lg:p-4">
         {users.map((user) => {
           const roleTone = ROLE_TONES[user.rolle] ?? "neutral";
-          const actions = isOwner && (
+          // Verwalten darf man nur Accounts unterhalb der eigenen Stufe —
+          // dieselbe Regel, die auch die API durchsetzt.
+          const verwaltbar = darfVerwalten(user);
+          const actions = verwaltbar && (
             <>
-              {user.rolle !== "OWNER" && (
-                <button onClick={() => resetActivation(user)} className={SMALL_GHOST}>
-                  Code neu
-                </button>
-              )}
+              <button onClick={() => resetActivation(user)} className={SMALL_GHOST}>
+                Code neu
+              </button>
               <button onClick={() => startEdit(user)} className={SMALL_GHOST}>
                 Bearbeiten
               </button>
-              {user.rolle !== "OWNER" && (
+              {user.id !== eigeneId && (
                 <button onClick={() => handleDelete(user)} className={SMALL_DANGER_GHOST}>
                   Löschen
                 </button>
@@ -375,11 +444,16 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
                   {user.mussPasswortAendern && (
                     <StatusPill tone="warn">Nicht aktiviert</StatusPill>
                   )}
+                  <MittagPill
+                    user={user}
+                    disabled={!verwaltbar}
+                    onToggle={() => toggleMittag(user)}
+                  />
                 </div>
                 <div>
                   <ActiveTogglePill
                     active={user.istAktiv}
-                    disabled={!isOwner}
+                    disabled={!verwaltbar}
                     onClick={() => toggleActive(user)}
                   />
                 </div>
@@ -398,7 +472,7 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
                   </div>
                   <ActiveTogglePill
                     active={user.istAktiv}
-                    disabled={!isOwner}
+                    disabled={!verwaltbar}
                     onClick={() => toggleActive(user)}
                   />
                 </div>
@@ -409,8 +483,13 @@ export function UsersClient({ isOwner }: { isOwner: boolean }) {
                   {user.mussPasswortAendern && (
                     <StatusPill tone="warn">Nicht aktiviert</StatusPill>
                   )}
+                  <MittagPill
+                    user={user}
+                    disabled={!verwaltbar}
+                    onToggle={() => toggleMittag(user)}
+                  />
                 </div>
-                {isOwner && (
+                {verwaltbar && (
                   <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>
                 )}
               </div>

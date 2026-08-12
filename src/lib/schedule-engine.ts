@@ -1,27 +1,49 @@
 /**
- * Zeitplan-Engine v2: Adaptive Priority-Matching
+ * Zeitplan-Engine v3 — Postenlauf mit Turnierfenster und rollendem Mittag
  *
- * Löst das Constraint-Satisfaction-Problem für den Postenlauf:
- * - N Teams rotieren durch M Stationen (Solo + Duell)
- * - Jedes Team spielt jedes Game genau 1×
- * - Kein Team doppelt pro Runde, keine Station doppelt pro Runde
+ * Was die Engine löst:
+ * - N Teams rotieren durch M Games; jedes Game kann mehrfach verlangt sein
+ *   (`durchgaenge`) — 10 Games mit zwei Doppel-Games ergeben 12 Posten pro Team.
+ * - Pro Runde belegt jedes Game höchstens einen Slot und jedes Team höchstens
+ *   ein Game.
+ * - Der Mittag ist keine globale Pause mehr, sondern rollt: Teams essen in
+ *   Wellen (2–3 gleichzeitig, 10 min Versatz) in Runden, in denen sie frei
+ *   sind. Der Betrieb läuft weiter.
+ * - Posten-Crew (Schiedsrichter/Helfer) bekommt dieselbe Behandlung: der Posten
+ *   pausiert genau in seiner Welle, damit die Crew essen kann.
+ * - Freirunden werden über den Tag gestreut statt am Ende gebündelt — Teams
+ *   sollen zwischendurch zuschauen können.
+ * - Vor/nach dem eigenen Mittag wird auf eine Zielverteilung hingearbeitet
+ *   (Standard rund 60 % der Posten vormittags, also 7 von 12).
  *
- * Algorithmus:
- * 1. Dynamische Duell-Kapazitätsberechnung (Solo-Schutz)
- * 2. Bipartites Matching für Duell-Aktivierung
- * 3. Fallback-Kaskade bei Konflikten
- * 4. Byes (ungerade Teams) erst nach regulärer Zuweisung
- * 5. Scoring für Gegner-Diversität, Bye-Balance, Dringlichkeit
- *
- * Determinismus: Gleiche Eingabe → gleiches Ergebnis
+ * Determinismus: gleiche Eingabe → gleiches Ergebnis (keine Zufallsquellen).
  */
+
+import { formatZeit, parseZeit, ueberlappt } from "@/lib/zeit";
+import {
+  planeMittag,
+  type MittagsfensterConfig,
+  type MittagsWelle,
+} from "@/lib/mittagsplanung";
 
 // ─── Typen ───────────────────────────────────────────────────────────
 
 export type GameInput = {
   id: string;
   name: string;
-  teamsProSlot: number; // 1 = Solo, 2 = Duell
+  /** 1 = Solo, 2 = Duell. */
+  teamsProSlot: number;
+  /** Wie oft jedes Team dieses Game absolviert (>= 1). */
+  durchgaenge?: number;
+  /** Personen der Posten-Crew — nur für die Mittagswellen relevant. */
+  crewGroesse?: number;
+};
+
+export type TeamInput = {
+  id: string;
+  name: string;
+  nummer: number;
+  teilnehmerAnzahl?: number | null;
 };
 
 export type PauseInput = {
@@ -30,18 +52,10 @@ export type PauseInput = {
   name: string;
 };
 
-export type MittagspauseConfig = {
-  nachRunde: number;          // Nach welcher Runde
-  dauerMin: number;           // Dauer pro Schicht (z.B. 45)
-  maxTeamsGleichzeitig: number; // Küchen-Kapazität (z.B. 8)
-  versatzMin: number;          // Versatz zwischen Schichten (z.B. 5)
-};
-
 /**
  * Anti-Korrelation zweier Games (ungerichtetes Paar): Ein Team, das Game X
  * früh spielt, soll Game Y spät spielen — und umgekehrt. Gleicht den
- * Beobachtungsvorteil später Slots zwischen den beiden Games aus
- * (z.B. Kisten stapeln ↔ Stack Attack).
+ * Beobachtungsvorteil später Slots aus (z. B. Kisten stapeln ↔ Stack Attack).
  */
 export type AntiKorrelationConfig = {
   gameXId: string;
@@ -49,13 +63,20 @@ export type AntiKorrelationConfig = {
 };
 
 export type ScheduleConfig = {
-  teams: { id: string; name: string; nummer: number }[];
+  teams: TeamInput[];
   games: GameInput[];
   blockDauerMin: number;
   wechselzeitMin: number;
+  /** Turnierstart. */
   startZeit: string;
+  /** Spätestes Turnierende (Soll-Fenster) — überschreiten meldet die Engine. */
+  fensterEndeZeit?: string | null;
   pausen: PauseInput[];
-  mittagspause?: MittagspauseConfig;
+  mittagsfenster?: MittagsfensterConfig | null;
+  /** Ziel: Posten vor der eigenen Mittagswelle. Standard ≈ 60 % aller Posten. */
+  postenVormittag?: number | null;
+  /** Helfer ohne Posten-Zuteilung, die mitessen. */
+  freieHelfer?: { id: string; name: string }[];
   antiKorrelationen?: AntiKorrelationConfig[];
 };
 
@@ -74,8 +95,18 @@ export type AntiKorrelationStatistik = {
   gameXName: string;
   gameYId: string;
   gameYName: string;
-  konformeTeams: number;     // beide Games in unterschiedlichen Hälften
-  verletzendeTeams: number;  // beide Games in derselben Hälfte
+  konformeTeams: number;
+  verletzendeTeams: number;
+};
+
+export type TurnierFenster = {
+  startZeit: string;
+  /** Soll-Ende aus der Konfiguration; null = kein Fenster gesetzt. */
+  endeSoll: string | null;
+  /** Tatsächliches Ende des generierten Plans. */
+  endeIst: string;
+  passt: boolean;
+  ueberzugMin: number;
 };
 
 export type ScheduleStatistiken = {
@@ -84,15 +115,12 @@ export type ScheduleStatistiken = {
   rundenEffizienz: number;
   teamAuslastung: Record<string, number>;
   theoretischesMinimum: number;
+  postenProTeam: number;
+  /** Posten vor der eigenen Mittagswelle, je Team. */
+  postenVormittagProTeam: Record<string, number>;
+  /** Längste Serie aufeinanderfolgender Einsätze, je Team. */
+  laengsteSerieProTeam: Record<string, number>;
   antiKorrelation?: AntiKorrelationStatistik[];
-};
-
-export type MittagsSchicht = {
-  schicht: number;
-  startZeit: string;
-  endZeit: string;
-  teamIds: string[];
-  teamNames: string[];
 };
 
 export type ScheduleResult = {
@@ -102,34 +130,76 @@ export type ScheduleResult = {
   konflikte: string[];
   teamZeitplaene: Record<string, SlotOutput[]>;
   statistiken?: ScheduleStatistiken;
-  mittagsSchichten?: MittagsSchicht[];
+  mittagsWellen?: MittagsWelle[];
+  fenster?: TurnierFenster;
 };
+
+// ─── Gewichte des Kandidaten-Scorings ────────────────────────────────
+// Reihenfolge der Wirkung: Gegner-Wiederholung > Serien-Bremse >
+// Anti-Korrelation > Vormittags-Ziel > Dringlichkeit (pro offenem Posten) >
+// Pausen-Streuung > Bye-Ausgleich.
+
+const GEGNER_WIEDERHOLUNG = 1000;
+const SERIEN_MALUS = 400;
+const POSTEN_WIEDERHOLUNG = 350;
+const ANTI_KORRELATION_WEIGHT = 300;
+const VORMITTAG_WEIGHT = 200;
+const DRINGLICHKEIT_WEIGHT = 100;
+const PAUSEN_WEIGHT = 60;
+
+/** Ab dieser Anzahl Runden am Stück wird ein Team spürbar zurückgestellt. */
+const MAX_SERIE = 4;
 
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────
 
-function parseTime(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
+function durchgaengeVon(game: GameInput): number {
+  return Math.max(1, Math.floor(game.durchgaenge ?? 1));
 }
 
-function formatTime(mins: number): string {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+/**
+ * Untere Schranke für die Rundenzahl: Team-Bedarf, Posten-Durchsatz und
+ * Gesamtkapazität — die grösste der drei Schranken bindet.
+ */
+export function theoretischesMinimum(
+  anzahlTeams: number,
+  games: readonly GameInput[],
+): number {
+  if (anzahlTeams === 0 || games.length === 0) return 0;
+
+  const postenProTeam = games.reduce((s, g) => s + durchgaengeVon(g), 0);
+  let proGame = 0;
+  let kapazitaetProRunde = 0;
+  for (const g of games) {
+    const proSlot = Math.max(1, g.teamsProSlot);
+    const besuche = anzahlTeams * durchgaengeVon(g);
+    proGame = Math.max(proGame, Math.ceil(besuche / proSlot));
+    kapazitaetProRunde += proSlot;
+  }
+  const gesamtBesuche = anzahlTeams * postenProTeam;
+  const kapazitaetsSchranke =
+    kapazitaetProRunde > 0 ? Math.ceil(gesamtBesuche / kapazitaetProRunde) : Infinity;
+
+  return Math.max(postenProTeam, proGame, kapazitaetsSchranke, 1);
 }
 
-function theoretischesMinimum(N: number, soloCount: number, duellCount: number): number {
-  if (soloCount === 0 && duellCount === 0) return 0;
-  const soloMin = soloCount > 0 ? N : 0;
-  const duellMin = duellCount > 0 ? Math.ceil(N / 2) : 0;
-  const optD = Math.min(duellCount, Math.floor(Math.max(0, N - soloCount) / 2));
-  const effectiveCap = Math.min(soloCount, N) + optD * 2;
-  const totalAssignments = N * (soloCount + duellCount);
-  const capacityMin = effectiveCap > 0 ? Math.ceil(totalAssignments / effectiveCap) : Infinity;
-  const duellScheduleMin = optD > 0
-    ? Math.ceil(duellCount * Math.ceil(N / 2) / optD)
-    : (duellCount > 0 ? Infinity : 0);
-  return Math.max(soloMin, duellMin, capacityMin, duellScheduleMin, 1);
+/** Startminute jeder Runde inkl. fixer Pausen — das Zeitraster des Tages. */
+function rundenRaster(
+  anzahl: number,
+  startMin: number,
+  taktMin: number,
+  pausen: readonly PauseInput[],
+): number[] {
+  const pauseNach = new Map<number, number>();
+  for (const p of pausen) {
+    pauseNach.set(p.nachRunde, (pauseNach.get(p.nachRunde) ?? 0) + p.dauerMin);
+  }
+  const raster: number[] = [];
+  let t = startMin;
+  for (let r = 0; r < anzahl; r++) {
+    raster.push(t);
+    t += taktMin + (pauseNach.get(r + 1) ?? 0);
+  }
+  return raster;
 }
 
 // ─── Bipartites Matching ─────────────────────────────────────────────
@@ -190,7 +260,10 @@ function generateCombinations<T>(arr: T[], k: number): T[][] {
   if (k > arr.length) return [];
   const result: T[][] = [];
   function combine(start: number, current: T[]) {
-    if (current.length === k) { result.push([...current]); return; }
+    if (current.length === k) {
+      result.push([...current]);
+      return;
+    }
     for (let i = start; i < arr.length; i++) {
       current.push(arr[i]);
       combine(i + 1, current);
@@ -210,8 +283,7 @@ function findDuellSubsetOfSize(
   if (targetSize === 0) return [];
   const maxSize = Math.min(targetSize, candidateGames.length);
   for (let size = maxSize; size >= 1; size--) {
-    const subsets = generateCombinations(candidateGames, size);
-    for (const subset of subsets) {
+    for (const subset of generateCombinations(candidateGames, size)) {
       if (canActivateDuellSubset(subset, availableTeams, N)) return subset;
     }
   }
@@ -242,15 +314,14 @@ function computeOptimalDuellCount(
     } else if (teamsForSolos <= 0) {
       soloRounds = Infinity;
     } else {
-      soloRounds = Math.ceil(maxSoloRemaining * activeSoloCount / teamsForSolos);
+      soloRounds = Math.ceil((maxSoloRemaining * activeSoloCount) / teamsForSolos);
     }
 
     let duellRounds: number;
     if (D === 0) {
       duellRounds = maxDuellRemaining > 0 ? Infinity : 0;
     } else {
-      const totalDuellRoundsNeeded = activeDuellCount * Math.ceil(maxDuellRemaining / 2);
-      duellRounds = Math.ceil(totalDuellRoundsNeeded / D);
+      duellRounds = Math.ceil((activeDuellCount * Math.ceil(maxDuellRemaining / 2)) / D);
     }
 
     const totalRounds = Math.max(soloRounds, duellRounds);
@@ -262,297 +333,439 @@ function computeOptimalDuellCount(
   return bestD;
 }
 
-// ─── Anti-Korrelation ────────────────────────────────────────────────
+// ─── Zuweisungs-Kontext ──────────────────────────────────────────────
 
-/**
- * Gewicht des Anti-Korrelations-Terms im Kandidaten-Scoring.
- * Einordnung in die bestehende Gewichtungs-Konvention:
- * Gegner-Wiederholung 1000 > Anti-Korrelation 300 > Dringlichkeit 100 > Byes 1-5.
- */
-const ANTI_KORRELATION_WEIGHT = 300;
+type Kontext = {
+  N: number;
+  M: number;
+  games: GameInput[];
+  /** Offene Durchgänge je Team/Game. */
+  offen: number[][];
+  /** Offene Posten je Team (Summe über alle Games). */
+  offenProTeam: number[];
+  /** Erste Runde, in der Team t Game g gespielt hat; -1 = noch nicht. */
+  ersteRunde: number[][];
+  /** Letzte Runde, in der Team t Game g gespielt hat; -1 = noch nicht. */
+  letzteRunde: number[][];
+  /** Wunsch-Abstand zwischen zwei Durchgängen desselben Games, je Game. */
+  mindestAbstand: number[];
+  opponentCount: number[][];
+  byeCount: number[];
+  /** Runden am Stück mit Einsatz. */
+  serie: number[];
+  /** Runden seit dem letzten Einsatz. */
+  leerlauf: number[];
+  /** Bereits absolvierte Posten. */
+  gespielt: number[];
+  /** Erste Runde der eigenen Mittagswelle; Infinity = kein Mittag. */
+  mittagsRunde: number[];
+  /** Runde gesperrt (Mittagswelle) je Team. */
+  teamGesperrt: boolean[][];
+  /** Runde gesperrt (Posten-Pause) je Game. */
+  postenGesperrt: boolean[][];
+  antiPartners: number[][];
+  estRounds: number;
+  zielVormittag: number;
+};
 
-/**
- * Soft-Score für die Anti-Korrelation (kein harter Filter — Machbarkeit hat
- * Vorrang, die Fallback-Kaskade bleibt unangetastet):
- * - Hat Team t das Partner-Game von g bereits in Runde rP gespielt, werden
- *   Zuteilungen bevorzugt, die den Rundenabstand |rP − r| maximieren.
- *   Normalisiert über die geschätzte Gesamtrundenzahl (theoretisches Minimum),
- *   zentriert: kleiner Abstand → negativer Score, grosser Abstand → positiver.
- * - Ist das Partner-Game noch offen, wird t in der ersten Tageshälfte leicht
- *   bevorzugt, damit eines der beiden Games früh liegt (nicht beide spät).
- */
-function antiKorrelationScore(
-  t: number,
-  g: number,
-  r: number,
-  antiPartners: number[][],
-  playedRound: number[][],
-  estRounds: number,
-): number {
-  const partners = antiPartners[g];
+function antiKorrelationScore(t: number, g: number, r: number, ctx: Kontext): number {
+  const partners = ctx.antiPartners[g];
   if (partners.length === 0) return 0;
-  const horizon = Math.max(1, estRounds - 1);
+  const horizont = Math.max(1, ctx.estRounds - 1);
   let score = 0;
   for (const p of partners) {
-    const rP = playedRound[t][p];
+    const rP = ctx.ersteRunde[t][p];
     if (rP >= 0) {
-      const spread = Math.min(1, Math.abs(rP - r) / horizon);
-      score += ANTI_KORRELATION_WEIGHT * (spread - 0.5);
-    } else if (r < estRounds / 2) {
+      const abstand = Math.min(1, Math.abs(rP - r) / horizont);
+      score += ANTI_KORRELATION_WEIGHT * (abstand - 0.5);
+    } else if (r < ctx.estRounds / 2) {
       score += ANTI_KORRELATION_WEIGHT * 0.1;
     }
   }
   return score;
 }
 
+/**
+ * Vormittags-Ziel: vor der eigenen Mittagswelle sollen rund `zielVormittag`
+ * Posten erledigt sein. Wer schon durch ist, wird zurückgestellt; wer hinten
+ * liegt, wird umso stärker bevorzugt, je näher die Welle rückt.
+ */
+function vormittagScore(t: number, r: number, ctx: Kontext): number {
+  const cut = ctx.mittagsRunde[t];
+  if (!Number.isFinite(cut) || r >= cut) return 0;
+  const rest = ctx.zielVormittag - ctx.gespielt[t];
+  if (rest <= 0) return -VORMITTAG_WEIGHT;
+  const verbleibendeRunden = Math.max(1, cut - r);
+  return VORMITTAG_WEIGHT * Math.min(1, rest / verbleibendeRunden);
+}
+
+/**
+ * Zwei Durchgänge desselben Postens sollen über den Tag verteilt liegen —
+ * direkt hintereinander wäre für die Teams ermüdend und für den Posten
+ * langweilig. Der Malus verläuft linear bis zum Wunschabstand.
+ */
+function wiederholungScore(t: number, g: number, r: number, ctx: Kontext): number {
+  const letzte = ctx.letzteRunde[t][g];
+  if (letzte < 0) return 0;
+  const abstand = r - letzte;
+  const wunsch = ctx.mindestAbstand[g];
+  if (abstand >= wunsch) return 0;
+  return -POSTEN_WIEDERHOLUNG * (1 - abstand / wunsch);
+}
+
+/** Freirunden streuen: lange Serien bremsen, lange Leerläufe bevorzugen. */
+function pausenScore(t: number, ctx: Kontext): number {
+  const serie = ctx.serie[t];
+  if (serie >= MAX_SERIE) return -SERIEN_MALUS;
+  const leerlaufBonus = Math.min(1, ctx.leerlauf[t] / 3);
+  const serienMalus = Math.min(1, serie / MAX_SERIE);
+  return PAUSEN_WEIGHT * (leerlaufBonus - serienMalus);
+}
+
+/** Gesamtbewertung eines Teams für einen Posten in einer Runde. */
+function teamScore(t: number, g: number, r: number, ctx: Kontext): number {
+  return (
+    ctx.offenProTeam[t] * DRINGLICHKEIT_WEIGHT +
+    vormittagScore(t, r, ctx) +
+    pausenScore(t, ctx) +
+    wiederholungScore(t, g, r, ctx) +
+    antiKorrelationScore(t, g, r, ctx) -
+    ctx.byeCount[t]
+  );
+}
+
 // ─── Kern: Rundenweise Zuweisung ─────────────────────────────────────
 
 type RoundAssignment = { gameIdx: number; teamIdxs: number[] };
 
-/**
- * Weist eine Runde zu. Gibt Zuweisungen zurück (modifiziert needed NICHT).
- */
-function assignRound(
-  needed: boolean[][],
-  games: GameInput[],
-  N: number,
-  M: number,
-  opponentCount: number[][],
-  teamByeCount: number[],
-  runde: number,
-  antiPartners: number[][],
-  playedRound: number[][],
-  estRounds: number,
-): RoundAssignment[] {
-  const teamUrgency = new Array(N).fill(0);
-  for (let t = 0; t < N; t++) {
-    for (let g = 0; g < M; g++) {
-      if (needed[t][g]) teamUrgency[t]++;
-    }
-  }
+function assignRound(runde: number, ctx: Kontext): RoundAssignment[] {
+  const { N, M, games, offen } = ctx;
 
-  const gameTeamsLeft = new Array(M).fill(0);
-  for (let g = 0; g < M; g++) {
-    for (let t = 0; t < N; t++) {
-      if (needed[t][g]) gameTeamsLeft[g]++;
-    }
-  }
-
-  // Aktive Games kategorisieren
+  /** Distinkte Teams, die Game g noch brauchen und in dieser Runde dürfen. */
+  const verfuegbar = new Map<number, number[]>();
+  const besucheOffen = new Array(M).fill(0);
   const activeSoloIdxs: number[] = [];
   const activeDuellIdxs: number[] = [];
-  const duellAvailable = new Map<number, number[]>();
-  // Duell-Games mit genau 1 verbleibendem Team → Bye-Kandidaten
   const byeCandidates: { gameIdx: number; teamIdx: number }[] = [];
 
   for (let g = 0; g < M; g++) {
-    if (gameTeamsLeft[g] === 0) continue;
+    if (ctx.postenGesperrt[g][runde]) continue;
+    const teams: number[] = [];
+    let besuche = 0;
+    for (let t = 0; t < N; t++) {
+      if (offen[t][g] > 0) {
+        besuche += offen[t][g];
+        if (!ctx.teamGesperrt[t][runde]) teams.push(t);
+      }
+    }
+    if (besuche === 0) continue;
+    besucheOffen[g] = besuche;
     if (games[g].teamsProSlot >= 2) {
-      const available: number[] = [];
-      for (let t = 0; t < N; t++) {
-        if (needed[t][g]) available.push(t);
-      }
-      if (available.length >= 2) {
+      if (teams.length >= 2) {
         activeDuellIdxs.push(g);
-        duellAvailable.set(g, available);
-      } else if (available.length === 1) {
-        byeCandidates.push({ gameIdx: g, teamIdx: available[0] });
+        verfuegbar.set(g, teams);
+      } else if (teams.length === 1) {
+        byeCandidates.push({ gameIdx: g, teamIdx: teams[0] });
       }
-    } else {
+    } else if (teams.length > 0) {
       activeSoloIdxs.push(g);
+      verfuegbar.set(g, teams);
     }
   }
 
-  // Optimale Duell-Anzahl berechnen
   let maxSoloRemaining = 0;
-  for (const g of activeSoloIdxs) {
-    if (gameTeamsLeft[g] > maxSoloRemaining) maxSoloRemaining = gameTeamsLeft[g];
-  }
+  for (const g of activeSoloIdxs) maxSoloRemaining = Math.max(maxSoloRemaining, besucheOffen[g]);
   let maxDuellRemaining = 0;
-  for (const g of activeDuellIdxs) {
-    if (gameTeamsLeft[g] > maxDuellRemaining) maxDuellRemaining = gameTeamsLeft[g];
+  for (const g of activeDuellIdxs) maxDuellRemaining = Math.max(maxDuellRemaining, besucheOffen[g]);
+
+  // Für die Kapazitätsschätzung zählen nur Teams, die in dieser Runde
+  // überhaupt dürfen — wer gerade isst, steht nicht zur Verfügung.
+  let freieTeams = 0;
+  for (let t = 0; t < N; t++) {
+    if (ctx.offenProTeam[t] > 0 && !ctx.teamGesperrt[t][runde]) freieTeams++;
   }
 
   const optimalD = computeOptimalDuellCount(
-    N, activeSoloIdxs.length, activeDuellIdxs.length,
-    maxSoloRemaining, maxDuellRemaining,
+    freieTeams,
+    activeSoloIdxs.length,
+    activeDuellIdxs.length,
+    maxSoloRemaining,
+    maxDuellRemaining,
   );
 
-  // Fallback-Kaskade: D von optimal runter bis 0
   for (let D = optimalD; D >= 0; D--) {
     const result = tryAssignment(
-      D, activeDuellIdxs, activeSoloIdxs, duellAvailable,
-      needed, games, N, M, opponentCount, teamByeCount, teamUrgency, gameTeamsLeft,
-      runde, antiPartners, playedRound, estRounds,
+      D,
+      activeDuellIdxs,
+      activeSoloIdxs,
+      verfuegbar,
+      runde,
+      ctx,
     );
     if (result !== null) {
-      // Byes für freie Teams anhängen
-      const usedTeams = new Set<number>();
-      for (const a of result) {
-        for (const t of a.teamIdxs) usedTeams.add(t);
-      }
+      const belegt = new Set<number>();
+      for (const a of result) for (const t of a.teamIdxs) belegt.add(t);
       for (const bye of byeCandidates) {
-        if (!usedTeams.has(bye.teamIdx)) {
+        if (!belegt.has(bye.teamIdx)) {
           result.push({ gameIdx: bye.gameIdx, teamIdxs: [bye.teamIdx] });
-          usedTeams.add(bye.teamIdx);
+          belegt.add(bye.teamIdx);
         }
       }
       return result;
     }
   }
 
-  // Absoluter Fallback: nur Byes (wenn überhaupt möglich)
   const fallback: RoundAssignment[] = [];
-  const usedTeams = new Set<number>();
+  const belegt = new Set<number>();
   for (const bye of byeCandidates) {
-    if (!usedTeams.has(bye.teamIdx)) {
+    if (!belegt.has(bye.teamIdx)) {
       fallback.push({ gameIdx: bye.gameIdx, teamIdxs: [bye.teamIdx] });
-      usedTeams.add(bye.teamIdx);
+      belegt.add(bye.teamIdx);
     }
   }
   return fallback;
 }
 
-/**
- * Versucht Zuweisung mit D Duells. Gibt null zurück wenn nicht alle Solos bedienbar.
- */
+/** Versucht eine Runde mit D Duellen. null = nicht alle Solos bedienbar. */
 function tryAssignment(
   targetD: number,
   activeDuellIdxs: number[],
   activeSoloIdxs: number[],
-  duellAvailable: Map<number, number[]>,
-  needed: boolean[][],
-  games: GameInput[],
-  N: number,
-  _M: number,
-  opponentCount: number[][],
-  teamByeCount: number[],
-  teamUrgency: number[],
-  gameTeamsLeft: number[],
+  verfuegbar: Map<number, number[]>,
   runde: number,
-  antiPartners: number[][],
-  playedRound: number[][],
-  estRounds: number,
+  ctx: Kontext,
 ): RoundAssignment[] | null {
-  const usedTeams = new Set<number>();
+  const belegt = new Set<number>();
   const assignments: RoundAssignment[] = [];
 
-  // ── Duell-Zuweisung ──
   if (targetD > 0) {
-    const duellSubset = findDuellSubsetOfSize(targetD, activeDuellIdxs, duellAvailable, N);
-    if (duellSubset === null || duellSubset.length === 0) return targetD === 0 ? null : null;
+    const subset = findDuellSubsetOfSize(targetD, activeDuellIdxs, verfuegbar, ctx.N);
+    if (subset === null || subset.length === 0) return null;
 
-    // Sortiere nach Knappheit
-    duellSubset.sort((a, b) =>
-      (duellAvailable.get(a)?.length ?? 0) - (duellAvailable.get(b)?.length ?? 0)
+    // Knappste Duells zuerst — sie haben die wenigsten Ausweichmöglichkeiten.
+    subset.sort(
+      (a, b) => (verfuegbar.get(a)?.length ?? 0) - (verfuegbar.get(b)?.length ?? 0),
     );
 
-    for (const g of duellSubset) {
-      const available = (duellAvailable.get(g) ?? []).filter(t => !usedTeams.has(t));
-      if (available.length < 2) return null;
+    for (const g of subset) {
+      const frei = (verfuegbar.get(g) ?? []).filter((t) => !belegt.has(t));
+      if (frei.length < 2) return null;
 
-      const antiScore = (t: number) =>
-        antiKorrelationScore(t, g, runde, antiPartners, playedRound, estRounds);
+      const sortiert = [...frei].sort(
+        (a, b) => teamScore(b, g, runde, ctx) - teamScore(a, g, runde, ctx),
+      );
+      const t1 = sortiert[0];
 
-      available.sort((a, b) => {
-        const sa = teamUrgency[a] * 100 - teamByeCount[a] + antiScore(a);
-        const sb = teamUrgency[b] * 100 - teamByeCount[b] + antiScore(b);
-        return sb - sa;
-      });
-
-      const t1 = available[0];
-      let bestT2 = available[1];
+      let bestT2 = sortiert[1];
       let bestScore = -Infinity;
-      for (let i = 1; i < available.length; i++) {
-        const t2 = available[i];
-        const score = -opponentCount[t1][t2] * 1000 + teamUrgency[t2] * 10 - teamByeCount[t2] * 5 + antiScore(t2);
-        if (score > bestScore) { bestScore = score; bestT2 = t2; }
+      for (let i = 1; i < sortiert.length; i++) {
+        const t2 = sortiert[i];
+        const score =
+          -ctx.opponentCount[t1][t2] * GEGNER_WIEDERHOLUNG + teamScore(t2, g, runde, ctx);
+        if (score > bestScore) {
+          bestScore = score;
+          bestT2 = t2;
+        }
       }
 
-      usedTeams.add(t1);
-      usedTeams.add(bestT2);
+      belegt.add(t1);
+      belegt.add(bestT2);
       assignments.push({ gameIdx: g, teamIdxs: [t1, bestT2] });
     }
   }
 
-  // ── Solo-Zuweisung via Bipartites Matching ──
-  // Greedy-Zuweisung kann sich selbst blockieren wenn ein Team von mehreren
-  // Solos gebraucht wird. Bipartites Matching findet die optimale Verteilung.
-  const sortedSolos = [...activeSoloIdxs].sort((a, b) => gameTeamsLeft[a] - gameTeamsLeft[b]);
+  // Solos über bipartites Matching: greedy kann sich selbst blockieren, wenn
+  // ein Team von mehreren Solos gebraucht wird.
+  const solos = [...activeSoloIdxs].sort(
+    (a, b) => (verfuegbar.get(a)?.length ?? 0) - (verfuegbar.get(b)?.length ?? 0),
+  );
 
-  if (sortedSolos.length > 0) {
-    const soloAdj: number[][] = Array.from({ length: sortedSolos.length }, () => []);
-    for (let i = 0; i < sortedSolos.length; i++) {
-      const g = sortedSolos[i];
-      // Kanten nach Dringlichkeit sortiert (Matching bevorzugt frühere Kanten)
-      const candidates: { t: number; score: number }[] = [];
-      for (let t = 0; t < N; t++) {
-        if (needed[t][g] && !usedTeams.has(t)) {
-          candidates.push({
-            t,
-            score: teamUrgency[t] * 100 - teamByeCount[t]
-              + antiKorrelationScore(t, g, runde, antiPartners, playedRound, estRounds),
-          });
-        }
-      }
-      candidates.sort((a, b) => b.score - a.score);
-      for (const c of candidates) soloAdj[i].push(c.t);
-    }
+  if (solos.length > 0) {
+    const adj: number[][] = solos.map((g) => {
+      const kandidaten = (verfuegbar.get(g) ?? [])
+        .filter((t) => !belegt.has(t))
+        .map((t) => ({ t, score: teamScore(t, g, runde, ctx) }));
+      kandidaten.sort((a, b) => b.score - a.score);
+      return kandidaten.map((k) => k.t);
+    });
 
-    const soloMatchLeft = new Array(sortedSolos.length).fill(-1);
-    const soloMatchRight = new Array(N).fill(-1);
-    const matched = bipartiteMatching(soloAdj, sortedSolos.length, N, soloMatchLeft, soloMatchRight);
+    const matchLeft = new Array(solos.length).fill(-1);
+    const matchRight = new Array(ctx.N).fill(-1);
+    const matched = bipartiteMatching(adj, solos.length, ctx.N, matchLeft, matchRight);
 
-    if (matched < sortedSolos.length) {
-      // Nicht alle Solos bedienbar mit dieser Duell-Konfiguration → Fallback
-      return null;
-    }
+    // Solos sind der Engpass: was bedienbar ist, muss bedient werden. Bleibt
+    // ein bedienbares Solo leer, kostet das eine ganze Runde — dann lieber ein
+    // Duell weniger (nächste Stufe der Fallback-Kaskade). Solos ohne jeden
+    // Kandidaten (alle Teams essen gerade) sind davon ausgenommen.
+    const bedienbar = adj.filter((kandidaten) => kandidaten.length > 0).length;
+    if (matched < bedienbar) return null;
+    if (matched === 0 && assignments.length === 0) return null;
 
-    for (let i = 0; i < sortedSolos.length; i++) {
-      const g = sortedSolos[i];
-      const t = soloMatchLeft[i];
-      usedTeams.add(t);
-      assignments.push({ gameIdx: g, teamIdxs: [t] });
+    for (let i = 0; i < solos.length; i++) {
+      const t = matchLeft[i];
+      if (t === -1) continue;
+      belegt.add(t);
+      assignments.push({ gameIdx: solos[i], teamIdxs: [t] });
     }
   }
 
   return assignments;
 }
 
+// ─── Mittagswellen auf das Rundenraster legen ────────────────────────
+
+type MittagsSperren = {
+  wellen: MittagsWelle[];
+  teamGesperrt: boolean[][];
+  postenGesperrt: boolean[][];
+  mittagsRunde: number[];
+  hinweise: string[];
+};
+
+function leereSperren(N: number, M: number, runden: number): MittagsSperren {
+  return {
+    wellen: [],
+    teamGesperrt: Array.from({ length: N }, () => new Array(runden).fill(false)),
+    postenGesperrt: Array.from({ length: M }, () => new Array(runden).fill(false)),
+    mittagsRunde: new Array(N).fill(Infinity),
+    hinweise: [],
+  };
+}
+
+/**
+ * Übersetzt die Mittagswellen in Runden-Sperren: Wer isst, wird in den
+ * überlappenden Runden nicht eingeteilt — Teams nicht als Spieler, Posten
+ * nicht als Station (damit die Crew mitessen kann).
+ */
+function baueMittagsSperren(
+  config: ScheduleConfig,
+  raster: number[],
+  blockDauerMin: number,
+): MittagsSperren {
+  const N = config.teams.length;
+  const M = config.games.length;
+  const leer = leereSperren(N, M, raster.length);
+  if (!config.mittagsfenster) return leer;
+
+  const plan = planeMittag({
+    fenster: config.mittagsfenster,
+    teams: config.teams.map((t) => ({
+      id: t.id,
+      name: t.name,
+      teilnehmerAnzahl: t.teilnehmerAnzahl,
+    })),
+    posten: config.games.map((g) => ({
+      id: g.id,
+      name: g.name,
+      crewGroesse: Math.max(0, g.crewGroesse ?? 0),
+    })),
+    freieHelfer: config.freieHelfer ?? [],
+  });
+
+  if (plan.wellen.length === 0) {
+    return { ...leer, hinweise: plan.hinweise };
+  }
+
+  const teamIdx = new Map(config.teams.map((t, i) => [t.id, i] as const));
+  const gameIdx = new Map(config.games.map((g, i) => [g.id, i] as const));
+
+  const sperren: MittagsSperren = {
+    wellen: plan.wellen,
+    teamGesperrt: Array.from({ length: N }, () => new Array(raster.length).fill(false)),
+    postenGesperrt: Array.from({ length: M }, () => new Array(raster.length).fill(false)),
+    mittagsRunde: new Array(N).fill(Infinity),
+    hinweise: [...plan.hinweise],
+  };
+
+  const ohneRunde: string[] = [];
+
+  for (const welle of plan.wellen) {
+    const betroffeneRunden: number[] = [];
+    for (let r = 0; r < raster.length; r++) {
+      if (ueberlappt(raster[r], raster[r] + blockDauerMin, welle.startMin, welle.endeMin)) {
+        betroffeneRunden.push(r);
+      }
+    }
+    if (betroffeneRunden.length === 0) {
+      ohneRunde.push(`${welle.startZeit}–${welle.endZeit}`);
+      continue;
+    }
+    for (const id of welle.teamIds) {
+      const t = teamIdx.get(id);
+      if (t === undefined) continue;
+      for (const r of betroffeneRunden) sperren.teamGesperrt[t][r] = true;
+      sperren.mittagsRunde[t] = betroffeneRunden[0];
+    }
+    for (const id of welle.postenIds) {
+      const g = gameIdx.get(id);
+      if (g === undefined) continue;
+      for (const r of betroffeneRunden) sperren.postenGesperrt[g][r] = true;
+    }
+  }
+
+  if (ohneRunde.length > 0) {
+    sperren.hinweise.push(
+      `WARN: ${ohneRunde.length} Mittagswelle(n) liegen ausserhalb des Spielbetriebs ` +
+        `(${ohneRunde.join(", ")}) — Turnierstart, Takt oder Mittagsfenster passen nicht zusammen.`,
+    );
+  }
+
+  return sperren;
+}
+
 // ─── Hauptfunktion ───────────────────────────────────────────────────
 
 export function generateSchedule(config: ScheduleConfig): ScheduleResult {
-  const { teams, games, blockDauerMin, wechselzeitMin, startZeit, pausen, mittagspause, antiKorrelationen } = config;
+  const {
+    teams,
+    games,
+    blockDauerMin,
+    wechselzeitMin,
+    startZeit,
+    fensterEndeZeit,
+    pausen,
+    antiKorrelationen,
+  } = config;
+
   const N = teams.length;
   const M = games.length;
 
   if (N === 0 || M === 0) {
     return {
-      slots: [], runden: 0, endZeit: startZeit,
+      slots: [],
+      runden: 0,
+      endZeit: startZeit,
       konflikte: N === 0 ? ["Keine Teams vorhanden"] : ["Keine Games vorhanden"],
       teamZeitplaene: {},
     };
   }
 
-  const soloCount = games.filter(g => g.teamsProSlot === 1).length;
-  const duellCount = games.filter(g => g.teamsProSlot >= 2).length;
+  const takt = blockDauerMin + wechselzeitMin;
+  const startMin = parseZeit(startZeit);
+  const postenProTeam = games.reduce((s, g) => s + durchgaengeVon(g), 0);
+  const estRounds = theoretischesMinimum(N, games);
+  // Reserve für Mittagssperren und Bye-Runden; die Schleife bricht ab, sobald
+  // nichts mehr offen ist.
+  const maxRunden = Math.max(estRounds + N + M + 20, postenProTeam + 20);
+  const raster = rundenRaster(maxRunden, startMin, takt, pausen);
 
-  // Anti-Korrelations-Paare auf Game-Indizes auflösen (ungerichtet)
+  const konflikte: string[] = [];
+
+  // ── Anti-Korrelations-Paare auflösen ──
   const gameIdxById = new Map(games.map((g, i) => [g.id, i] as const));
   const antiPartners: number[][] = Array.from({ length: M }, () => []);
   const antiPairs: { x: number; y: number }[] = [];
-  const antiKonflikte: string[] = [];
   for (const paar of antiKorrelationen ?? []) {
     const x = gameIdxById.get(paar.gameXId);
     const y = gameIdxById.get(paar.gameYId);
     if (x === undefined || y === undefined) {
-      antiKonflikte.push(
+      konflikte.push(
         `WARN: Anti-Korrelation ignoriert – unbekannte Game-ID (${paar.gameXId} / ${paar.gameYId})`,
       );
       continue;
     }
     if (x === y) {
-      antiKonflikte.push(
+      konflikte.push(
         `WARN: Anti-Korrelation ignoriert – "${games[x].name}" ist mit sich selbst verknüpft`,
       );
       continue;
@@ -561,227 +774,235 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
     antiPartners[x].push(y);
     antiPartners[y].push(x);
   }
-  // Schätzung der Gesamtrundenzahl zur Normalisierung des Anti-Korrelations-Scores
-  const estRounds = theoretischesMinimum(N, soloCount, duellCount);
 
-  const needed: boolean[][] = Array.from({ length: N }, () => new Array(M).fill(true));
-  const opponentCount: number[][] = Array.from({ length: N }, () => new Array(N).fill(0));
-  const teamByeCount = new Array(N).fill(0);
-  // playedRound[t][g] = Rundenindex (0-basiert), in dem Team t Game g gespielt hat; -1 = offen
-  const playedRound: number[][] = Array.from({ length: N }, () => new Array(M).fill(-1));
+  // ── Mittagswellen und die daraus folgenden Sperren ──
+  const mittag = baueMittagsSperren(config, raster, blockDauerMin);
+  konflikte.push(...mittag.hinweise);
 
+  const zielVormittag = Math.min(
+    Math.max(1, config.postenVormittag ?? Math.round(postenProTeam * 0.6)),
+    postenProTeam,
+  );
+
+  const ctx: Kontext = {
+    N,
+    M,
+    games,
+    offen: Array.from({ length: N }, () => games.map((g) => durchgaengeVon(g))),
+    offenProTeam: new Array(N).fill(postenProTeam),
+    ersteRunde: Array.from({ length: N }, () => new Array(M).fill(-1)),
+    letzteRunde: Array.from({ length: N }, () => new Array(M).fill(-1)),
+    mindestAbstand: games.map((g) =>
+      Math.max(2, Math.floor(estRounds / (durchgaengeVon(g) + 1))),
+    ),
+    opponentCount: Array.from({ length: N }, () => new Array(N).fill(0)),
+    byeCount: new Array(N).fill(0),
+    serie: new Array(N).fill(0),
+    leerlauf: new Array(N).fill(0),
+    gespielt: new Array(N).fill(0),
+    mittagsRunde: mittag.mittagsRunde,
+    teamGesperrt: mittag.teamGesperrt,
+    postenGesperrt: mittag.postenGesperrt,
+    antiPartners,
+    estRounds,
+    zielVormittag,
+  };
+
+  // ── Runden zuweisen ──
   const allRounds: RoundAssignment[][] = [];
-  const MAX_ROUNDS = N + M + 20;
+  let leereRunden = 0;
 
-  for (let r = 0; r < MAX_ROUNDS; r++) {
-    let remaining = 0;
-    for (let t = 0; t < N; t++) {
-      for (let g = 0; g < M; g++) {
-        if (needed[t][g]) remaining++;
-      }
+  for (let r = 0; r < maxRunden; r++) {
+    if (ctx.offenProTeam.every((o) => o === 0)) break;
+
+    const zuweisungen = assignRound(r, ctx);
+
+    if (zuweisungen.length === 0) {
+      const gesperrt =
+        ctx.teamGesperrt.some((z) => z[r]) || ctx.postenGesperrt.some((z) => z[r]);
+      // Ohne Sperre gibt es keinen Grund, warum die nächste Runde besser
+      // laufen sollte — dann ist der Plan nicht auflösbar.
+      if (!gesperrt && ++leereRunden >= 2) break;
+      allRounds.push([]);
+      continue;
     }
-    if (remaining === 0) break;
+    leereRunden = 0;
 
-    const roundResult = assignRound(
-      needed, games, N, M, opponentCount, teamByeCount,
-      r, antiPartners, playedRound, estRounds,
-    );
-    if (roundResult.length === 0) break;
-
-    // Zuweisungen anwenden
-    for (const a of roundResult) {
+    const eingesetzt = new Set<number>();
+    for (const a of zuweisungen) {
       for (const t of a.teamIdxs) {
-        needed[t][a.gameIdx] = false;
-        playedRound[t][a.gameIdx] = r;
+        ctx.offen[t][a.gameIdx]--;
+        ctx.offenProTeam[t]--;
+        ctx.gespielt[t]++;
+        if (ctx.ersteRunde[t][a.gameIdx] < 0) ctx.ersteRunde[t][a.gameIdx] = r;
+        ctx.letzteRunde[t][a.gameIdx] = r;
+        eingesetzt.add(t);
       }
-      // Gegner-Tracking
       if (games[a.gameIdx].teamsProSlot >= 2 && a.teamIdxs.length === 2) {
         const [t1, t2] = a.teamIdxs;
-        opponentCount[t1][t2]++;
-        opponentCount[t2][t1]++;
+        ctx.opponentCount[t1][t2]++;
+        ctx.opponentCount[t2][t1]++;
       }
     }
 
-    // Bye-Tracking
-    const usedThisRound = new Set<number>();
-    for (const a of roundResult) {
-      for (const t of a.teamIdxs) usedThisRound.add(t);
-    }
     for (let t = 0; t < N; t++) {
-      let hasRemaining = false;
-      for (let g = 0; g < M; g++) {
-        if (needed[t][g]) { hasRemaining = true; break; }
+      if (eingesetzt.has(t)) {
+        ctx.serie[t]++;
+        ctx.leerlauf[t] = 0;
+      } else {
+        ctx.serie[t] = 0;
+        ctx.leerlauf[t]++;
+        // Mittagswellen zählen nicht als verpasste Runde.
+        if (ctx.offenProTeam[t] > 0 && !ctx.teamGesperrt[t][r]) ctx.byeCount[t]++;
       }
-      if (hasRemaining && !usedThisRound.has(t)) teamByeCount[t]++;
     }
 
-    allRounds.push(roundResult);
+    allRounds.push(zuweisungen);
   }
+
+  // Leerlaufende Runden am Schluss abschneiden.
+  while (allRounds.length > 0 && allRounds[allRounds.length - 1].length === 0) {
+    allRounds.pop();
+  }
+
+  // ── Zeitslots bauen ──
+  // Der wievielte Durchgang ein Slot für ein Team ist, hängt am Team (bei
+  // Duellen können die beiden Teams unterschiedlich weit sein) — er wird
+  // deshalb dort gezählt, wo er angezeigt wird, nicht am Slot gespeichert.
+  const slots: SlotOutput[] = [];
+  for (let r = 0; r < allRounds.length; r++) {
+    const start = raster[r];
+    const ende = start + blockDauerMin;
+    for (const a of allRounds[r]) {
+      const game = games[a.gameIdx];
+      slots.push({
+        runde: r + 1,
+        startZeit: formatZeit(start),
+        endZeit: formatZeit(ende),
+        gameId: game.id,
+        gameName: game.name,
+        teamIds: a.teamIdxs.map((t) => teams[t].id),
+        teamNames: a.teamIdxs.map((t) => teams[t].name),
+      });
+    }
+  }
+
+  const endeMin =
+    allRounds.length > 0 ? raster[allRounds.length - 1] + blockDauerMin : startMin;
+  const endZeit = formatZeit(endeMin);
 
   // ── Validierung ──
-  const konflikte: string[] = [];
   for (let t = 0; t < N; t++) {
     for (let g = 0; g < M; g++) {
-      if (needed[t][g]) {
-        konflikte.push(`HART: ${teams[t].name} hat "${games[g].name}" nicht zugeteilt bekommen`);
+      if (ctx.offen[t][g] > 0) {
+        konflikte.push(
+          `HART: ${teams[t].name} fehlen ${ctx.offen[t][g]} Durchgang/Durchgänge bei "${games[g].name}"`,
+        );
       }
     }
   }
   for (let r = 0; r < allRounds.length; r++) {
-    const seen = new Set<number>();
+    const teamsGesehen = new Set<number>();
+    const gamesGesehen = new Set<number>();
     for (const a of allRounds[r]) {
+      if (gamesGesehen.has(a.gameIdx)) {
+        konflikte.push(`HART: "${games[a.gameIdx].name}" in Runde ${r + 1} doppelt`);
+      }
+      gamesGesehen.add(a.gameIdx);
       for (const t of a.teamIdxs) {
-        if (seen.has(t)) konflikte.push(`HART: ${teams[t].name} in Runde ${r + 1} doppelt`);
-        seen.add(t);
+        if (teamsGesehen.has(t)) {
+          konflikte.push(`HART: ${teams[t].name} in Runde ${r + 1} doppelt`);
+        }
+        teamsGesehen.add(t);
       }
-    }
-  }
-  for (let r = 0; r < allRounds.length; r++) {
-    const seen = new Set<number>();
-    for (const a of allRounds[r]) {
-      if (seen.has(a.gameIdx)) konflikte.push(`HART: "${games[a.gameIdx].name}" in Runde ${r + 1} doppelt`);
-      seen.add(a.gameIdx);
     }
   }
 
-  // ── Anti-Korrelation validieren (weiche WARN-Konflikte) ──
-  konflikte.push(...antiKonflikte);
-  const istFrueheRunde = (r: number): boolean => r < allRounds.length / 2;
+  // ── Anti-Korrelation als weiche Warnung ──
+  const istFrueh = (r: number) => r < allRounds.length / 2;
   for (const { x, y } of antiPairs) {
     for (let t = 0; t < N; t++) {
-      const rx = playedRound[t][x];
-      const ry = playedRound[t][y];
-      if (rx < 0 || ry < 0) continue; // fehlende Zuteilung ist bereits ein HART-Konflikt
-      const xFrueh = istFrueheRunde(rx);
-      if (xFrueh === istFrueheRunde(ry)) {
+      const rx = ctx.ersteRunde[t][x];
+      const ry = ctx.ersteRunde[t][y];
+      if (rx < 0 || ry < 0) continue;
+      if (istFrueh(rx) === istFrueh(ry)) {
         konflikte.push(
-          `WARN: ${teams[t].name} hat "${games[x].name}" (Runde ${rx + 1}) und "${games[y].name}" (Runde ${ry + 1}) beide ${xFrueh ? "früh" : "spät"}`,
+          `WARN: ${teams[t].name} hat "${games[x].name}" (Runde ${rx + 1}) und "${games[y].name}" (Runde ${ry + 1}) beide ${istFrueh(rx) ? "früh" : "spät"}`,
         );
       }
     }
   }
 
-  // ── Gestaffelte Mittagspause berechnen ──
-  let mittagsSchichten: MittagsSchicht[] | undefined;
-
-  if (mittagspause && N > 0) {
-    const { dauerMin, maxTeamsGleichzeitig, versatzMin } = mittagspause;
-    const anzahlSchichten = Math.ceil(N / maxTeamsGleichzeitig);
-
-    if (anzahlSchichten > 1) {
-      mittagsSchichten = [];
-      // Teams gleichmässig auf Schichten verteilen
-      const teamsProSchicht = Math.ceil(N / anzahlSchichten);
-      for (let s = 0; s < anzahlSchichten; s++) {
-        const startIdx = s * teamsProSchicht;
-        const endIdx = Math.min(startIdx + teamsProSchicht, N);
-        const schichtTeams = teams.slice(startIdx, endIdx);
-        mittagsSchichten.push({
-          schicht: s + 1,
-          startZeit: "", // wird unten beim Zeitslot-Bau gesetzt
-          endZeit: "",
-          teamIds: schichtTeams.map(t => t.id),
-          teamNames: schichtTeams.map(t => t.name),
-        });
-      }
-    }
+  // ── Turnierfenster prüfen ──
+  const endeSollMin = fensterEndeZeit ? parseZeit(fensterEndeZeit) : NaN;
+  const hatFenster = Number.isFinite(endeSollMin);
+  const ueberzugMin = hatFenster ? Math.max(0, endeMin - endeSollMin) : 0;
+  if (hatFenster && ueberzugMin > 0) {
+    konflikte.push(
+      `WARN: Der Plan endet um ${endZeit} und überzieht das Turnierfenster (bis ${fensterEndeZeit}) um ${ueberzugMin} min. ` +
+        `Blockdauer oder Wechselzeit kürzen, Durchgänge reduzieren oder das Fenster erweitern.`,
+    );
   }
 
-  // ── Zeitslots ──
-  const slots: SlotOutput[] = [];
-  let currentTime = parseTime(startZeit);
-  const pauseMap = new Map(pausen.map(p => [p.nachRunde, p]));
-
-  for (let r = 0; r < allRounds.length; r++) {
-    const roundNum = r + 1;
-    const roundStart = currentTime;
-    const roundEnd = currentTime + blockDauerMin;
-    for (const a of allRounds[r]) {
-      const game = games[a.gameIdx];
-      slots.push({
-        runde: roundNum,
-        startZeit: formatTime(roundStart),
-        endZeit: formatTime(roundEnd),
-        gameId: game.id, gameName: game.name,
-        teamIds: a.teamIdxs.map(t => teams[t].id),
-        teamNames: a.teamIdxs.map(t => teams[t].name),
-      });
-    }
-    currentTime = roundEnd + wechselzeitMin;
-
-    // Einfache Pausen (nicht-Mittag)
-    const pause = pauseMap.get(roundNum);
-    if (pause) currentTime += pause.dauerMin;
-
-    // Gestaffelte Mittagspause
-    if (mittagspause && roundNum === mittagspause.nachRunde) {
-      if (mittagsSchichten && mittagsSchichten.length > 1) {
-        // Gestaffelt: Schichten mit Versatz
-        const pauseStart = currentTime;
-        for (let s = 0; s < mittagsSchichten.length; s++) {
-          const schichtStart = pauseStart + s * mittagspause.versatzMin;
-          const schichtEnd = schichtStart + mittagspause.dauerMin;
-          mittagsSchichten[s].startZeit = formatTime(schichtStart);
-          mittagsSchichten[s].endZeit = formatTime(schichtEnd);
-        }
-        // Gesamtpause = letzte Schicht Ende - erste Schicht Start
-        const totalPause = (mittagsSchichten.length - 1) * mittagspause.versatzMin + mittagspause.dauerMin;
-        currentTime += totalPause;
-      } else {
-        // Alle passen gleichzeitig → einfache Pause
-        if (mittagsSchichten && mittagsSchichten.length === 1) {
-          mittagsSchichten[0].startZeit = formatTime(currentTime);
-          mittagsSchichten[0].endZeit = formatTime(currentTime + mittagspause.dauerMin);
-        }
-        currentTime += mittagspause.dauerMin;
-      }
-    }
-  }
-
-  // ── Team-Zeitpläne ──
+  // ── Team-Zeitpläne und Statistiken ──
   const teamZeitplaene: Record<string, SlotOutput[]> = {};
   for (const team of teams) {
     teamZeitplaene[team.id] = slots
-      .filter(s => s.teamIds.includes(team.id))
+      .filter((s) => s.teamIds.includes(team.id))
       .sort((a, b) => a.runde - b.runde);
   }
 
-  // ── Statistiken ──
   const freirundenProTeam: Record<string, number> = {};
+  const teamAuslastung: Record<string, number> = {};
+  const postenVormittagProTeam: Record<string, number> = {};
+  const laengsteSerieProTeam: Record<string, number> = {};
+
   for (let t = 0; t < N; t++) {
-    freirundenProTeam[teams[t].id] = allRounds.length - (teamZeitplaene[teams[t].id]?.length ?? 0);
+    const id = teams[t].id;
+    const eigene = teamZeitplaene[id] ?? [];
+    freirundenProTeam[id] = allRounds.length - eigene.length;
+    teamAuslastung[id] = allRounds.length > 0 ? eigene.length / allRounds.length : 0;
+
+    const cut = ctx.mittagsRunde[t];
+    postenVormittagProTeam[id] = Number.isFinite(cut)
+      ? eigene.filter((s) => s.runde - 1 < cut).length
+      : eigene.length;
+
+    let serie = 0;
+    let maxSerie = 0;
+    let letzte = -2;
+    for (const s of eigene) {
+      serie = s.runde - 1 === letzte + 1 ? serie + 1 : 1;
+      letzte = s.runde - 1;
+      maxSerie = Math.max(maxSerie, serie);
+    }
+    laengsteSerieProTeam[id] = maxSerie;
   }
 
   const duellGegnerVerteilung: Record<string, Record<string, number>> = {};
   for (let t1 = 0; t1 < N; t1++) {
     const gegner: Record<string, number> = {};
     for (let t2 = 0; t2 < N; t2++) {
-      if (t1 !== t2 && opponentCount[t1][t2] > 0) gegner[teams[t2].id] = opponentCount[t1][t2];
+      if (t1 !== t2 && ctx.opponentCount[t1][t2] > 0) {
+        gegner[teams[t2].id] = ctx.opponentCount[t1][t2];
+      }
     }
     if (Object.keys(gegner).length > 0) duellGegnerVerteilung[teams[t1].id] = gegner;
   }
 
-  const totalAssignments = N * M;
-  const capPerRound = soloCount + duellCount * 2;
-  const maxPossible = allRounds.length * Math.min(N, capPerRound);
+  const kapazitaetProRunde = games.reduce((s, g) => s + Math.max(1, g.teamsProSlot), 0);
+  const maxMoeglich = allRounds.length * Math.min(N, kapazitaetProRunde);
 
-  const teamAuslastung: Record<string, number> = {};
-  for (let t = 0; t < N; t++) {
-    teamAuslastung[teams[t].id] = allRounds.length > 0
-      ? (teamZeitplaene[teams[t].id]?.length ?? 0) / allRounds.length : 0;
-  }
-
-  // Anti-Korrelation: pro Paar Anzahl konformer/verletzender Teams
   let antiKorrelation: AntiKorrelationStatistik[] | undefined;
   if (antiPairs.length > 0) {
     antiKorrelation = antiPairs.map(({ x, y }) => {
       let konformeTeams = 0;
       let verletzendeTeams = 0;
       for (let t = 0; t < N; t++) {
-        const rx = playedRound[t][x];
-        const ry = playedRound[t][y];
+        const rx = ctx.ersteRunde[t][x];
+        const ry = ctx.ersteRunde[t][y];
         if (rx < 0 || ry < 0) continue;
-        if (istFrueheRunde(rx) === istFrueheRunde(ry)) verletzendeTeams++;
+        if (istFrueh(rx) === istFrueh(ry)) verletzendeTeams++;
         else konformeTeams++;
       }
       return {
@@ -798,17 +1019,27 @@ export function generateSchedule(config: ScheduleConfig): ScheduleResult {
   return {
     slots,
     runden: allRounds.length,
-    endZeit: formatTime(currentTime - wechselzeitMin),
+    endZeit,
     konflikte,
     teamZeitplaene,
     statistiken: {
       freirundenProTeam,
       duellGegnerVerteilung,
-      rundenEffizienz: maxPossible > 0 ? totalAssignments / maxPossible : 0,
+      rundenEffizienz: maxMoeglich > 0 ? (N * postenProTeam) / maxMoeglich : 0,
       teamAuslastung,
-      theoretischesMinimum: theoretischesMinimum(N, soloCount, duellCount),
+      theoretischesMinimum: estRounds,
+      postenProTeam,
+      postenVormittagProTeam,
+      laengsteSerieProTeam,
       antiKorrelation,
     },
-    mittagsSchichten,
+    mittagsWellen: mittag.wellen.length > 0 ? mittag.wellen : undefined,
+    fenster: {
+      startZeit,
+      endeSoll: fensterEndeZeit ?? null,
+      endeIst: endZeit,
+      passt: !hatFenster || ueberzugMin === 0,
+      ueberzugMin,
+    },
   };
 }

@@ -1,12 +1,22 @@
 import type {
-  MittagspauseParameter,
+  MittagsfensterParameter,
   ZeitplanParameter,
 } from "@/lib/zeitplan-parameter";
+import type { MittagsWelle } from "@/lib/mittagsplanung";
+import type { ZeitplanAktualitaet } from "@/lib/zeitplan-aktualitaet";
 
-export type { MittagspauseParameter, ZeitplanParameter };
+export type { MittagsfensterParameter, ZeitplanParameter, MittagsWelle };
 
 export type Team = { id: string; name: string; nummer: number };
-export type Game = { id: string; name: string; slug: string; status: string; teamsProSlot: number };
+
+export type Game = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  teamsProSlot: number;
+  durchgaenge: number;
+};
 
 // Ungerichtetes Game-Paar: wer Game A früh spielt, spielt Game B spät
 export type AntiKorrelationConfig = { gameXId: string; gameYId: string };
@@ -21,12 +31,24 @@ export type SlotOutput = {
   teamNames: string[];
 };
 
-export type MittagsSchicht = {
-  schicht: number;
+/** Wie der Plan zum Turnierfenster steht. */
+export type TurnierFenster = {
   startZeit: string;
-  endZeit: string;
-  teamIds: string[];
-  teamNames: string[];
+  endeSoll: string | null;
+  endeIst: string;
+  passt: boolean;
+  ueberzugMin: number;
+};
+
+export type ScheduleStatistiken = {
+  freirundenProTeam: Record<string, number>;
+  duellGegnerVerteilung: Record<string, Record<string, number>>;
+  rundenEffizienz: number;
+  teamAuslastung: Record<string, number>;
+  theoretischesMinimum: number;
+  postenProTeam: number;
+  postenVormittagProTeam: Record<string, number>;
+  laengsteSerieProTeam: Record<string, number>;
 };
 
 export type ScheduleResult = {
@@ -35,7 +57,9 @@ export type ScheduleResult = {
   endZeit: string;
   konflikte: string[];
   teamZeitplaene: Record<string, SlotOutput[]>;
-  mittagsSchichten?: MittagsSchicht[];
+  statistiken?: ScheduleStatistiken;
+  mittagsWellen?: MittagsWelle[];
+  fenster?: TurnierFenster;
 };
 
 /** Was an den Slots eines gespeicherten Zeitplans hängt. */
@@ -63,6 +87,7 @@ export type GeladenerZeitplan = ScheduleResult &
     createdAt: string;
     updatedAt: string;
     abhaengigkeiten: ZeitplanAbhaengigkeiten;
+    aktualitaet: ZeitplanAktualitaet;
     sperre: ZeitplanSperre;
   };
 
@@ -78,7 +103,9 @@ export type SavedConfig = {
   wechselzeitMin: number;
   startZeit: string;
   endZeit: string;
-  mittagspause: MittagspauseParameter | null;
+  fensterEndeZeit: string | null;
+  postenVormittag: number | null;
+  mittagspause: MittagsfensterParameter | null;
   _count: { slots: number };
 };
 

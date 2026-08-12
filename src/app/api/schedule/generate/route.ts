@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { generateSchedule } from "@/lib/schedule-engine";
 import { requireRole } from "@/lib/auth-helpers";
 import { ZeitplanParameterSchema, zodValidationError } from "@/lib/schemas";
+import { ladeZeitplanEingaben } from "@/lib/zeitplan-eingaben";
 
 // Die Preview war schon immer mit leerem Body aufrufbar — Defaults ergänzen
 // die Pflichtfelder des Parameter-Schemas, ohne dessen Grenzen zu lockern.
@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    // Unvalidierte Werte (z. B. mittagspause.maxTeamsGleichzeitig = 0) würden
-    // die Engine in eine Endlosschleife treiben — deshalb Zod vor der Engine.
+    // Unvalidierte Werte (z. B. versatzMin = 0 bei zu kurzem Fenster) würden
+    // die Engine in absurde Pläne treiben — deshalb Zod vor der Engine.
     const body = await request.json().catch(() => null);
     const parsed = GenerateBodySchema.safeParse(body);
     if (!parsed.success) {
@@ -30,35 +30,29 @@ export async function POST(request: NextRequest) {
       blockDauerMin,
       wechselzeitMin,
       startZeit,
+      fensterEndeZeit,
+      postenVormittag,
       pausen,
-      mittagspause,
+      mittagsfenster,
       antiKorrelationen,
     } = parsed.data;
 
-    // Load all active/ready games
-    const games = await prisma.game.findMany({
-      where: { status: { in: ["BEREIT", "AKTIV"] } },
-      select: { id: true, name: true, teamsProSlot: true },
-      orderBy: { name: "asc" },
-    });
-
-    // Load all teams
-    const teams = await prisma.team.findMany({
-      select: { id: true, name: true, nummer: true },
-      orderBy: { nummer: "asc" },
-    });
+    const { teams, games, freieHelfer } = await ladeZeitplanEingaben();
 
     if (games.length === 0) {
       return NextResponse.json(
-        { error: "Keine Games mit Status BEREIT oder AKTIV gefunden. Setze Games auf 'Bereit' in der Game-Verwaltung." },
-        { status: 400 }
+        {
+          error:
+            "Keine Games mit Status BEREIT oder AKTIV gefunden. Setze Games auf 'Bereit' in der Game-Verwaltung.",
+        },
+        { status: 400 },
       );
     }
 
     if (teams.length === 0) {
       return NextResponse.json(
         { error: "Keine Teams vorhanden. Erstelle zuerst Teams." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -68,15 +62,28 @@ export async function POST(request: NextRequest) {
       if (paar.gameXId === paar.gameYId) {
         return NextResponse.json(
           { error: "Anti-Korrelation: Game A und Game B müssen unterschiedlich sein." },
-          { status: 400 }
+          { status: 400 },
         );
       }
       if (!gameIds.has(paar.gameXId) || !gameIds.has(paar.gameYId)) {
         return NextResponse.json(
-          { error: "Anti-Korrelation verweist auf ein Game, das nicht den Status BEREIT oder AKTIV hat." },
-          { status: 400 }
+          {
+            error:
+              "Anti-Korrelation verweist auf ein Game, das nicht den Status BEREIT oder AKTIV hat.",
+          },
+          { status: 400 },
         );
       }
+    }
+
+    const postenGesamt = games.reduce((s, g) => s + (g.durchgaenge ?? 1), 0);
+    if (postenVormittag != null && postenVormittag >= postenGesamt) {
+      return NextResponse.json(
+        {
+          error: `Vor dem Mittag können höchstens ${postenGesamt - 1} von ${postenGesamt} Posten liegen.`,
+        },
+        { status: 400 },
+      );
     }
 
     const result = generateSchedule({
@@ -85,8 +92,11 @@ export async function POST(request: NextRequest) {
       blockDauerMin,
       wechselzeitMin,
       startZeit,
+      fensterEndeZeit,
       pausen,
-      mittagspause: mittagspause ?? undefined,
+      mittagsfenster,
+      postenVormittag,
+      freieHelfer,
       antiKorrelationen,
     });
 
@@ -95,7 +105,7 @@ export async function POST(request: NextRequest) {
     console.error("POST /api/schedule/generate error:", error);
     return NextResponse.json(
       { error: "Fehler bei der Zeitplan-Generierung" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -3,14 +3,17 @@
  * Spielregeln-Protokolls vom 10.08.2026 — ohne Ergebnisse oder Verknüpfungen
  * (Material, Zeitplan-Slots) zu verlieren.
  *
- * - Upsert der 11 Protokoll-Games per Slug (Name, Regeln, Wertungslogik, Modus, …)
- * - Ausgemusterte Games (xxl-basketball, geschicklichkeits-parcour) werden NICHT
- *   gelöscht, sondern auf Status ENTWURF gesetzt und aus der Wertung genommen
+ * - Upsert der 10 Protokoll-Games per Slug (Name, Regeln, Wertungslogik, Modus,
+ *   Durchgänge, …). ChaosQuadrant und Human Soccer haben 2 Durchgänge —
+ *   zusammen ergeben die 10 Games 12 Posten pro Team.
+ * - Ausgemusterte Games (xxl-basketball, geschicklichkeits-parcour, eierfall)
+ *   werden gelöscht, sofern keine Ergebnisse daran hängen; sonst gehen sie auf
+ *   ENTWURF und aus der Wertung
  * - Idempotent: mehrfaches Ausführen ist unschädlich
  * - Von der Orga justierte Laufzeitwerte bleiben beim Update erhalten:
- *   zaehltZurWertung (z. B. Eierfall-Abschaltung) und die vertraulichen
- *   Gewichtungen gewichtungG/gewichtungSieg aus dem Leitstand werden NICHT
- *   auf die Seed-Defaults zurückgesetzt (nur neu angelegte Games erhalten sie)
+ *   zaehltZurWertung und die vertraulichen Gewichtungen
+ *   gewichtungG/gewichtungSieg aus dem Leitstand werden NICHT auf die
+ *   Seed-Defaults zurückgesetzt (nur neu angelegte Games erhalten sie)
  *
  * Ausführen:  npm run games:update
  * (auf dem Server: docker compose run --rm app npm run games:update)
@@ -86,14 +89,30 @@ async function main() {
     }
   }
 
+  // Ausgemusterte Games verschwinden ganz — ausser es hängen Ergebnisse daran.
+  // Dann bleiben sie als ENTWURF ohne Wertung stehen, damit der Wertungsstand
+  // nicht beschädigt wird.
   for (const slug of ausgemusterteSlugs) {
-    const result = await prisma.game.updateMany({
+    const vorhanden = await prisma.game.findUnique({
       where: { slug },
-      data: { status: "ENTWURF", zaehltZurWertung: false },
+      select: { id: true, name: true, _count: { select: { ergebnisse: true } } },
     });
-    if (result.count > 0) {
-      console.log(`  🗑️  ausgemustert (ENTWURF, zählt nicht zur Wertung): ${slug}`);
+    if (!vorhanden) continue;
+
+    if (vorhanden._count.ergebnisse > 0) {
+      await prisma.game.update({
+        where: { slug },
+        data: { status: "ENTWURF", zaehltZurWertung: false },
+      });
+      console.log(
+        `  🗑️  ${vorhanden.name} [${slug}]: ${vorhanden._count.ergebnisse} Ergebnisse vorhanden ` +
+          `→ auf ENTWURF gesetzt und aus der Wertung genommen (nicht gelöscht)`,
+      );
+      continue;
     }
+
+    await prisma.game.delete({ where: { slug } });
+    console.log(`  ❌ gelöscht (nicht mehr im Programm): ${vorhanden.name} [${slug}]`);
   }
 
   console.log(`\n✅ Fertig: ${games.length} Games auf Protokoll-Stand.\n`);

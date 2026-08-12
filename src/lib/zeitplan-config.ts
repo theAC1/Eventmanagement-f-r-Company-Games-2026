@@ -11,8 +11,11 @@ const CONFIG_SELECT = {
   wechselzeitMin: true,
   startZeit: true,
   endZeit: true,
+  fensterEndeZeit: true,
+  postenVormittag: true,
   pausen: true,
   mittagspause: true,
+  mittagswellen: true,
   createdAt: true,
   updatedAt: true,
 } as const;

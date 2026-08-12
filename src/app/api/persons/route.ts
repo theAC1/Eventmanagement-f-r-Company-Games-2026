@@ -21,9 +21,20 @@ export async function GET(request: NextRequest) {
       istAktiv: true,
       ...(rollen.length > 0 ? { rolle: { in: rollen } } : {}),
     },
-    select: { id: true, name: true, rolle: true },
+    select: {
+      id: true,
+      name: true,
+      rolle: true,
+      isstMittag: true,
+      postenCrew: { select: { game: { select: { id: true, name: true } } } },
+    },
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json(persons);
+  return NextResponse.json(
+    persons.map(({ postenCrew, ...person }) => ({
+      ...person,
+      posten: postenCrew.map((c) => c.game),
+    })),
+  );
 }

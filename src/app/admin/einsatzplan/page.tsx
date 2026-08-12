@@ -1,11 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Warning, X } from "@phosphor-icons/react";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { StatusPill } from "@/components/ui/pills";
+import { apiFetch, apiSend } from "@/lib/api-client";
+import { meldung } from "@/lib/api-fehler";
 
 type Person = { id: string; name: string; rolle: string };
+
+/** Aus der Posten-Crew abgeleitete Besetzung eines Games. */
+type Posten = {
+  gameId: string;
+  gameName: string;
+  gameSlug: string;
+  durchgaenge: number;
+  slots: number;
+  bedarfSchiedsrichter: number;
+  bedarfHelfer: number;
+  crew: Person[];
+  unterbesetzt: boolean;
+  mittag: { startZeit: string; endZeit: string } | null;
+};
 
 type Slot = {
   id: string;
@@ -21,38 +38,47 @@ type Slot = {
 
 type PlanConfig = { id: string; name: string; istAktiv: boolean; createdAt: string };
 
+type EinsatzplanAntwort = {
+  config: PlanConfig | null;
+  slots: Slot[];
+  posten: Posten[];
+};
+
 export default function EinsatzplanPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [posten, setPosten] = useState<Posten[]>([]);
   const [planConfig, setPlanConfig] = useState<PlanConfig | null>(null);
   const [personen, setPersonen] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingSlot, setSavingSlot] = useState<string | null>(null);
+  const [zeigeSlots, setZeigeSlots] = useState(false);
 
-  const load = () => {
-    Promise.all([
-      fetch("/api/einsatzplan").then((r) => {
-        if (!r.ok) throw new Error("Fehler beim Laden des Einsatzplans");
-        return r.json();
-      }),
-      fetch("/api/persons?rolle=SCHIEDSRICHTER,HELFER").then((r) => {
-        if (!r.ok) throw new Error("Fehler beim Laden der Personen");
-        return r.json();
-      }),
-    ])
-      .then(([s, p]) => {
-        setSlots(s.slots ?? []);
-        setPlanConfig(s.config ?? null);
-        setPersonen(p);
-        setError(null);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Fehler"))
-      .finally(() => setLoading(false));
-  };
+  const load = useCallback(async () => {
+    try {
+      const [plan, p] = await Promise.all([
+        apiFetch<EinsatzplanAntwort>("/api/einsatzplan", {
+          fehlerText: "Fehler beim Laden des Einsatzplans",
+        }),
+        apiFetch<Person[]>("/api/persons?rolle=SCHIEDSRICHTER,HELFER", {
+          fehlerText: "Fehler beim Laden der Personen",
+        }),
+      ]);
+      setSlots(plan.slots ?? []);
+      setPosten(plan.posten ?? []);
+      setPlanConfig(plan.config ?? null);
+      setPersonen(p);
+      setError(null);
+    } catch (err) {
+      setError(meldung(err, "Fehler"));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   // Personen die einem Game (in irgendeinem Slot) zugewiesen sind → Empfehlung
   const gamePersonMap = useMemo(() => {
@@ -84,21 +110,17 @@ export default function EinsatzplanPage() {
     setSavingSlot(slot.id);
     setError(null);
     try {
-      const res = await fetch(`/api/einsatzplan/${slot.id}/personen`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personIds }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? "Fehler beim Speichern");
-      }
-      const updated = await res.json();
+      const updated = await apiSend<Slot>(
+        `/api/einsatzplan/${slot.id}/personen`,
+        "PUT",
+        { personIds },
+        "Fehler beim Speichern",
+      );
       setSlots((prev) =>
         prev.map((s) => (s.id === slot.id ? { ...s, personen: updated.personen } : s)),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler beim Speichern");
+      setError(meldung(err, "Fehler beim Speichern"));
     } finally {
       setSavingSlot(null);
     }
@@ -156,7 +178,22 @@ export default function EinsatzplanPage() {
           </div>
         )}
 
-        {groups.map(([gameId, group]) => (
+        {posten.length > 0 && <PostenUebersicht posten={posten} />}
+
+        {posten.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setZeigeSlots((v) => !v)}
+            className="text-[13px] font-medium text-ink-3 transition-colors duration-150 hover:text-ink"
+          >
+            {zeigeSlots
+              ? "Runden-Feinjustierung ausblenden"
+              : "Runden-Feinjustierung einblenden"}
+          </button>
+        )}
+
+        {zeigeSlots &&
+          groups.map(([gameId, group]) => (
           <section
             key={gameId}
             className="overflow-hidden rounded-[10px] border border-line bg-surface"
@@ -189,9 +226,85 @@ export default function EinsatzplanPage() {
               ))}
             </div>
           </section>
-        ))}
+          ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Der eigentliche Einsatzplan: eine Zeile pro Posten. Zugeteilt wird im
+ * Games-Tab — hier steht das Ergebnis, inklusive der Mittagswelle, in der der
+ * Posten pausiert.
+ */
+function PostenUebersicht({ posten }: { posten: Posten[] }) {
+  const offen = posten.filter((p) => p.unterbesetzt).length;
+
+  return (
+    <section className="overflow-hidden rounded-[10px] border border-line bg-surface">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-3.5 py-2.5">
+        <h2 className="text-[13px] font-semibold text-ink">Posten-Besetzung</h2>
+        <span className="tnum text-[11px] text-label">{posten.length} Posten</span>
+        <span className="flex-1" aria-hidden />
+        {offen > 0 ? (
+          <StatusPill tone="warn">
+            <span className="tnum">{offen}</span>
+            <span className="ml-1">unterbesetzt</span>
+          </StatusPill>
+        ) : (
+          <StatusPill tone="done">Vollständig besetzt</StatusPill>
+        )}
+      </div>
+
+      <div className="divide-y divide-line-soft">
+        {posten.map((p) => (
+          <div
+            key={p.gameId}
+            className="grid gap-x-4 gap-y-2 px-3.5 py-3 sm:grid-cols-[minmax(0,200px)_1fr_auto]"
+          >
+            <div className="min-w-0 space-y-0.5">
+              <Link
+                href={`/admin/games/${p.gameId}`}
+                className="block truncate text-[13px] font-medium text-ink transition-colors duration-150 hover:text-action"
+              >
+                {p.gameName}
+              </Link>
+              <p className="tnum text-[11px] text-ink-3">
+                {p.slots} Slots
+                {p.durchgaenge > 1 && ` · ${p.durchgaenge} Durchgänge pro Team`}
+              </p>
+            </div>
+
+            <div className="min-w-0 space-y-1">
+              {p.crew.length > 0 ? (
+                <p className="text-[12px] text-ink-2">
+                  {p.crew.map((c) => c.name).join(", ")}
+                </p>
+              ) : (
+                <p className="text-[12px] text-faint">
+                  Niemand zugeteilt &mdash; im Game-Tab festlegen
+                </p>
+              )}
+              {p.mittag && (
+                <p className="tnum text-[11px] text-ink-3">
+                  Mittag: {p.mittag.startZeit}&ndash;{p.mittag.endZeit} (Posten
+                  pausiert)
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-start gap-1.5">
+              <StatusPill tone={p.unterbesetzt ? "warn" : "done"}>
+                <span className="tnum">
+                  {p.crew.length}/{p.bedarfSchiedsrichter + p.bedarfHelfer}
+                </span>
+                <span className="ml-1">Crew</span>
+              </StatusPill>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

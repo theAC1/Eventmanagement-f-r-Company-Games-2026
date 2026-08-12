@@ -40,6 +40,9 @@ export const GameCreateSchema = z.object({
   typ: z.enum(["RETURNEE", "NEU"]),
   modus: z.enum(["SOLO", "DUELL"]),
   teamsProSlot: z.number().int().min(1).max(4).optional(),
+  // Wie oft jedes Team diesen Posten absolviert (Human Soccer/ChaosQuadrant: 2)
+  durchgaenge: z.number().int().min(1).max(5).optional(),
+  teilnehmerProTeam: z.number().int().min(1).max(50).nullable().optional(),
   kurzbeschreibung: z.string().nullable().optional(),
   einfuehrungMin: z.number().int().min(0).optional(),
   playtimeMin: z.number().int().min(1).optional(),
@@ -52,7 +55,7 @@ export const GameCreateSchema = z.object({
   helferAnzahl: z.number().int().min(0).optional(),
   schiedsrichterAnzahl: z.number().int().min(1).max(10).optional(),
   stromNoetig: z.boolean().optional(),
-  // Eierfall-Anforderung: Game kann stattfinden, ohne in die Gesamtwertung zu zählen
+  // Bonus-Game: findet statt, zählt aber nicht in die Gesamtwertung
   zaehltZurWertung: z.boolean().optional(),
 });
 
@@ -135,6 +138,17 @@ export const UserUpdateSchema = z.object({
   rolle: z.enum(["OWNER", "ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]).optional(),
   email: z.string().email().nullable().optional(),
   istAktiv: z.boolean().optional(),
+  // Verpflegung: isst diese Person am Turniertag mit?
+  isstMittag: z.boolean().optional(),
+});
+
+// ─── Posten-Crew (Einsatzplan) ───
+
+/** Schiedsrichter-/Helfer-Besetzung eines Postens, gesetzt im Games-Tab. */
+export const GameCrewSchema = z.object({
+  personIds: z.array(z.string().min(1), {
+    message: "personIds (Array von IDs) erforderlich",
+  }),
 });
 
 // ─── Zeitplan ───
@@ -147,12 +161,22 @@ const ZeitSchema = z
   .string()
   .regex(ZEIT_REGEX, "Zeit im Format HH:MM erwartet (auch über Mitternacht hinaus)");
 
-export const MittagspauseSchema = z.object({
-  nachRunde: z.number().int().min(1, "Mittagspause frühestens nach Runde 1"),
-  dauerMin: z.number().int().min(5).max(240),
-  maxTeamsGleichzeitig: z.number().int().min(1).max(200),
-  versatzMin: z.number().int().min(0).max(120),
-});
+/**
+ * Küchenfenster statt fixer Pause: die Orga sagt nur, ab wann und bis wann
+ * gegessen werden kann — die Engine verteilt die Wellen darin.
+ */
+export const MittagsfensterSchema = z
+  .object({
+    von: ZeitSchema,
+    bis: ZeitSchema,
+    dauerMin: z.number().int().min(5).max(240),
+    teamsProWelle: z.number().int().min(1).max(50),
+    versatzMin: z.number().int().min(0).max(120),
+  })
+  .refine((v) => v.bis > v.von, {
+    message: "Das Mittagsfenster muss nach seinem Beginn enden",
+    path: ["bis"],
+  });
 
 export const PauseSchema = z.object({
   nachRunde: z.number().int().min(1),
@@ -171,8 +195,12 @@ export const ZeitplanParameterSchema = z.object({
   blockDauerMin: z.number().int().min(1, "Blockdauer mind. 1 min").max(240),
   wechselzeitMin: z.number().int().min(0).max(120),
   startZeit: ZeitSchema,
+  /** Spätestes Turnierende; die Engine meldet einen Überzug, blockt aber nicht. */
+  fensterEndeZeit: ZeitSchema.nullish(),
+  /** Ziel-Posten vor der eigenen Mittagswelle (Standard: ~60 % aller Posten). */
+  postenVormittag: z.number().int().min(1).max(40).nullish(),
   pausen: z.array(PauseSchema).default([]),
-  mittagspause: MittagspauseSchema.nullish(),
+  mittagsfenster: MittagsfensterSchema.nullish(),
   antiKorrelationen: z.array(AntiKorrelationSchema).default([]),
 });
 
@@ -184,11 +212,28 @@ const ZeitplanSlotSchema = z.object({
   teamIds: z.array(z.string().min(1)).min(1, "Slot ohne Teams"),
 });
 
+/** Eine berechnete Mittagswelle, wie die Engine sie liefert. */
+export const MittagsWelleSchema = z.object({
+  welle: z.number().int().min(1),
+  startZeit: ZeitSchema,
+  endZeit: ZeitSchema,
+  startMin: z.number().int().min(0),
+  endeMin: z.number().int().min(0),
+  teamIds: z.array(z.string()).default([]),
+  teamNamen: z.array(z.string()).default([]),
+  postenIds: z.array(z.string()).default([]),
+  postenNamen: z.array(z.string()).default([]),
+  helferIds: z.array(z.string()).default([]),
+  helferNamen: z.array(z.string()).default([]),
+  personenTotal: z.number().int().min(0),
+});
+
 /** Zeitplan neu anlegen oder vollständig ersetzen (Parameter + Slots). */
 export const ZeitplanSaveSchema = ZeitplanParameterSchema.extend({
   name: z.string().min(1, "Name ist erforderlich").max(100),
   endZeit: ZeitSchema,
   slots: z.array(ZeitplanSlotSchema).min(1, "Zeitplan ohne Slots"),
+  mittagswellen: z.array(MittagsWelleSchema).default([]),
   istAktiv: z.boolean().optional(),
 });
 

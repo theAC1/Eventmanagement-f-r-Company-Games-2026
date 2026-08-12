@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { TeamUpdateSchema, zodValidationError } from "@/lib/schemas";
+import { loeschFolgen, pruefeLoeschen } from "@/lib/loesch-schutz";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -60,15 +61,47 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE /api/teams/:id
+/**
+ * DELETE /api/teams/:id
+ *
+ * Zeitplan-Einsätze und QR-Scans räumt die Datenbank per Cascade mit weg —
+ * sie sind Planungsdaten. Erfasste Ergebnisse blockieren dagegen: sie sind der
+ * Wertungsstand und dürfen nicht beiläufig verschwinden.
+ */
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   const { error: authError } = await requireRole("ORGA");
   if (authError) return authError;
 
   const { id } = await params;
   try {
+    const team = await prisma.team.findUnique({
+      where: { id },
+      select: {
+        name: true,
+        _count: { select: { ergebnisse: true, slotTeams: true, qrScans: true } },
+      },
+    });
+    if (!team) {
+      return NextResponse.json({ error: "Team nicht gefunden" }, { status: 404 });
+    }
+
+    const entscheid = pruefeLoeschen(
+      `Team "${team.name}"`,
+      [{ was: "erfasste Ergebnisse", anzahl: team._count.ergebnisse }],
+      "Lösche zuerst die Ergebnisse oder setze den Gameday zurück.",
+    );
+    if (!entscheid.erlaubt) {
+      return NextResponse.json({ error: entscheid.grund }, { status: 409 });
+    }
+
     await prisma.team.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      folgen: loeschFolgen([
+        { was: "Zeitplan-Einsätze", anzahl: team._count.slotTeams },
+        { was: "QR-Verifikationen", anzahl: team._count.qrScans },
+      ]),
+    });
   } catch (error) {
     console.error(`DELETE /api/teams/${id} error:`, error);
     return NextResponse.json({ error: "Fehler beim Löschen des Teams" }, { status: 500 });

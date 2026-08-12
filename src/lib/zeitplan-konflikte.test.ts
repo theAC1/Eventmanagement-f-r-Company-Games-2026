@@ -58,7 +58,23 @@ describe("pruefeZeitplanKonflikte", () => {
       { runde: 3, gameId: "gA", gameName: "Turm", teamIds: ["t1"], teamNames: ["Alpha"] },
     ];
     expect(pruefeZeitplanKonflikte(slots)).toContain(
-      'HART: Alpha spielt "Turm" 2×',
+      'HART: Alpha spielt "Turm" 2× statt 1×',
+    );
+  });
+
+  it("akzeptiert mehrere Durchgänge, wenn das Game sie vorsieht", () => {
+    const slots: KonfliktSlot[] = [
+      ...sauber,
+      { runde: 3, gameId: 'gA', gameName: 'Turm', teamIds: ['t1'], teamNames: ['Alpha'] },
+      { runde: 4, gameId: 'gA', gameName: 'Turm', teamIds: ['t2'], teamNames: ['Beta'] },
+    ];
+    expect(pruefeZeitplanKonflikte(slots, { gA: 2 })).toEqual([]);
+  });
+
+  it('meldet fehlende Durchgänge mit Soll-Angabe', () => {
+    const konflikte = pruefeZeitplanKonflikte(sauber, { gA: 2 });
+    expect(konflikte).toContain(
+      'HART: Alpha spielt "Turm" 1× (Soll: 2 Durchgänge)',
     );
   });
 

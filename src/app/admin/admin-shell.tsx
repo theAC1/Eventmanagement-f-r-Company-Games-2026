@@ -8,6 +8,7 @@ import {
   Broadcast,
   CalendarBlank,
   ClipboardText,
+  ForkKnife,
   Lightbulb,
   List,
   ListChecks,
@@ -18,10 +19,12 @@ import {
   Trophy,
   UserGear,
   UsersThree,
+  Warning,
   X,
   type Icon,
 } from "@phosphor-icons/react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useLiveCounts, type AdminCounts } from "@/hooks/use-live-counts";
 
 interface NavItem {
   key: string;
@@ -29,6 +32,9 @@ interface NavItem {
   href: string;
   icon: Icon;
   badge?: string;
+  /** Badge als Warnung darstellen (z. B. veralteter Zeitplan). */
+  badgeWarnung?: boolean;
+  badgeTitel?: string;
   adminOnly?: boolean;
   isActive: (pathname: string) => boolean;
 }
@@ -38,7 +44,14 @@ interface NavGroup {
   items: NavItem[];
 }
 
-function buildNav(counts: AdminShellProps["counts"]): NavGroup[] {
+/** Zahl nur anzeigen, wenn es etwas zu zeigen gibt. */
+function zahl(wert: number): string | undefined {
+  return wert > 0 ? String(wert) : undefined;
+}
+
+function buildNav(counts: AdminCounts): NavGroup[] {
+  const zeitplanVeraltet = counts.zeitplan.vorhanden && !counts.zeitplan.aktuell;
+
   return [
     {
       label: "Planung",
@@ -48,7 +61,15 @@ function buildNav(counts: AdminShellProps["counts"]): NavGroup[] {
           label: "Games",
           href: "/admin",
           icon: Target,
-          badge: counts.games > 0 ? String(counts.games) : undefined,
+          // Games vs. Posten: 10 Games, davon zwei doppelt, ergeben 12 Posten.
+          badge:
+            counts.posten > counts.games
+              ? `${counts.games}·${counts.posten}`
+              : zahl(counts.games),
+          badgeTitel:
+            counts.posten > counts.games
+              ? `${counts.games} Games, ${counts.posten} Posten pro Team`
+              : undefined,
           isActive: (p) => p === "/admin" || p.startsWith("/admin/games"),
         },
         {
@@ -56,7 +77,7 @@ function buildNav(counts: AdminShellProps["counts"]): NavGroup[] {
           label: "Teams",
           href: "/admin/teams",
           icon: UsersThree,
-          badge: counts.teams > 0 ? String(counts.teams) : undefined,
+          badge: zahl(counts.teams),
           isActive: (p) => p.startsWith("/admin/teams"),
         },
         {
@@ -64,7 +85,7 @@ function buildNav(counts: AdminShellProps["counts"]): NavGroup[] {
           label: "Material",
           href: "/admin/materials",
           icon: Package,
-          badge: counts.materials > 0 ? String(counts.materials) : undefined,
+          badge: zahl(counts.materials),
           isActive: (p) => p.startsWith("/admin/materials"),
         },
         {
@@ -72,6 +93,11 @@ function buildNav(counts: AdminShellProps["counts"]): NavGroup[] {
           label: "Zeitplan",
           href: "/admin/schedule",
           icon: CalendarBlank,
+          badge: zeitplanVeraltet ? "veraltet" : undefined,
+          badgeWarnung: zeitplanVeraltet,
+          badgeTitel: zeitplanVeraltet
+            ? `${counts.zeitplan.abweichungen} Abweichung(en) zu den Stammdaten — Zeitplan neu generieren`
+            : undefined,
           isActive: (p) => p.startsWith("/admin/schedule"),
         },
         {
@@ -80,6 +106,13 @@ function buildNav(counts: AdminShellProps["counts"]): NavGroup[] {
           href: "/admin/einsatzplan",
           icon: ClipboardText,
           isActive: (p) => p.startsWith("/admin/einsatzplan"),
+        },
+        {
+          key: "verpflegung",
+          label: "Verpflegung",
+          href: "/admin/verpflegung",
+          icon: ForkKnife,
+          isActive: (p) => p.startsWith("/admin/verpflegung"),
         },
         {
           key: "lageplan",
@@ -125,6 +158,7 @@ function buildNav(counts: AdminShellProps["counts"]): NavGroup[] {
           label: "Benutzer",
           href: "/admin/users",
           icon: UserGear,
+          badge: zahl(counts.personen),
           adminOnly: true,
           isActive: (p) => p.startsWith("/admin/users"),
         },
@@ -146,7 +180,8 @@ interface AdminShellProps {
   userRolle: string;
   isAdmin: boolean;
   version: string;
-  counts: { games: number; teams: number; materials: number };
+  /** Serverseitiger Startwert; danach hält `useLiveCounts` die Zahlen aktuell. */
+  counts: AdminCounts;
   children: React.ReactNode;
 }
 
@@ -198,8 +233,14 @@ function NavList({
                   <span className="flex-1">{item.label}</span>
                   {item.badge && (
                     <span
-                      className={`tnum text-[11px] ${item.badge === "LIVE" ? "font-semibold text-warn" : "text-label"}`}
+                      title={item.badgeTitel}
+                      className={`tnum flex items-center gap-1 text-[11px] ${
+                        item.badgeWarnung || item.badge === "LIVE"
+                          ? "font-semibold text-warn"
+                          : "text-label"
+                      }`}
                     >
+                      {item.badgeWarnung && <Warning size={11} weight="bold" />}
                       {item.badge}
                     </span>
                   )}
@@ -259,7 +300,7 @@ function Brand({ onClick, bordered = true }: { onClick?: () => void; bordered?: 
 export function AdminShell({ userName, userRolle, isAdmin, version, counts, children }: AdminShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const groups = buildNav(counts);
+  const groups = buildNav(useLiveCounts(counts));
 
   return (
     <div className="flex min-h-dvh bg-bg text-ink">

@@ -13,7 +13,10 @@
  * - kisten-stappeln       → heisst neu "Kisten stapeln" (Slug behält den Alt-Tippfehler)
  *
  * Nicht mehr im Programm (werden vom Update-Script aus der Wertung genommen):
- * - xxl-basketball, geschicklichkeits-parcour
+ * - xxl-basketball, geschicklichkeits-parcour, eierfall
+ *
+ * 10 Games, davon ChaosQuadrant und Human Soccer mit 2 Durchgängen
+ * ⇒ 12 Posten, die jedes Team über den Tag absolviert.
  */
 
 import type { Wertungslogik } from "../src/lib/wertungslogik-types";
@@ -24,6 +27,8 @@ export type GameSeedData = {
   typ: "RETURNEE" | "NEU";
   modus: "SOLO" | "DUELL";
   teamsProSlot: number;
+  /** Wie oft jedes Team diesen Posten absolviert (Standard 1). */
+  durchgaenge?: number;
   kurzbeschreibung: string;
   playtimeMin?: number;
   wertungstyp: string;
@@ -208,6 +213,7 @@ Bewertung durch den Schiedsrichter anhand **vorbereiteter Referenzfotos** mit Se
     typ: "NEU",
     modus: "DUELL",
     teamsProSlot: 2,
+    durchgaenge: 2,
     kurzbeschreibung:
       "Völkerball-Variante auf 30×15 m: Bälle ins gegnerische Feld werfen. " +
       "3 fixe Runden à 1:30 — das Team mit den wenigsten Punkten gewinnt.",
@@ -405,6 +411,7 @@ Fortbewegung durch Weitergeben und Umlegen der Matten.
     typ: "RETURNEE",
     modus: "DUELL",
     teamsProSlot: 2,
+    durchgaenge: 2,
     kurzbeschreibung:
       "Tischkicker in Lebensgrösse. Spieler auf festen Reihen, nur seitliche Bewegung. " +
       "Aufblasbare Arena via Arena der Wunder.",
@@ -481,44 +488,7 @@ Unentschieden ist möglich und führt zu geteilten Rängen.`,
   kann einen Sieger nie überholen (analog zur Cornhole-Logik).`,
   },
 
-  // ─── 10. Der grosse Eierfall ───
-  {
-    name: "Der grosse Eierfall",
-    slug: "eierfall",
-    typ: "NEU",
-    modus: "SOLO",
-    teamsProSlot: 1,
-    kurzbeschreibung:
-      "Bonusrunde über den ganzen Tag: Teams bauen eine Schutzkonstruktion für ein rohes Ei. " +
-      "Streichung möglich — Game ist abschaltbar gebaut.",
-    wertungstyp: "risiko",
-    wertungslogik: {
-      typ: "risiko_wahl",
-      richtung: "hoechster_gewinnt",
-      optionen: [
-        { name: "2m", punkte_erfolg: 5, punkte_fail: 0 },
-        { name: "3m", punkte_erfolg: 10, punkte_fail: 0 },
-        { name: "5m", punkte_erfolg: 20, punkte_fail: 0 },
-      ],
-    },
-    flaecheLaengeM: 5,
-    flaecheBreiteM: 5,
-    helferAnzahl: 2,
-    schiedsrichterAnzahl: 1,
-    stromNoetig: false,
-    zaehltZurWertung: true,
-    regeln: `## Regeln
-- **Bonusrunde, die über den ganzen Tag läuft**
-- Teams bauen eine Schutzkonstruktion für ein rohes Ei und wählen die Fallhöhe
-
-## Offen
-- **Wertungslogik ist nicht spezifiziert** — die hinterlegte Risiko-Wertung
-  (2 m/3 m/5 m) ist ein Platzhalter aus der früheren Planung
-- **Streichung ist möglich.** Das Game kann über «Zählt zur Wertung» im Admin
-  jederzeit aus der Gesamtwertung genommen werden, ohne dass Ergebnisse verloren gehen.`,
-  },
-
-  // ─── 11. Menschenkugelbahn ───
+  // ─── 10. Menschenkugelbahn ───
   {
     name: "Menschenkugelbahn",
     slug: "menschenkugelbahn",
@@ -552,4 +522,13 @@ Unentschieden ist möglich und führt zu geteilten Rängen.`,
 ];
 
 /** Slugs von Games, die nicht mehr im Programm sind (Protokoll: 11 Games). */
-export const ausgemusterteSlugs = ["xxl-basketball", "geschicklichkeits-parcour"];
+/**
+ * Games, die nicht mehr stattfinden. Das Update-Script löscht sie, sofern keine
+ * Ergebnisse daran hängen — sonst setzt es sie auf ENTWURF und nimmt sie aus
+ * der Wertung, damit der Wertungsstand erhalten bleibt.
+ */
+export const ausgemusterteSlugs = [
+  "xxl-basketball",
+  "geschicklichkeits-parcour",
+  "eierfall",
+];

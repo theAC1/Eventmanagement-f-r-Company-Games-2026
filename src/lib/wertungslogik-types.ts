@@ -13,7 +13,7 @@
  *                              wenigste Punkte gewinnen
  * - "tuerme_punkte"          — Robert Huber Radio: Sektionen + Bonusklötze + 100%-Bonus
  * - "sieg_zuege"             — XXL Viergewinnt: Siege × Gewichtung − Züge
- * - "formel", "multi_level", "risiko_wahl" — Bestandstypen (Eierfall u. a.)
+ * - "formel", "multi_level", "risiko_wahl" — Bestandstypen für Bonus-Games
  */
 
 export type WertungsRichtung = "hoechster_gewinnt" | "niedrigster_gewinnt";

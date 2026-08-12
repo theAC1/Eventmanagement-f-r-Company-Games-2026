@@ -54,8 +54,8 @@ export function GespeicherteZeitplaene({
               {c.mittagspause && (
                 <>
                   {" "}
-                  &middot; Mittag nach R
-                  <span className="tnum">{c.mittagspause.nachRunde}</span>
+                  &middot; Mittag <span className="tnum">{c.mittagspause.von}</span>
+                  &ndash;<span className="tnum">{c.mittagspause.bis}</span>
                 </>
               )}
             </span>

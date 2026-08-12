@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Lightning, Warning } from "@phosphor-icons/react";
+import { ArrowsClockwise, Lightning, Warning } from "@phosphor-icons/react";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { Button } from "@/components/ui/button";
 import { HotPill, StatusPill } from "@/components/ui/pills";
 import { parameterDiff, type ZeitplanParameter } from "@/lib/zeitplan-parameter";
+import { MITTAG_DEFAULT } from "@/lib/mittagsplanung";
+import { apiFetch, apiSend, aufDatenAenderung } from "@/lib/api-client";
+import { meldung } from "@/lib/api-fehler";
 import {
   Team,
   Game,
   GamedayStatus,
   GeladenerZeitplan,
+  MittagsfensterParameter,
   ScheduleResult,
   SavedConfig,
 } from "./types";
@@ -19,33 +23,7 @@ import { KonfigurationPanel } from "./KonfigurationPanel";
 import { ZeitplanAktionen } from "./ZeitplanAktionen";
 import { ZeitplanErgebnis } from "./ZeitplanErgebnis";
 
-type ApiFehler = {
-  error?: string;
-  details?: { field?: string; message?: string }[];
-};
-
-/** Extrahiert den Klartext-Grund (error + Zod-details) aus einer API-Fehlerantwort. */
-function fehlerText(data: unknown, fallback: string): string {
-  if (data && typeof data === "object") {
-    const { error, details } = data as ApiFehler;
-    const detailText = Array.isArray(details)
-      ? details
-          .map((d) => (d.field ? `${d.field}: ${d.message ?? ""}` : d.message ?? ""))
-          .filter((t) => t.length > 0)
-          .join("; ")
-      : "";
-    if (error && detailText) return `${error} — ${detailText}`;
-    if (error) return error;
-    if (detailText) return detailText;
-  }
-  return fallback;
-}
-
-async function jsonOderFehler(res: Response, fallback: string) {
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(fehlerText(data, fallback));
-  return data;
-}
+const FENSTER_ENDE_DEFAULT = "16:30";
 
 export default function SchedulePage() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -72,17 +50,16 @@ export default function SchedulePage() {
   const [gamedayModus, setGamedayModus] = useState("INAKTIV");
   const gesperrt = gamedayModus === "TEST" || gamedayModus === "HOT";
 
-  // Config
+  // Turnierfenster und Takt
   const [blockDauer, setBlockDauer] = useState(15);
   const [wechselzeit, setWechselzeit] = useState(5);
   const [startZeit, setStartZeit] = useState("09:00");
+  const [fensterEnde, setFensterEnde] = useState(FENSTER_ENDE_DEFAULT);
+  const [postenVormittag, setPostenVormittag] = useState<number | null>(null);
 
-  // Mittagspause
+  // Mittagsfenster (rollend, keine globale Pause)
   const [mittagAktiv, setMittagAktiv] = useState(true);
-  const [mittagNachRunde, setMittagNachRunde] = useState(6);
-  const [mittagDauer, setMittagDauer] = useState(45);
-  const [mittagMaxTeams, setMittagMaxTeams] = useState(8);
-  const [mittagVersatz, setMittagVersatz] = useState(5);
+  const [mittag, setMittag] = useState<MittagsfensterParameter>(MITTAG_DEFAULT);
 
   // Anti-Korrelation (Spielregeln-Protokoll: Kisten stapeln <-> Stack Attack)
   const [antiKorrAktiv, setAntiKorrAktiv] = useState(false);
@@ -99,8 +76,7 @@ export default function SchedulePage() {
 
   // Gültiges Anti-Korrelations-Paar für Generate/Save. Ungültige Auswahl wird
   // ignoriert statt mitgesendet — die Generate-Route akzeptiert nur Paare aus
-  // BEREIT/AKTIV-Games und würde sonst mit 400 antworten (Warnhinweis dazu
-  // zeigt die Anti-Korrelations-Sektion im KonfigurationPanel).
+  // BEREIT/AKTIV-Games und würde sonst mit 400 antworten.
   const antiKorrelationen =
     antiKorrAktiv &&
     antiKorrGameX &&
@@ -116,14 +92,9 @@ export default function SchedulePage() {
     blockDauerMin: blockDauer,
     wechselzeitMin: wechselzeit,
     startZeit,
-    mittagspause: mittagAktiv
-      ? {
-          nachRunde: mittagNachRunde,
-          dauerMin: mittagDauer,
-          maxTeamsGleichzeitig: mittagMaxTeams,
-          versatzMin: mittagVersatz,
-        }
-      : null,
+    fensterEndeZeit: fensterEnde || null,
+    postenVormittag,
+    mittagsfenster: mittagAktiv ? mittag : null,
   };
 
   const aenderungen = geladen
@@ -132,47 +103,51 @@ export default function SchedulePage() {
           blockDauerMin: geladen.blockDauerMin,
           wechselzeitMin: geladen.wechselzeitMin,
           startZeit: geladen.startZeit,
-          mittagspause: geladen.mittagspause ?? null,
+          fensterEndeZeit: geladen.fensterEndeZeit ?? null,
+          postenVormittag: geladen.postenVormittag ?? null,
+          mittagsfenster: geladen.mittagsfenster ?? null,
         },
         aktuelleParameter,
       )
     : [];
 
-  const meldung = (text: string) => {
+  const meldungAnzeigen = (text: string) => {
     setStatusMsg(text);
     setTimeout(() => setStatusMsg(null), 2500);
   };
 
   const ladeListe = useCallback(async (): Promise<SavedConfig[]> => {
-    const res = await fetch("/api/schedule");
-    const configs: SavedConfig[] = await jsonOderFehler(
-      res,
-      "Fehler beim Laden der gespeicherten Zeitpläne",
-    );
+    const configs = await apiFetch<SavedConfig[]>("/api/schedule", {
+      fehlerText: "Fehler beim Laden der gespeicherten Zeitpläne",
+    });
     setSavedConfigs(configs);
     return configs;
   }, []);
 
   const ladeGamedayStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/gameday");
-      const gd: GamedayStatus = await jsonOderFehler(
-        res,
-        "Gameday-Status nicht verfügbar",
-      );
+      const gd = await apiFetch<GamedayStatus>("/api/gameday");
       setGamedayModus(gd.modus ?? "INAKTIV");
     } catch {
       // Sperr-Status ist nur eine Vorabprüfung — die API blockt notfalls selbst.
     }
   }, []);
 
+  const ladeStammdaten = useCallback(async () => {
+    const [t, g] = await Promise.all([
+      apiFetch<Team[]>("/api/teams"),
+      apiFetch<Game[]>("/api/games"),
+    ]);
+    setTeams(t);
+    setGames(g);
+    return g;
+  }, []);
+
   /** Gespeicherten Plan laden und die Konfiguration darauf setzen. */
   const ladePlan = useCallback(async (configId: string) => {
-    const res = await fetch("/api/schedule/" + configId);
-    const data: GeladenerZeitplan = await jsonOderFehler(
-      res,
-      "Fehler beim Laden des Zeitplans",
-    );
+    const data = await apiFetch<GeladenerZeitplan>("/api/schedule/" + configId, {
+      fehlerText: "Fehler beim Laden des Zeitplans",
+    });
 
     setGeladen(data);
     setResult(data);
@@ -182,12 +157,11 @@ export default function SchedulePage() {
     setBlockDauer(data.blockDauerMin);
     setWechselzeit(data.wechselzeitMin);
     setStartZeit(data.startZeit);
-    if (data.mittagspause) {
+    setFensterEnde(data.fensterEndeZeit ?? FENSTER_ENDE_DEFAULT);
+    setPostenVormittag(data.postenVormittag ?? null);
+    if (data.mittagsfenster) {
       setMittagAktiv(true);
-      setMittagNachRunde(data.mittagspause.nachRunde);
-      setMittagDauer(data.mittagspause.dauerMin);
-      setMittagMaxTeams(data.mittagspause.maxTeamsGleichzeitig);
-      setMittagVersatz(data.mittagspause.versatzMin);
+      setMittag(data.mittagsfenster);
     } else {
       setMittagAktiv(false);
     }
@@ -201,13 +175,8 @@ export default function SchedulePage() {
 
     (async () => {
       try {
-        const [t, g] = await Promise.all([
-          fetch("/api/teams").then((r) => r.json()) as Promise<Team[]>,
-          fetch("/api/games").then((r) => r.json()) as Promise<Game[]>,
-        ]);
+        const g = await ladeStammdaten();
         if (abgebrochen) return;
-        setTeams(t);
-        setGames(g);
 
         // Protokoll-Default: Kisten stapeln <-> Stack Attack als Anti-Korrelations-Paar.
         // Aktiviert wird nur, wenn BEIDE Games BEREIT/AKTIV sind — die
@@ -230,9 +199,7 @@ export default function SchedulePage() {
         const ziel = configs.find((c) => c.istAktiv) ?? configs[0];
         if (ziel) await ladePlan(ziel.id);
       } catch (err) {
-        if (!abgebrochen) {
-          setError(err instanceof Error ? err.message : "Fehler beim Laden");
-        }
+        if (!abgebrochen) setError(meldung(err, "Fehler beim Laden"));
       } finally {
         if (!abgebrochen) setInitLoading(false);
       }
@@ -241,38 +208,44 @@ export default function SchedulePage() {
     return () => {
       abgebrochen = true;
     };
-  }, [ladeGamedayStatus, ladeListe, ladePlan]);
+  }, [ladeGamedayStatus, ladeListe, ladePlan, ladeStammdaten]);
 
-  // Gameday kann in einem anderen Tab gestartet werden — beim Zurückwechseln
-  // den Sperr-Status auffrischen, damit die Buttons nicht falsch offen sind.
+  // Teams oder Games können in einem anderen Tab geändert worden sein — beim
+  // Zurückwechseln Stammdaten und Sperr-Status auffrischen, damit die
+  // Veraltet-Warnung stimmt.
   useEffect(() => {
     const auffrischen = () => {
-      if (document.visibilityState === "visible") void ladeGamedayStatus();
+      if (document.visibilityState !== "visible") return;
+      void ladeGamedayStatus();
+      void ladeStammdaten().catch(() => {});
     };
+    const ab = aufDatenAenderung(auffrischen);
     window.addEventListener("focus", auffrischen);
     document.addEventListener("visibilitychange", auffrischen);
     return () => {
+      ab();
       window.removeEventListener("focus", auffrischen);
       document.removeEventListener("visibilitychange", auffrischen);
     };
-  }, [ladeGamedayStatus]);
+  }, [ladeGamedayStatus, ladeStammdaten]);
 
   /** Zeitplan mit den aktuellen Parametern berechnen (ohne zu speichern). */
-  const generiere = async (): Promise<ScheduleResult> => {
-    const res = await fetch("/api/schedule/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  const generiere = (): Promise<ScheduleResult> =>
+    apiSend<ScheduleResult>(
+      "/api/schedule/generate",
+      "POST",
+      {
         blockDauerMin: blockDauer,
         wechselzeitMin: wechselzeit,
         startZeit,
+        fensterEndeZeit: fensterEnde || null,
+        postenVormittag,
         pausen: [],
-        mittagspause: aktuelleParameter.mittagspause ?? undefined,
+        mittagsfenster: aktuelleParameter.mittagsfenster,
         antiKorrelationen,
-      }),
-    });
-    return jsonOderFehler(res, "Fehler bei der Zeitplan-Generierung");
-  };
+      },
+      "Fehler bei der Zeitplan-Generierung",
+    );
 
   const speicherBody = (name: string, generiert: ScheduleResult) => ({
     name,
@@ -280,8 +253,11 @@ export default function SchedulePage() {
     wechselzeitMin: wechselzeit,
     startZeit,
     endZeit: generiert.endZeit,
+    fensterEndeZeit: fensterEnde || null,
+    postenVormittag,
     pausen: [],
-    mittagspause: aktuelleParameter.mittagspause,
+    mittagsfenster: aktuelleParameter.mittagsfenster,
+    mittagswellen: generiert.mittagsWellen ?? [],
     antiKorrelationen,
     slots: generiert.slots,
   });
@@ -295,7 +271,7 @@ export default function SchedulePage() {
       setIstVorschau(true);
       setGenStamp(Date.now());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler");
+      setError(meldung(err));
     } finally {
       setLoading(false);
     }
@@ -320,27 +296,19 @@ export default function SchedulePage() {
     setError(null);
     try {
       const generiert = await generiere();
-      const res = await fetch("/api/schedule/" + geladen.id, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...speicherBody(saveName, generiert),
-          istAktiv: geladen.istAktiv,
-        }),
-      });
-      await jsonOderFehler(res, "Fehler beim Aktualisieren");
+      await apiSend(
+        "/api/schedule/" + geladen.id,
+        "PUT",
+        { ...speicherBody(saveName, generiert), istAktiv: geladen.istAktiv },
+        "Fehler beim Aktualisieren",
+      );
 
       await ladeListe();
       await ladePlan(geladen.id);
-      // Mittagsschichten berechnet nur die Engine — sie stehen nicht in der DB
-      // und würden sonst direkt nach dem Aktualisieren verschwinden.
-      setResult((r) =>
-        r ? { ...r, mittagsSchichten: generiert.mittagsSchichten } : r,
-      );
       setGenStamp(Date.now());
-      meldung("Zeitplan aktualisiert");
+      meldungAnzeigen("Zeitplan aktualisiert");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler");
+      setError(meldung(err));
     } finally {
       setLoading(false);
     }
@@ -363,26 +331,23 @@ export default function SchedulePage() {
           ? `${saveName.trim()} (Kopie)`
           : saveName.trim();
 
-      const res = await fetch("/api/schedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const saved = await apiSend<SavedConfig>(
+        "/api/schedule",
+        "POST",
+        {
           ...speicherBody(name, generiert),
           // Erster Zeitplan überhaupt: direkt aktiv, damit Leitstand und
           // Einsatzplan sofort damit arbeiten.
           istAktiv: savedConfigs.length === 0,
-        }),
-      });
-      const saved: SavedConfig = await jsonOderFehler(res, "Fehler beim Speichern");
+        },
+        "Fehler beim Speichern",
+      );
 
       await ladeListe();
       await ladePlan(saved.id);
-      setResult((r) =>
-        r ? { ...r, mittagsSchichten: generiert.mittagsSchichten } : r,
-      );
-      meldung("Gespeichert");
+      meldungAnzeigen("Gespeichert");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler");
+      setError(meldung(err));
     } finally {
       setLoading(false);
     }
@@ -394,7 +359,7 @@ export default function SchedulePage() {
     try {
       await ladePlan(configId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler");
+      setError(meldung(err));
     } finally {
       setLoading(false);
     }
@@ -404,8 +369,7 @@ export default function SchedulePage() {
     if (!confirm("Zeitplan wirklich löschen?")) return;
     setError(null);
     try {
-      const res = await fetch("/api/schedule/" + configId, { method: "DELETE" });
-      await jsonOderFehler(res, "Fehler beim Löschen");
+      await apiSend("/api/schedule/" + configId, "DELETE", undefined, "Fehler beim Löschen");
 
       const configs = await ladeListe();
       if (geladen?.id === configId) {
@@ -419,61 +383,42 @@ export default function SchedulePage() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler");
+      setError(meldung(err));
     }
   };
 
   const handleSetActive = async (configId: string) => {
     setError(null);
     try {
-      const res = await fetch("/api/schedule/" + configId, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ istAktiv: true }),
-      });
-      await jsonOderFehler(res, "Fehler beim Aktivieren");
+      await apiSend(
+        "/api/schedule/" + configId,
+        "PUT",
+        { istAktiv: true },
+        "Fehler beim Aktivieren",
+      );
 
       await ladeListe();
       if (geladen?.id === configId) await ladePlan(configId);
       else setGeladen((g) => (g ? { ...g, istAktiv: false } : g));
-      meldung("Aktiviert");
+      meldungAnzeigen("Aktiviert");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler");
+      setError(meldung(err));
     }
   };
 
   const generateQuickTeams = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const newTeams: Team[] = [];
       for (let i = 1; i <= quickTeamCount; i++) {
-        const res = await fetch("/api/teams", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: `Team ${i}`, nummer: i }),
-        });
-        if (res.ok) newTeams.push(await res.json());
+        await apiSend("/api/teams", "POST", { name: `Team ${i}`, nummer: i });
       }
-      setTeams(newTeams);
-    } catch {
-      setError("Fehler beim Erstellen der Teams");
+      await ladeStammdaten();
+    } catch (err) {
+      setError(meldung(err, "Fehler beim Erstellen der Teams"));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleMittagChange = (update: Partial<{
-    mittagAktiv: boolean;
-    mittagNachRunde: number;
-    mittagDauer: number;
-    mittagMaxTeams: number;
-    mittagVersatz: number;
-  }>) => {
-    if (update.mittagAktiv !== undefined) setMittagAktiv(update.mittagAktiv);
-    if (update.mittagNachRunde !== undefined) setMittagNachRunde(update.mittagNachRunde);
-    if (update.mittagDauer !== undefined) setMittagDauer(update.mittagDauer);
-    if (update.mittagMaxTeams !== undefined) setMittagMaxTeams(update.mittagMaxTeams);
-    if (update.mittagVersatz !== undefined) setMittagVersatz(update.mittagVersatz);
   };
 
   const handleAntiKorrChange = (update: Partial<{
@@ -487,6 +432,7 @@ export default function SchedulePage() {
   };
 
   const aktiveConfig = savedConfigs.find((c) => c.istAktiv);
+  const veraltet = geladen?.aktualitaet && !geladen.aktualitaet.aktuell;
 
   return (
     <div className="flex flex-col">
@@ -535,6 +481,14 @@ export default function SchedulePage() {
           </div>
         )}
 
+        {veraltet && !gesperrt && (
+          <VeraltetBanner
+            abweichungen={geladen!.aktualitaet.abweichungen}
+            loading={loading}
+            onAktualisieren={handleAktualisieren}
+          />
+        )}
+
         {error && (
           <div className="flex items-start gap-2.5 rounded-[10px] border border-[var(--hot-border)] bg-hot-dim/50 px-3.5 py-2.5 text-[13px] text-ink-2">
             <Warning
@@ -567,13 +521,19 @@ export default function SchedulePage() {
               blockDauer={blockDauer}
               wechselzeit={wechselzeit}
               startZeit={startZeit}
-              mittag={{ mittagAktiv, mittagNachRunde, mittagDauer, mittagMaxTeams, mittagVersatz }}
+              fensterEnde={fensterEnde}
+              postenVormittag={postenVormittag}
+              mittagAktiv={mittagAktiv}
+              mittag={mittag}
               antiKorr={{ antiKorrAktiv, antiKorrGameX, antiKorrGameY }}
               quickTeamCount={quickTeamCount}
               onBlockDauerChange={setBlockDauer}
               onWechselzeitChange={setWechselzeit}
               onStartZeitChange={setStartZeit}
-              onMittagChange={handleMittagChange}
+              onFensterEndeChange={setFensterEnde}
+              onPostenVormittagChange={setPostenVormittag}
+              onMittagAktivChange={setMittagAktiv}
+              onMittagChange={(update) => setMittag((m) => ({ ...m, ...update }))}
               onAntiKorrChange={handleAntiKorrChange}
               onQuickTeamCountChange={setQuickTeamCount}
               onGenerateQuickTeams={generateQuickTeams}
@@ -622,6 +582,40 @@ export default function SchedulePage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Der gespeicherte Plan passt nicht mehr zu den Stammdaten — die häufigste
+ * Ursache ist ein Team, das nach dem Generieren dazukam oder wegfiel.
+ */
+function VeraltetBanner({
+  abweichungen,
+  loading,
+  onAktualisieren,
+}: {
+  abweichungen: string[];
+  loading: boolean;
+  onAktualisieren: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-start gap-3 rounded-[10px] border border-[var(--warn-border)] bg-warn-dim px-3.5 py-3">
+      <Warning size={16} weight="bold" className="mt-0.5 shrink-0 text-warn" />
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="text-[13px] font-semibold text-ink">
+          Dieser Zeitplan ist nicht mehr aktuell
+        </p>
+        {abweichungen.map((a) => (
+          <p key={a} className="text-[12px] text-ink-2">
+            {a}
+          </p>
+        ))}
+      </div>
+      <Button variant="primary" onClick={onAktualisieren} disabled={loading}>
+        <ArrowsClockwise size={15} weight="bold" />
+        Neu berechnen
+      </Button>
     </div>
   );
 }

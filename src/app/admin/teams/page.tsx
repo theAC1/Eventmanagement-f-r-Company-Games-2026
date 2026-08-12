@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Warning } from "@phosphor-icons/react";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { Button } from "@/components/ui/button";
 import { useScrollRestore } from "@/hooks/use-scroll-restore";
+import { apiFetch, apiSend } from "@/lib/api-client";
+import { meldung } from "@/lib/api-fehler";
 
 type Team = {
   id: string; name: string; nummer: number; farbe: string;
@@ -17,38 +20,61 @@ const GRID_COLS = "36px 1.3fr 150px 90px 1fr 52px 90px";
 const INPUT_CLASS =
   "h-[34px] rounded-[9px] border border-line-strong bg-sunken px-3 text-[13px] text-ink outline-none transition-colors duration-150 placeholder:text-label focus:border-action";
 
+type LoeschAntwort = { folgen?: string[] };
+
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
   const [newNummer, setNewNummer] = useState(1);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [hinweis, setHinweis] = useState<string | null>(null);
 
   useScrollRestore("admin:teams", !loading);
 
-  const load = () => {
-    fetch("/api/teams").then(r => r.json()).then(t => { setTeams(t); setLoading(false); });
-  };
+  const load = useCallback(async () => {
+    try {
+      setTeams(await apiFetch<Team[]>("/api/teams"));
+      setFehler(null);
+    } catch (err) {
+      setFehler(meldung(err, "Teams konnten nicht geladen werden."));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const createTeam = async () => {
     if (!newName.trim()) return;
-    await fetch("/api/teams", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName, nummer: newNummer }),
-    });
-    setNewName("");
-    setNewNummer(teams.length + 2);
-    setShowNew(false);
-    load();
+    try {
+      await apiSend("/api/teams", "POST", { name: newName, nummer: newNummer });
+      setNewName("");
+      setNewNummer(newNummer + 1);
+      setShowNew(false);
+      setFehler(null);
+      await load();
+    } catch (err) {
+      setFehler(meldung(err, "Team konnte nicht erstellt werden."));
+    }
   };
 
-  const deleteTeam = async (id: string) => {
-    if (!confirm("Team wirklich löschen?")) return;
-    await fetch(`/api/teams/${id}`, { method: "DELETE" });
-    load();
+  const deleteTeam = async (team: Team) => {
+    if (!confirm(`Team "${team.name}" wirklich löschen?`)) return;
+    setFehler(null);
+    setHinweis(null);
+    try {
+      const antwort = await apiSend<LoeschAntwort>(`/api/teams/${team.id}`, "DELETE");
+      if (antwort.folgen && antwort.folgen.length > 0) {
+        setHinweis(`"${team.name}" gelöscht. ${antwort.folgen.join(" ")}`);
+      }
+      await load();
+    } catch (err) {
+      setFehler(meldung(err, "Team konnte nicht gelöscht werden."));
+    }
   };
 
   if (loading) {
@@ -100,6 +126,19 @@ export default function TeamsPage() {
           </Button>
         )}
       </TopBar>
+
+      {fehler && (
+        <div className="mx-4 mt-4 flex items-start gap-2.5 rounded-[10px] border border-[var(--hot-border)] bg-hot-dim/50 px-3.5 py-2.5 text-[13px] text-ink-2 sm:mx-[22px]">
+          <Warning size={15} weight="bold" className="mt-0.5 shrink-0 text-hot-tint" />
+          <span>{fehler}</span>
+        </div>
+      )}
+
+      {hinweis && (
+        <div className="mx-4 mt-4 rounded-[10px] border border-line bg-sunken px-3.5 py-2.5 text-[13px] text-ink-2 sm:mx-[22px]">
+          {hinweis}
+        </div>
+      )}
 
       {teams.length === 0 ? (
         <div className="px-[22px] py-12 text-center text-sm text-ink-3">
@@ -155,7 +194,7 @@ export default function TeamsPage() {
                   />
                   <span className="text-right">
                     <button
-                      onClick={() => deleteTeam(t.id)}
+                      onClick={() => deleteTeam(t)}
                       className="rounded-[7px] border border-[var(--hot-border)] px-2.5 py-1 text-[11px] font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim"
                     >
                       Löschen
@@ -191,7 +230,7 @@ export default function TeamsPage() {
                   )}
                   <div className="flex justify-end">
                     <button
-                      onClick={() => deleteTeam(t.id)}
+                      onClick={() => deleteTeam(t)}
                       className="rounded-[7px] border border-[var(--hot-border)] px-2.5 py-1 text-[11px] font-medium text-hot-tint transition-colors duration-150 hover:bg-hot-dim"
                     >
                       Löschen

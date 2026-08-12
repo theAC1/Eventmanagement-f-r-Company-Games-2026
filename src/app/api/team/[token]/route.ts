@@ -96,7 +96,7 @@ export async function GET(
       },
       orderBy: { game: { name: "asc" } },
     });
-    // Eierfall-Opt-out: Bonus-Games (zaehltZurWertung=false) werden angezeigt,
+    // Bonus-Games (zaehltZurWertung=false) werden angezeigt,
     // fliessen aber nicht in die Rangpunkte-Summe ein
     const rangPunkteSumme = ergebnisse.reduce(
       (sum, e) => (e.game.zaehltZurWertung ? sum + (e.rangPunkte ?? 0) : sum),

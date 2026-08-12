@@ -17,7 +17,7 @@ export async function GET() {
   try {
     const games = await prisma.game.findMany({
       include: {
-        _count: { select: { varianten: true, materialItems: true } },
+        _count: { select: { varianten: true, materialItems: true, crew: true } },
       },
       orderBy: { name: "asc" },
     });
@@ -84,6 +84,8 @@ export async function POST(request: NextRequest) {
         typ: data.typ,
         modus: data.modus,
         teamsProSlot: data.teamsProSlot ?? 1,
+        durchgaenge: data.durchgaenge ?? 1,
+        teilnehmerProTeam: data.teilnehmerProTeam ?? null,
         kurzbeschreibung: data.kurzbeschreibung ?? null,
         einfuehrungMin: data.einfuehrungMin ?? 3,
         playtimeMin: data.playtimeMin ?? 10,

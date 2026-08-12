@@ -6,7 +6,6 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.test.ts"],
-    exclude: ["src/lib/schedule-engine.test.ts"],
     coverage: {
       provider: "v8",
       include: ["src/lib/**/*.ts"],
@@ -15,8 +14,10 @@ export default defineConfig({
         "src/lib/prisma.ts",
         "src/lib/auth.ts",
         // Reine Prisma-Abfragen ohne eigene Logik (die Regeln dazu liegen in
-        // zeitplan-sperre.ts und sind dort vollständig getestet).
+        // zeitplan-sperre.ts, zeitplan-aktualitaet.ts und mittagsplanung.ts und
+        // sind dort vollständig getestet).
         "src/lib/zeitplan-config.ts",
+        "src/lib/zeitplan-eingaben.ts",
       ],
       thresholds: {
         statements: 80,

@@ -18,6 +18,14 @@ model Game {
   modus            GameModus
   teamsProSlot     Int        @default(1)
 
+  // Wie oft jedes Team dieses Game im Turnier absolviert.
+  // 10 Games, davon zwei mit durchgaenge=2 ⇒ 12 Posten pro Team.
+  durchgaenge Int @default(1)
+
+  // Spieler pro Team an diesem Posten (z. B. Human Soccer 5, Cornhole 2).
+  // Grundlage für Aufstellungen und Materialbedarf.
+  teilnehmerProTeam Int?
+
   einfuehrungMin Int @default(3)
   playtimeMin    Int @default(10)
   reserveMin     Int @default(2)
@@ -32,8 +40,7 @@ model Game {
   schiedsrichterAnzahl Int     @default(1)
   stromNoetig    Boolean @default(false)
 
-  // Game findet statt, fliesst aber nicht in die Gesamtwertung ein
-  // (Protokoll-Anforderung: Eierfall muss abschaltbar sein)
+  // Bonus-Game: findet statt, fliesst aber nicht in die Gesamtwertung ein
   zaehltZurWertung Boolean @default(true)
 
   createdById String?
@@ -49,6 +56,23 @@ model Game {
   zeitplanSlots  ZeitplanSlot[]
   gamePositionen GamePosition[]
   ergebnisse     Ergebnis[]
+  crew           GameCrew[]
+}
+
+/// Feste Schiedsrichter-/Helfer-Besetzung eines Postens.
+/// Der Einsatzplan wird daraus abgeleitet — zugewiesen wird im Games-Tab,
+/// nicht mehr Slot für Slot.
+model GameCrew {
+  id        String      @id @default(cuid())
+  gameId    String
+  game      Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+  rolle     PersonRolle
+  createdAt DateTime    @default(now())
+
+  @@unique([gameId, personId])
+  @@index([personId])
 }
 
 enum GameTyp {
@@ -115,6 +139,9 @@ model Person {
   mussPasswortAendern Boolean @default(false)
   rolle        PersonRolle
   istAktiv     Boolean     @default(true)
+  // Verpflegung: Helfer ohne Posten-Zuteilung melden hier, ob sie mitessen.
+  // Posten-Crew isst immer mit (Welle folgt aus der Posten-Pause).
+  isstMittag   Boolean     @default(true)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
@@ -123,6 +150,7 @@ model Person {
   kvpEintraege           KvpEintrag[]
   zeitplanSlots          ZeitplanSlot[]
   slotEinsaetze          ZeitplanSlotPerson[]
+  postenCrew             GameCrew[]
   ergebnisseEingetragen  Ergebnis[]         @relation("eingetragen_von")
   qrScans                QRVerifikation[]
 
@@ -214,7 +242,15 @@ model ZeitplanConfig {
   startZeit      String
   endZeit        String
   pausen         Json     @default("[]")
+  // MittagsfensterConfig: { von, bis, dauerMin, teamsProWelle, versatzMin }
   mittagspause   Json?
+  // Spätestes Turnierende (Soll-Fenster). endZeit ist das berechnete Ende.
+  fensterEndeZeit String?
+  // Ziel: wie viele Posten ein Team vor seiner Mittagswelle absolviert.
+  postenVormittag Int?
+  // Berechnete Mittagswellen (Teams + Posten-Crew + freie Helfer) als Snapshot,
+  // damit Einsatzplan und Verpflegung ohne Neuberechnung darauf zugreifen.
+  mittagswellen  Json     @default("[]")
   istAktiv       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -230,7 +266,7 @@ model ZeitplanSlot {
   startZeit        String
   endZeit          String
   gameId           String?
-  game             Game?          @relation(fields: [gameId], references: [id])
+  game             Game?          @relation(fields: [gameId], references: [id], onDelete: SetNull)
   status           SlotStatus     @default(GEPLANT)
   schiedsrichterId String?
   schiedsrichter   Person?        @relation(fields: [schiedsrichterId], references: [id])
@@ -260,7 +296,10 @@ model ZeitplanSlotTeam {
   slotId String
   slot   ZeitplanSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
   teamId String
-  team   Team         @relation(fields: [teamId], references: [id])
+  // Cascade: ein gelöschtes Team darf nicht an einer Planungszeile scheitern.
+  // Die Ergebnis-Relation bleibt bewusst restriktiv — dort greift die
+  // Vorprüfung in der API mit Klartext-Begründung.
+  team   Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@id([slotId, teamId])
 }
@@ -291,7 +330,7 @@ model GamePosition {
   planId      String
   plan        Situationsplan @relation(fields: [planId], references: [id], onDelete: Cascade)
   gameId      String
-  game        Game           @relation(fields: [gameId], references: [id])
+  game        Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
   x           Float
   y           Float
   rotation    Float          @default(0)
@@ -418,7 +457,7 @@ model ErgebnisHistory {
 model QRVerifikation {
   id               String               @id @default(cuid())
   teamId           String
-  team             Team                 @relation(fields: [teamId], references: [id])
+  team             Team                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
   zeitplanSlotId   String
   zeitplanSlot     ZeitplanSlot         @relation(fields: [zeitplanSlotId], references: [id])
   schiedsrichterId String

@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { GameUpdateSchema, zodValidationError } from "@/lib/schemas";
 import { berechneGamePunkteNeu } from "@/lib/game-punkte";
+import { loeschFolgen, pruefeLoeschen } from "@/lib/loesch-schutz";
 import { hasMinRole } from "@/lib/roles";
 import {
   sanitizeWertungslogikFuerSchiedsrichter,
@@ -107,15 +108,64 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE /api/games/:id – Game löschen
+/**
+ * DELETE /api/games/:id
+ *
+ * Varianten, Posten-Crew und Lageplan-Position gehen per Cascade mit; die
+ * Zeitplan-Slots verlieren ihre Game-Referenz (SetNull) und werden dadurch als
+ * veralteter Zeitplan sichtbar. Erfasste Ergebnisse blockieren das Löschen.
+ */
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   const { error: authError } = await requireRole("ORGA");
   if (authError) return authError;
 
   const { id } = await params;
   try {
+    const game = await prisma.game.findUnique({
+      where: { id },
+      select: {
+        name: true,
+        _count: {
+          select: {
+            ergebnisse: true,
+            zeitplanSlots: true,
+            materialItems: true,
+            crew: true,
+          },
+        },
+      },
+    });
+    if (!game) {
+      return NextResponse.json({ error: "Game nicht gefunden" }, { status: 404 });
+    }
+
+    const entscheid = pruefeLoeschen(
+      `Das Game "${game.name}"`,
+      [{ was: "erfasste Ergebnisse", anzahl: game._count.ergebnisse }],
+      "Lösche zuerst die Ergebnisse oder setze den Gameday zurück. " +
+        "Alternativ: Status auf Entwurf setzen — dann bleibt es erhalten, kommt aber nicht in den Zeitplan.",
+    );
+    if (!entscheid.erlaubt) {
+      return NextResponse.json({ error: entscheid.grund }, { status: 409 });
+    }
+
     await prisma.game.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+
+    const folgen = loeschFolgen([
+      { was: "Posten-Zuteilungen (Schiedsrichter/Helfer)", anzahl: game._count.crew },
+    ]);
+    if (game._count.zeitplanSlots > 0) {
+      folgen.push(
+        `${game._count.zeitplanSlots} Zeitplan-Slots haben ihren Posten verloren — der Zeitplan muss neu generiert werden.`,
+      );
+    }
+    if (game._count.materialItems > 0) {
+      folgen.push(
+        `${game._count.materialItems} Material-Einträge sind jetzt ohne Game-Zuordnung.`,
+      );
+    }
+
+    return NextResponse.json({ success: true, folgen });
   } catch (error) {
     console.error(`DELETE /api/games/${id} error:`, error);
     return NextResponse.json(

@@ -20,7 +20,7 @@ export async function GET() {
     const ergebnisWhere: Prisma.ErgebnisWhereInput = {
       gamePunkte: { not: null },
       rangImGame: { not: null },
-      // Eierfall-Opt-out: Ergebnisse von Games mit zaehltZurWertung=false
+      // Bonus-Opt-out: Ergebnisse von Games mit zaehltZurWertung=false
       // fliessen nicht in die Gesamtwertung ein
       game: { zaehltZurWertung: true },
       ...(includeTest ? {} : { istTest: false }),
