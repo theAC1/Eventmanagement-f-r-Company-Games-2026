@@ -1,0 +1,27 @@
+name: Game-Stammdaten aktualisieren
+
+# Manuell auslösbar (Actions → "Game-Stammdaten aktualisieren" → Run workflow).
+#
+# Der Deploy pusht nur das Schema; Stammdaten-Änderungen an games-data.ts
+# erreichen die Datenbank erst über diesen Lauf. Das Script ist idempotent:
+# es aktualisiert die Protokoll-Games per Slug, löscht ausgemusterte Games ohne
+# Ergebnisse und behält von der Orga justierte Laufzeitwerte
+# (zaehltZurWertung, Gewichtungen) bei.
+#
+# Achtung: Name, Regeln, Wertungslogik und Zeiten werden auf den Stand von
+# prisma/games-data.ts zurückgesetzt — im Admin-UI gemachte Änderungen an
+# diesen Feldern gehen dabei verloren.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: self-hosted
+    steps:
+      - name: Stammdaten auf Protokoll-Stand bringen
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose run --rm app npm run games:update
+
+      - name: App erreichbar?
+        run: curl -sf http://localhost:3000/api/health
