@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
-import { GridStack, type GridStackNode } from "gridstack";
+import { GridStack, type GridItemHTMLElement, type GridStackNode } from "gridstack";
 import "gridstack/dist/gridstack.min.css";
 import {
   ArrowClockwise,
@@ -141,27 +141,38 @@ type MapGridProps = {
   onSave: (key: string, rect: Rect, mode: "drag" | "resize") => void;
 };
 
+/** Rasterkoordinaten aller Felder, einmalig aus den Daten berechnet. */
+type Layout = Record<string, { x: number; y: number; w: number; h: number }>;
+
+function berechneLayout(games: GamePosition[], customs: CustomFeld[], mpp: number): Layout {
+  const layout: Layout = {};
+  for (const pos of games) {
+    const { wPct, hPct } = sizePct(pos.game.flaecheLaengeM ?? 10, pos.game.flaecheBreiteM ?? 10, pos.rotation, mpp);
+    layout["g:" + pos.gameId] = toGrid(pos.x, pos.y, wPct, hPct);
+  }
+  for (const cf of customs) {
+    const { wPct, hPct } = sizePct(cf.laengeM, cf.breiteM, cf.rotation, mpp);
+    layout["c:" + cf.id] = toGrid(cf.x, cf.y, wPct, hPct);
+  }
+  return layout;
+}
+
 function MapGrid({ games, customs, mpp, selected, onSelect, onSave }: MapGridProps) {
   const elRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<GridStack | null>(null);
   const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
 
-  // Initiales Layout einmalig beim Mount aus den Daten berechnen.
-  // GridStack besitzt danach die DOM-Position; React fasst gs-* nicht mehr an.
-  const initialLayout = useRef<Record<string, { x: number; y: number; w: number; h: number }> | null>(null);
-  if (initialLayout.current === null) {
-    const m: Record<string, { x: number; y: number; w: number; h: number }> = {};
-    for (const pos of games) {
-      const { wPct, hPct } = sizePct(pos.game.flaecheLaengeM ?? 10, pos.game.flaecheBreiteM ?? 10, pos.rotation, mpp);
-      m["g:" + pos.gameId] = toGrid(pos.x, pos.y, wPct, hPct);
-    }
-    for (const cf of customs) {
-      const { wPct, hPct } = sizePct(cf.laengeM, cf.breiteM, cf.rotation, mpp);
-      m["c:" + cf.id] = toGrid(cf.x, cf.y, wPct, hPct);
-    }
-    initialLayout.current = m;
-  }
+  // Der Effekt unten läuft nur beim Mount, braucht aber immer den neuesten
+  // Callback — deshalb über eine Ref, die nach jedem Render nachgezogen wird.
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  // Initiales Layout einmalig beim Mount aus den Daten berechnen. GridStack
+  // besitzt danach die DOM-Position; React fasst gs-* nicht mehr an. Bewusst
+  // State mit Lazy-Initialisierung statt einer Ref: der Wert wird beim Rendern
+  // gelesen, und genau das darf eine Ref nicht.
+  const [initialLayout] = useState<Layout>(() => berechneLayout(games, customs, mpp));
 
   useEffect(() => {
     if (!elRef.current) return;
@@ -173,19 +184,19 @@ function MapGrid({ games, customs, mpp, selected, onSelect, onSave }: MapGridPro
         float: true,
         margin: 0,
         animate: false,
-        disableOneColumnMode: true,
         resizable: { handles: "n,ne,e,se,s,sw,w,nw" },
-      } as any,
+      },
       elRef.current,
     )!;
     gridRef.current = grid;
 
-    const route = (mode: "drag" | "resize") => (_e: Event, el: any) => {
-      const node: GridStackNode | undefined = el?.gridstackNode;
-      const key = el?.getAttribute?.("gs-id");
-      if (!node || !key) return;
-      onSaveRef.current(key, fromGrid(node), mode);
-    };
+    const route =
+      (mode: "drag" | "resize") => (_e: Event, el: GridItemHTMLElement) => {
+        const node: GridStackNode | undefined = el?.gridstackNode;
+        const key = el?.getAttribute?.("gs-id");
+        if (!node || !key) return;
+        onSaveRef.current(key, fromGrid(node), mode);
+      };
     grid.on("dragstop", route("drag"));
     grid.on("resizestop", route("resize"));
 
@@ -205,7 +216,8 @@ function MapGrid({ games, customs, mpp, selected, onSelect, onSave }: MapGridPro
     rotation: number,
     oeffentlich: boolean,
   ) => {
-    const g = initialLayout.current![key];
+    const g = initialLayout[key];
+    if (!g) return null;
     const isSel = selected?.type === type && selected.id === id;
     const r45 = rotation % 90 !== 0;
     return (
@@ -299,8 +311,6 @@ export default function SituationsplanPage() {
 
   const placedIds = new Set(plan?.gamePositionen.map(p => p.gameId) ?? []);
   const unplaced = allGames.filter(g => !placedIds.has(g.id));
-
-  const fieldSize = (lM: number, bM: number, rot: number) => sizePct(lM, bM, rot, mpp);
 
   // ─── Save nach Drag/Resize (GridStack) ───
   const handleSave = useCallback(async (key: string, rect: Rect, mode: "drag" | "resize") => {
@@ -604,6 +614,7 @@ export default function SituationsplanPage() {
             )}
           </div>
           {plan?.hintergrundbildUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- Vorschau einer hochgeladenen Datei, keine Optimierung nötig
             <img src={plan.hintergrundbildUrl} alt="Lageplan-Vorschau"
               className="max-h-32 rounded-lg border border-line object-contain" />
           )}
@@ -617,6 +628,7 @@ export default function SituationsplanPage() {
               onClick={e => { if (addingInfra) { addInfra(e); return; } setSelected(null); }}
               style={{ aspectRatio: `${IMG_RATIO}` }}>
 
+              {/* eslint-disable-next-line @next/next/no-img-element -- Hintergrundbild des Plans, wird als Canvas-Untergrund gebraucht */}
               <img src="/images/situationsplan.jpg" alt=""
                 className="absolute inset-0 z-0 h-full w-full object-cover opacity-[0.62] [html[data-theme=light]_&]:opacity-80"
                 draggable={false} />
@@ -790,12 +802,12 @@ export default function SituationsplanPage() {
                       const v = e.target.value;
                       setPlan(prev => prev ? { ...prev, gamePositionen: prev.gamePositionen.map(p => p.id === selGame.id ? { ...p, nummer: v } : p) } : prev);
                     }}
-                    onBlur={() => updateGamePos(selGame.id, { nummer: selGame.nummer } as any)}
+                    onBlur={() => updateGamePos(selGame.id, { nummer: selGame.nummer })}
                     className={`tnum text-center ${INPUT_CLS}`} />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="cg-label">Sichtbarkeit</span>
-                  <button onClick={() => updateGamePos(selGame.id, { oeffentlich: !selGame.oeffentlich } as any)}
+                  <button onClick={() => updateGamePos(selGame.id, { oeffentlich: !selGame.oeffentlich })}
                     className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 font-medium transition-colors duration-150 ${selGame.oeffentlich ? "border-done bg-done-dim text-done-tint" : "border-line-strong bg-sunken text-ink-3"}`}>
                     {selGame.oeffentlich ? <Eye size={13} weight="bold" /> : <Lock size={13} weight="bold" />}
                     {selGame.oeffentlich ? "Öffentlich" : "OKW"}

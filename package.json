@@ -1,6 +1,6 @@
 {
   "name": "company-games-2026",
-  "version": "0.17.0-alpha",
+  "version": "0.17.1-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -11,8 +11,8 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "users:init": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/create-initial-users.ts",
-    "games:update": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/update-games-protokoll.ts",
+    "users:init": "ts-node --project tsconfig.scripts.json scripts/create-initial-users.ts",
+    "games:update": "ts-node --project tsconfig.scripts.json scripts/update-games-protokoll.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:build": "docker compose build",
@@ -22,7 +22,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "seed": "ts-node --project tsconfig.scripts.json prisma/seed.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

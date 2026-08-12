@@ -94,14 +94,18 @@ export default function EingabePage() {
 
   // Cleanup: Kamera stoppen bei Unmount
   useEffect(() => {
+    // Das <video>-Element beim Aufsetzen festhalten: im Cleanup kann videoRef
+    // bereits auf ein anderes (oder gar kein) Element zeigen — der Kamerastream
+    // liefe dann weiter.
+    const video = videoRef.current;
     return () => {
       scanningRef.current = false;
       if (scanIntervalRef.current) {
         clearInterval(scanIntervalRef.current);
         scanIntervalRef.current = null;
       }
-      if (videoRef.current?.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      if (video?.srcObject) {
+        (video.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       }
     };
   }, []);

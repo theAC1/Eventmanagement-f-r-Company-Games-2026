@@ -143,6 +143,7 @@ function BadgeCard({ team, portalUrl }: {
         <div style={{ textAlign: "center" }}>
           {team.logoUrl ? (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- Badge wird per Canvas gerendert, next/image liefert kein <img> mit crossOrigin */}
               <img src={team.logoUrl} alt={team.name} style={{ width: "56px", height: "56px", objectFit: "contain" }}
                 crossOrigin="anonymous" />
             </div>
@@ -166,6 +167,7 @@ function BadgeCard({ team, portalUrl }: {
             backgroundColor: "white", borderRadius: "12px", padding: "12px",
             display: "inline-block",
           }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- extern erzeugter QR-Code, wird für den Druck als Canvas gebraucht */}
             <img src={qrUrl(portalUrl, 200)} alt="Team QR" style={{ width: "180px", height: "180px" }}
               crossOrigin="anonymous" />
           </div>
