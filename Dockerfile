@@ -35,10 +35,13 @@ COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.js ./prisma.config.js
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-# Für Wartungs-Scripts im Container (z.B. npm run users:init)
+# Für Wartungs-Scripts im Container (npm run users:init, npm run games:update).
+# tsconfig.scripts.json ist dabei nicht optional: ts-node wird darüber
+# aufgerufen und bricht ohne die Datei mit TS5083 ab.
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/tsconfig.scripts.json ./tsconfig.scripts.json
 
 # Upload-Verzeichnis: Ownership wird beim ersten Mount vom Named Volume übernommen
 RUN mkdir -p /app/uploads && chown nextjs:nodejs /app/uploads
