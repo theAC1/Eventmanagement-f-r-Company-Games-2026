@@ -6,8 +6,15 @@
  * Formatieren.
  */
 
-/** "09:30" → 570. Ungültige Eingaben ergeben NaN, nie stillschweigend 0. */
-export function parseZeit(zeit: string): number {
+/**
+ * "09:30" → 570. Ungültige Eingaben ergeben NaN, nie stillschweigend 0.
+ *
+ * Nimmt bewusst `unknown` entgegen: Zeitangaben kommen auch aus JSON-Spalten
+ * der Datenbank, deren Form sich über die Zeit geändert hat. Ein fehlendes
+ * Feld darf hier nicht die ganze Seite mitreissen.
+ */
+export function parseZeit(zeit: unknown): number {
+  if (typeof zeit !== "string") return NaN;
   const treffer = /^(\d{1,2}):([0-5]\d)$/.exec(zeit.trim());
   if (!treffer) return NaN;
   return Number(treffer[1]) * 60 + Number(treffer[2]);

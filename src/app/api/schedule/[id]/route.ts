@@ -22,6 +22,7 @@ import {
   pruefeZeitplanAktualitaet,
 } from "@/lib/zeitplan-aktualitaet";
 import { ladeAktuellenStand, ladeSollDurchgaenge } from "@/lib/zeitplan-eingaben";
+import { normalisiereMittagsfenster } from "@/lib/mittagsplanung";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -134,8 +135,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       fensterEndeZeit: config.fensterEndeZeit,
       postenVormittag: config.postenVormittag,
       pausen: config.pausen,
-      mittagsfenster: config.mittagspause,
-      mittagsWellen: config.mittagswellen,
+      // Alte Pläne tragen noch die Pausen-Form von früher — übersetzen, statt
+      // die Oberfläche mit halben Objekten zu füttern.
+      mittagsfenster: normalisiereMittagsfenster(config.mittagspause),
+      mittagsWellen: Array.isArray(config.mittagswellen) ? config.mittagswellen : [],
       istAktiv: config.istAktiv,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,

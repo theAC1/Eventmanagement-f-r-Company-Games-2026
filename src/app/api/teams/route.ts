@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateUniqueCheckinCode } from "@/lib/checkin-code";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { TeamCreateSchema, zodValidationError } from "@/lib/schemas";
+import { naechsteFreieNummer } from "@/lib/team-nummern";
 
 const TEAM_PUBLIC_SELECT = {
   id: true,
@@ -50,9 +51,22 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    const existing = await prisma.team.findMany({ select: { checkinCode: true } });
-    const existingCodes = new Set<string>(existing.map((t: { checkinCode: string }) => t.checkinCode).filter(Boolean));
+    const existing = await prisma.team.findMany({
+      select: { checkinCode: true, nummer: true, name: true },
+    });
+    const existingCodes = new Set<string>(existing.map((t) => t.checkinCode).filter(Boolean));
     const checkinCode = generateUniqueCheckinCode(existingCodes);
+
+    // Startnummern sind eindeutig — Klartext statt Datenbankfehler.
+    const belegt = existing.find((t) => t.nummer === data.nummer);
+    if (belegt) {
+      return NextResponse.json(
+        {
+          error: `Startnummer ${data.nummer} ist bereits an "${belegt.name}" vergeben. Freie Nummer: ${naechsteFreieNummer(existing.map((t) => t.nummer))}.`,
+        },
+        { status: 409 },
+      );
+    }
 
     const userId = await getCurrentUserId();
 

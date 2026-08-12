@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { ZeitplanSaveSchema, zodValidationError } from "@/lib/schemas";
 import { getGamedayModus } from "@/lib/zeitplan-config";
 import { pruefeGamedaySperre } from "@/lib/zeitplan-sperre";
+import { normalisiereMittagsfenster } from "@/lib/mittagsplanung";
 
 /** Listenfelder: genug, um Parameter eines Plans ohne Nachladen anzuzeigen. */
 const LIST_SELECT = {
@@ -36,7 +37,13 @@ export async function GET() {
       select: LIST_SELECT,
       orderBy: [{ istAktiv: "desc" }, { createdAt: "desc" }],
     });
-    return NextResponse.json(configs);
+    // Pläne aus der Zeit der festen Mittagspause tragen noch die alte Form.
+    return NextResponse.json(
+      configs.map((c) => ({
+        ...c,
+        mittagspause: normalisiereMittagsfenster(c.mittagspause),
+      })),
+    );
   } catch (error) {
     console.error("GET /api/schedule error:", error);
     return NextResponse.json({ error: "Fehler beim Laden" }, { status: 500 });

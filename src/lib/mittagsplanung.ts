@@ -89,6 +89,41 @@ export const MITTAG_DEFAULT: MittagsfensterConfig = {
 };
 
 /**
+ * Bringt eine gespeicherte Mittagskonfiguration auf die aktuelle Form.
+ *
+ * Die Spalte `ZeitplanConfig.mittagspause` ist JSON und trug früher eine
+ * andere Form: `{ nachRunde, dauerMin, maxTeamsGleichzeitig, versatzMin }` —
+ * eine feste Pause nach Runde N. Pläne aus dieser Zeit stehen weiterhin in der
+ * Datenbank; ohne Übersetzung fehlten `von`/`bis` und die Zeitplanseite lief
+ * beim Rendern auf.
+ *
+ * Was sich übernehmen lässt (Essenszeit, Versatz, Gruppengrösse), wird
+ * übernommen; das Fenster selbst ist aus einer Rundennummer nicht ableitbar
+ * und fällt auf den Standard zurück.
+ */
+export function normalisiereMittagsfenster(wert: unknown): MittagsfensterConfig | null {
+  if (!wert || typeof wert !== "object") return null;
+  const roh = wert as Record<string, unknown>;
+
+  const zahl = (v: unknown, standard: number): number =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : standard;
+  const zeit = (v: unknown, standard: string): string =>
+    typeof v === "string" && /^\d{1,2}:[0-5]\d$/.test(v) ? v : standard;
+
+  return {
+    von: zeit(roh.von, MITTAG_DEFAULT.von),
+    bis: zeit(roh.bis, MITTAG_DEFAULT.bis),
+    dauerMin: Math.max(5, zahl(roh.dauerMin, MITTAG_DEFAULT.dauerMin)),
+    // Altform: maxTeamsGleichzeitig war die Kapazität einer Schicht.
+    teamsProWelle: Math.max(
+      1,
+      zahl(roh.teamsProWelle ?? roh.maxTeamsGleichzeitig, MITTAG_DEFAULT.teamsProWelle),
+    ),
+    versatzMin: zahl(roh.versatzMin, MITTAG_DEFAULT.versatzMin),
+  };
+}
+
+/**
  * Wie viele Wellen passen ins Fenster? Die letzte Welle muss vollständig
  * innerhalb von [von, bis] liegen.
  */

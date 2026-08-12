@@ -45,6 +45,24 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(zodValidationError(parsed.error), { status: 400 });
     }
 
+    // Startnummern sind eindeutig. Ohne diese Prüfung liefe der Wechsel auf
+    // eine belegte Nummer in einen Datenbankfehler und käme als "Fehler beim
+    // Aktualisieren" zurück — ohne zu sagen, wer die Nummer hat.
+    if (parsed.data.nummer !== undefined) {
+      const belegt = await prisma.team.findUnique({
+        where: { nummer: parsed.data.nummer },
+        select: { id: true, name: true },
+      });
+      if (belegt && belegt.id !== id) {
+        return NextResponse.json(
+          {
+            error: `Startnummer ${parsed.data.nummer} ist bereits an "${belegt.name}" vergeben.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const userId = await getCurrentUserId();
 
     const team = await prisma.team.update({

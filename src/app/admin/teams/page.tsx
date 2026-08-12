@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useScrollRestore } from "@/hooks/use-scroll-restore";
 import { apiFetch, apiSend } from "@/lib/api-client";
 import { meldung } from "@/lib/api-fehler";
+import { hatLuecken, naechsteFreieNummer } from "@/lib/team-nummern";
 
 type Team = {
   id: string; name: string; nummer: number; farbe: string;
@@ -53,12 +54,50 @@ export default function TeamsPage() {
     try {
       await apiSend("/api/teams", "POST", { name: newName, nummer: newNummer });
       setNewName("");
-      setNewNummer(newNummer + 1);
       setShowNew(false);
       setFehler(null);
       await load();
     } catch (err) {
       setFehler(meldung(err, "Team konnte nicht erstellt werden."));
+    }
+  };
+
+  /** Startnummer eines Teams ändern — die API meldet eine belegte Nummer. */
+  const setzeNummer = async (team: Team, nummer: number) => {
+    if (nummer === team.nummer) return;
+    setFehler(null);
+    setHinweis(null);
+    try {
+      await apiSend(`/api/teams/${team.id}`, "PUT", { nummer });
+      await load();
+    } catch (err) {
+      setFehler(meldung(err, "Startnummer konnte nicht geändert werden."));
+      // Zurück auf den gespeicherten Stand, damit die Anzeige nicht lügt
+      await load();
+    }
+  };
+
+  const nummernNeuVergeben = async () => {
+    if (
+      !confirm(
+        "Startnummern lückenlos auf 1–" +
+          teams.length +
+          " setzen? Die bisherige Reihenfolge bleibt erhalten.\n\n" +
+          "Achtung: Bereits gedruckte Badges und Startnummern stimmen danach nicht mehr.",
+      )
+    )
+      return;
+    setFehler(null);
+    try {
+      const antwort = await apiSend<{ geaendert: number }>("/api/teams/nummern", "POST");
+      setHinweis(
+        antwort.geaendert === 0
+          ? "Die Nummern waren bereits lückenlos."
+          : `${antwort.geaendert} Startnummer(n) angepasst.`,
+      );
+      await load();
+    } catch (err) {
+      setFehler(meldung(err, "Nummern konnten nicht neu vergeben werden."));
     }
   };
 
@@ -85,10 +124,21 @@ export default function TeamsPage() {
     );
   }
 
+  const luecken = hatLuecken(teams);
+
   return (
     <div className="flex flex-col">
       <TopBar title="Teams">
         <span className="tnum text-xs text-ink-3">{teams.length} Teams</span>
+        {luecken && (
+          <button
+            onClick={nummernNeuVergeben}
+            title={`Höchste Nummer ${teams.at(-1)?.nummer} bei ${teams.length} Teams — Lücken schliessen`}
+            className="rounded-[7px] border border-[var(--warn-border)] px-2.5 py-1 text-[11px] font-medium text-warn transition-colors duration-150 hover:bg-warn-dim"
+          >
+            Nummern haben Lücken — neu vergeben
+          </button>
+        )}
         <TopBarSpacer />
         {showNew ? (
           <>
@@ -120,7 +170,12 @@ export default function TeamsPage() {
         ) : (
           <Button
             variant="primary"
-            onClick={() => { setShowNew(true); setNewNummer(teams.length + 1); }}
+            onClick={() => {
+              setShowNew(true);
+              // Nicht teams.length + 1: nach Löschungen wäre das eine belegte
+              // Nummer. Die kleinste freie ist immer vergebbar.
+              setNewNummer(naechsteFreieNummer(teams.map((t) => t.nummer)));
+            }}
           >
             + Neues Team
           </Button>
@@ -172,7 +227,7 @@ export default function TeamsPage() {
                   className="hidden h-[62px] items-center px-[22px] lg:grid"
                   style={{ gridTemplateColumns: GRID_COLS, gap: "14px" }}
                 >
-                  <span className="tnum text-xs font-semibold text-ink-3">{t.nummer}</span>
+                  <NummerFeld key={t.nummer} team={t} onSetzen={setzeNummer} />
                   <Link
                     href={`/admin/teams/${t.id}`}
                     className="flex min-w-0 items-center gap-2.5 text-sm font-medium text-ink transition-colors duration-150 hover:text-action"
@@ -205,7 +260,7 @@ export default function TeamsPage() {
                 {/* Mobile-Karte */}
                 <div className="flex flex-col gap-2.5 p-4 lg:hidden">
                   <div className="flex items-center gap-2.5">
-                    <span className="tnum text-xs font-semibold text-ink-3">{t.nummer}</span>
+                    <NummerFeld key={t.nummer} team={t} onSetzen={setzeNummer} />
                     <Link
                       href={`/admin/teams/${t.id}`}
                       className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-ink"
@@ -243,5 +298,52 @@ export default function TeamsPage() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Startnummer direkt in der Liste ändern.
+ *
+ * Sie ist eindeutig und wird beim Löschen nicht nachgezogen — nach dem
+ * Entfernen von Teams bleiben Lücken stehen, die die Orga hier einzeln oder
+ * per "neu vergeben" schliessen kann. Gespeichert wird beim Verlassen des
+ * Feldes, damit nicht jeder Tastendruck eine Anfrage auslöst.
+ */
+function NummerFeld({
+  team,
+  onSetzen,
+}: {
+  team: Team;
+  onSetzen: (team: Team, nummer: number) => void;
+}) {
+  // Der Aufrufer setzt key={team.nummer}: nach dem Neuvergeben startet die
+  // Komponente mit der neuen Nummer, ohne dass State abgeglichen werden muss.
+  const [wert, setWert] = useState(String(team.nummer));
+
+  return (
+    <input
+      type="number"
+      min={1}
+      value={wert}
+      aria-label={`Startnummer von ${team.name}`}
+      onChange={(e) => setWert(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onBlur={() => {
+        const nummer = parseInt(wert, 10);
+        if (!Number.isFinite(nummer) || nummer < 1) {
+          setWert(String(team.nummer));
+          return;
+        }
+        onSetzen(team, nummer);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setWert(String(team.nummer));
+          e.currentTarget.blur();
+        }
+      }}
+      className="tnum h-7 w-[38px] rounded-[6px] border border-transparent bg-transparent px-1 text-xs font-semibold text-ink-3 outline-none transition-colors duration-150 hover:border-line-strong focus:border-action focus:bg-sunken focus:text-ink"
+    />
   );
 }

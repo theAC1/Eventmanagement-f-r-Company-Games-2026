@@ -12,8 +12,18 @@ function zeilen(csv: string): string[] {
   return csv.replace(BOM, "").split("\n");
 }
 
+type RanglisteZeile = {
+  gesamtRang: number;
+  teamName: string;
+  teamNummer?: number;
+  rangPunkteSumme: number;
+  gamesGespielt: number;
+  gamesTotal: number;
+  platzierungen: Record<number, number>;
+};
+
 describe("generateRanglisteCSV", () => {
-  const rangliste = [
+  const rangliste: RanglisteZeile[] = [
     {
       gesamtRang: 1,
       teamName: "Die Löwen",

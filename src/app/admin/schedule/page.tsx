@@ -6,7 +6,7 @@ import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { Button } from "@/components/ui/button";
 import { HotPill, StatusPill } from "@/components/ui/pills";
 import { parameterDiff, type ZeitplanParameter } from "@/lib/zeitplan-parameter";
-import { MITTAG_DEFAULT } from "@/lib/mittagsplanung";
+import { MITTAG_DEFAULT, normalisiereMittagsfenster } from "@/lib/mittagsplanung";
 import { apiFetch, apiSend, aufDatenAenderung } from "@/lib/api-client";
 import { meldung } from "@/lib/api-fehler";
 import {
@@ -159,12 +159,11 @@ export default function SchedulePage() {
     setStartZeit(data.startZeit);
     setFensterEnde(data.fensterEndeZeit ?? FENSTER_ENDE_DEFAULT);
     setPostenVormittag(data.postenVormittag ?? null);
-    if (data.mittagsfenster) {
-      setMittagAktiv(true);
-      setMittag(data.mittagsfenster);
-    } else {
-      setMittagAktiv(false);
-    }
+    // Zweite Absicherung neben der API: die Eingabefelder brauchen ein
+    // vollständiges Objekt, sonst kippen sie von controlled auf uncontrolled.
+    const fenster = normalisiereMittagsfenster(data.mittagsfenster);
+    setMittagAktiv(fenster !== null);
+    setMittag(fenster ?? MITTAG_DEFAULT);
     return data;
   }, []);
 
