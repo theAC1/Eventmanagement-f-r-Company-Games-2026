@@ -63,13 +63,29 @@ export const GameUpdateSchema = GameCreateSchema.partial().extend({
   status: z.enum(["ENTWURF", "BEREIT", "AKTIV", "ABGESCHLOSSEN"]).optional(),
 });
 
+// ─── Gemeinsame Felder ───
+
+/**
+ * E-Mail ist überall freiwillig — von Schiedsrichtern und Helfern kennt die
+ * Orga oft keine Adresse. Ein leer gelassenes Formularfeld kommt als "" an und
+ * wird hier zu null normalisiert; nur ein tatsächlich getippter Wert muss eine
+ * gültige Adresse sein. `undefined` bleibt `undefined`, damit ein Teil-Update
+ * ohne E-Mail-Feld die gespeicherte Adresse nicht löscht.
+ */
+export const OptionaleEmailSchema = z
+  .union([z.literal(""), z.null(), z.string().email("Ungültige E-Mail-Adresse")], {
+    error: "Ungültige E-Mail-Adresse",
+  })
+  .optional()
+  .transform((wert) => (wert === "" ? null : wert));
+
 // ─── Teams ───
 
 export const TeamCreateSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich").max(100),
   nummer: z.number().int().min(1, "Nummer muss mindestens 1 sein"),
   captainName: z.string().nullable().optional(),
-  captainEmail: z.string().email().nullable().optional(),
+  captainEmail: OptionaleEmailSchema,
   farbe: z.string().optional(),
   logoUrl: z.string().url().nullable().optional(),
   motto: z.string().nullable().optional(),
@@ -128,7 +144,7 @@ export const UserCreateSchema = z.object({
   name: z.string().min(1, "Name ist erforderlich").max(100),
   username: z.string().min(2, "Username mind. 2 Zeichen").max(50),
   rolle: z.enum(["OWNER", "ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]),
-  email: z.string().email().nullable().optional(),
+  email: OptionaleEmailSchema,
 });
 
 export const UserUpdateSchema = z.object({
@@ -136,7 +152,7 @@ export const UserUpdateSchema = z.object({
   username: z.string().min(2).max(50).optional(),
   password: z.string().min(10).optional(),
   rolle: z.enum(["OWNER", "ADMIN", "ORGA", "SCHIEDSRICHTER", "HELFER"]).optional(),
-  email: z.string().email().nullable().optional(),
+  email: OptionaleEmailSchema,
   istAktiv: z.boolean().optional(),
   // Verpflegung: isst diese Person am Turniertag mit?
   isstMittag: z.boolean().optional(),

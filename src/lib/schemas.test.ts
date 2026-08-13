@@ -156,6 +156,28 @@ describe("TeamCreateSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("sollte leere Captain-Email zu null normalisieren", () => {
+    const result = TeamCreateSchema.safeParse({
+      name: "Test",
+      nummer: 1,
+      captainEmail: "",
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.captainEmail).toBeNull();
+  });
+
+  it("sollte eine definitive Teilnehmerzahl annehmen und löschbar halten", () => {
+    expect(
+      TeamCreateSchema.safeParse({ name: "Test", nummer: 1, teilnehmerAnzahl: 8 }).success,
+    ).toBe(true);
+    expect(
+      TeamCreateSchema.safeParse({ name: "Test", nummer: 1, teilnehmerAnzahl: null }).success,
+    ).toBe(true);
+    expect(
+      TeamCreateSchema.safeParse({ name: "Test", nummer: 1, teilnehmerAnzahl: 0 }).success,
+    ).toBe(false);
+  });
 });
 
 // ─── MaterialCreateSchema ───
@@ -237,6 +259,27 @@ describe("UserCreateSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("sollte leeres E-Mail-Feld akzeptieren — von Schiedsrichtern fehlt sie oft", () => {
+    const result = UserCreateSchema.safeParse({
+      name: "Test",
+      username: "test",
+      rolle: "SCHIEDSRICHTER",
+      email: "",
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.email).toBeNull();
+  });
+
+  it("sollte eine getippte, aber ungültige E-Mail weiterhin ablehnen", () => {
+    const result = UserCreateSchema.safeParse({
+      name: "Test",
+      username: "test",
+      rolle: "HELFER",
+      email: "nicht-eine-email",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ─── UserUpdateSchema ───
@@ -246,6 +289,19 @@ describe("UserUpdateSchema", () => {
     expect(UserUpdateSchema.safeParse({ name: "Neuer Name" }).success).toBe(true);
     expect(UserUpdateSchema.safeParse({ istAktiv: false }).success).toBe(true);
     expect(UserUpdateSchema.safeParse({}).success).toBe(true);
+  });
+
+  it("sollte leere E-Mail zu null normalisieren", () => {
+    const result = UserUpdateSchema.safeParse({ email: "" });
+    expect(result.success).toBe(true);
+    expect(result.data?.email).toBeNull();
+  });
+
+  it("sollte ein Update ohne E-Mail-Feld nicht als Löschung auslegen", () => {
+    // Sonst würde z. B. der Aktiv-Schalter die gespeicherte Adresse wegräumen.
+    const result = UserUpdateSchema.safeParse({ istAktiv: false });
+    expect(result.data).not.toHaveProperty("email", null);
+    expect(result.data?.email).toBeUndefined();
   });
 });
 

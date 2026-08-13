@@ -23,6 +23,11 @@ type Team = {
 const INPUT_CLASS =
   "w-full rounded-[9px] border border-line-strong bg-sunken px-3 py-2 text-sm text-ink outline-none transition-colors duration-150 placeholder:text-label focus:border-action";
 
+/** Namensliste aus dem Textfeld — eine Zeile pro Person, Leerzeilen fallen weg. */
+function teilnehmerNamenAus(text: string): string[] {
+  return text.split("\n").map(n => n.trim()).filter(Boolean);
+}
+
 export default function TeamDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -61,17 +66,24 @@ export default function TeamDetailPage() {
     if (!team) return;
     setSaving(true); setError(null);
     try {
-      const namen = teilnehmerText.trim().split("\n").filter(n => n.trim());
+      const namen = teilnehmerNamenAus(teilnehmerText);
+      // Die gepflegte Zahl gilt: sie ist die verbindliche Meldung für
+      // Verpflegung und Mittagswellen. Eine Namensliste, die erst zur Hälfte
+      // erfasst ist, darf sie nicht überschreiben — nur wenn gar keine Zahl
+      // gesetzt ist, springt die Liste ein.
+      const gemeldeteAnzahl = team.teilnehmerAnzahl ?? (namen.length > 0 ? namen.length : null);
       const res = await fetch(`/api/teams/${teamId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...team,
           teilnehmerNamen: namen.length > 0 ? namen : null,
-          teilnehmerAnzahl: namen.length > 0 ? namen.length : team.teilnehmerAnzahl,
+          teilnehmerAnzahl: gemeldeteAnzahl,
         }),
       });
       if (!res.ok) throw new Error("Fehler beim Speichern");
+      // Abgeleitete Zahl sichtbar machen, ohne die Audit-Angaben neu zu laden
+      setTeam(vorher => (vorher ? { ...vorher, teilnehmerAnzahl: gemeldeteAnzahl } : vorher));
       setDirty(false);
       setSuccessMsg("Gespeichert");
       setTimeout(() => setSuccessMsg(null), 2000);
@@ -105,6 +117,9 @@ export default function TeamDetailPage() {
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
   const portalUrl = `${baseUrl}/team/${team.qrToken}`;
+  const anzahlNamen = teilnehmerNamenAus(teilnehmerText).length;
+  const anzahlWeichtAb =
+    team.teilnehmerAnzahl != null && anzahlNamen > 0 && team.teilnehmerAnzahl !== anzahlNamen;
 
   return (
     <div className="flex flex-col">
@@ -205,10 +220,31 @@ export default function TeamDetailPage() {
         <section className="space-y-5 rounded-[10px] border border-line bg-surface p-5">
           <div className="flex items-center justify-between">
             <h2 className="cg-label">Teilnehmer</h2>
-            <span className="tnum text-xs text-ink-3">
-              {teilnehmerText.trim().split("\n").filter(n => n.trim()).length} Personen
-            </span>
+            <span className="tnum text-xs text-ink-3">{anzahlNamen} Namen erfasst</span>
           </div>
+          <Field label="Definitive Teilnehmerzahl">
+            <input
+              type="number"
+              min={1}
+              value={team.teilnehmerAnzahl ?? ""}
+              onChange={e => {
+                const zahl = parseInt(e.target.value, 10);
+                update("teilnehmerAnzahl", Number.isFinite(zahl) && zahl > 0 ? zahl : null);
+              }}
+              placeholder={anzahlNamen > 0 ? String(anzahlNamen) : "z.B. 8"}
+              className={`${INPUT_CLASS} tnum sm:max-w-[160px]`}
+            />
+            <p className="text-[11px] text-ink-3">
+              Verbindliche Kopfzahl für Verpflegung und Mittagswellen. Leer lassen heisst:
+              aus der Namensliste ableiten.
+            </p>
+          </Field>
+          {anzahlWeichtAb && (
+            <p className="rounded-[9px] border border-[var(--warn-border)] bg-warn-dim/50 px-3 py-2 text-[11px] text-ink-2">
+              Gemeldete Zahl ({team.teilnehmerAnzahl}) weicht von den {anzahlNamen} erfassten
+              Namen ab. Für die Planung zählt die gemeldete Zahl.
+            </p>
+          )}
           <Field label="Namen (ein Name pro Zeile)">
             <textarea value={teilnehmerText}
               onChange={e => { setTeilnehmerText(e.target.value); setDirty(true); }}

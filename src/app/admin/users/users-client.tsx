@@ -330,11 +330,12 @@ export function UsersClient({ eigeneRolle, eigeneId }: UsersClientProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="cg-label block">Email</label>
+              <label className="cg-label block">Email (optional)</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="leer lassen, wenn unbekannt"
                 className={INPUT_CLASS}
               />
             </div>

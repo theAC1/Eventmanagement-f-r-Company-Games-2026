@@ -77,6 +77,24 @@ export default function TeamsPage() {
     }
   };
 
+  /**
+   * Gemeldete Teilnehmerzahl setzen oder wieder offen lassen.
+   *
+   * Sie ist die Kopfzahl, mit der Verpflegung und Mittagswellen rechnen —
+   * darum hier direkt in der Liste erfassbar, statt Team für Team im Detail.
+   */
+  const setzeTeilnehmerAnzahl = async (team: Team, teilnehmerAnzahl: number | null) => {
+    setFehler(null);
+    setHinweis(null);
+    try {
+      await apiSend(`/api/teams/${team.id}`, "PUT", { teilnehmerAnzahl });
+      await load();
+    } catch (err) {
+      setFehler(meldung(err, "Teilnehmerzahl konnte nicht gespeichert werden."));
+      await load();
+    }
+  };
+
   const nummernNeuVergeben = async () => {
     if (
       !confirm(
@@ -227,7 +245,12 @@ export default function TeamsPage() {
                   className="hidden h-[62px] items-center px-[22px] lg:grid"
                   style={{ gridTemplateColumns: GRID_COLS, gap: "14px" }}
                 >
-                  <NummerFeld key={t.nummer} team={t} onSetzen={setzeNummer} />
+                  <InlineZahl
+                    key={t.nummer}
+                    wert={t.nummer}
+                    label={`Startnummer von ${t.name}`}
+                    onSetzen={(nummer) => nummer !== null && setzeNummer(t, nummer)}
+                  />
                   <Link
                     href={`/admin/teams/${t.id}`}
                     className="flex min-w-0 items-center gap-2.5 text-sm font-medium text-ink transition-colors duration-150 hover:text-action"
@@ -239,8 +262,15 @@ export default function TeamsPage() {
                     <span className="truncate">{t.name}</span>
                   </Link>
                   <span className="truncate text-xs text-ink-3">{t.captainName ?? "–"}</span>
-                  <span className="tnum text-right text-xs text-ink-3">
-                    {t.teilnehmerAnzahl ?? "–"}
+                  <span className="flex justify-end">
+                    <InlineZahl
+                      key={`anzahl-${t.teilnehmerAnzahl}`}
+                      wert={t.teilnehmerAnzahl}
+                      label={`Teilnehmerzahl von ${t.name}`}
+                      erlaubtLeer
+                      extraKlasse="w-[52px] text-right"
+                      onSetzen={(anzahl) => setzeTeilnehmerAnzahl(t, anzahl)}
+                    />
                   </span>
                   <span className="truncate text-xs text-ink-3">{t.motto ?? "–"}</span>
                   <span
@@ -260,7 +290,12 @@ export default function TeamsPage() {
                 {/* Mobile-Karte */}
                 <div className="flex flex-col gap-2.5 p-4 lg:hidden">
                   <div className="flex items-center gap-2.5">
-                    <NummerFeld key={t.nummer} team={t} onSetzen={setzeNummer} />
+                    <InlineZahl
+                      key={t.nummer}
+                      wert={t.nummer}
+                      label={`Startnummer von ${t.name}`}
+                      onSetzen={(nummer) => nummer !== null && setzeNummer(t, nummer)}
+                    />
                     <Link
                       href={`/admin/teams/${t.id}`}
                       className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-ink"
@@ -278,7 +313,17 @@ export default function TeamsPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-ink-3">
                     <span>{t.captainName ?? "Kein Captain"}</span>
-                    <span className="tnum">{t.teilnehmerAnzahl ?? "–"} Teilnehmer</span>
+                    <span className="flex items-center gap-1">
+                      <InlineZahl
+                        key={`anzahl-${t.teilnehmerAnzahl}`}
+                        wert={t.teilnehmerAnzahl}
+                        label={`Teilnehmerzahl von ${t.name}`}
+                        erlaubtLeer
+                        extraKlasse="w-[46px]"
+                        onSetzen={(anzahl) => setzeTeilnehmerAnzahl(t, anzahl)}
+                      />
+                      Teilnehmer
+                    </span>
                   </div>
                   {t.motto && (
                     <p className="truncate text-[11px] text-ink-3">{t.motto}</p>
@@ -302,48 +347,67 @@ export default function TeamsPage() {
 }
 
 /**
- * Startnummer direkt in der Liste ändern.
+ * Zahl direkt in der Liste ändern — Startnummer und Teilnehmerzahl.
  *
- * Sie ist eindeutig und wird beim Löschen nicht nachgezogen — nach dem
- * Entfernen von Teams bleiben Lücken stehen, die die Orga hier einzeln oder
- * per "neu vergeben" schliessen kann. Gespeichert wird beim Verlassen des
- * Feldes, damit nicht jeder Tastendruck eine Anfrage auslöst.
+ * Gespeichert wird beim Verlassen des Feldes, damit nicht jeder Tastendruck
+ * eine Anfrage auslöst. Der Aufrufer setzt key={wert}: nach dem Speichern
+ * startet die Komponente mit dem neuen Stand, ohne State-Abgleich.
+ *
+ * `erlaubtLeer` trennt die beiden Fälle: eine Startnummer hat jedes Team,
+ * eine gemeldete Teilnehmerzahl darf offen bleiben.
  */
-function NummerFeld({
-  team,
+function InlineZahl({
+  wert,
+  label,
   onSetzen,
+  erlaubtLeer = false,
+  extraKlasse = "w-[38px]",
 }: {
-  team: Team;
-  onSetzen: (team: Team, nummer: number) => void;
+  wert: number | null;
+  label: string;
+  onSetzen: (neu: number | null) => void;
+  erlaubtLeer?: boolean;
+  extraKlasse?: string;
 }) {
-  // Der Aufrufer setzt key={team.nummer}: nach dem Neuvergeben startet die
-  // Komponente mit der neuen Nummer, ohne dass State abgeglichen werden muss.
-  const [wert, setWert] = useState(String(team.nummer));
+  const alsText = (zahl: number | null) => (zahl === null ? "" : String(zahl));
+  const [text, setText] = useState(alsText(wert));
+
+  const uebernehmen = () => {
+    const roh = text.trim();
+    if (roh === "") {
+      if (!erlaubtLeer) {
+        setText(alsText(wert));
+        return;
+      }
+      if (wert !== null) onSetzen(null);
+      return;
+    }
+    const zahl = parseInt(roh, 10);
+    if (!Number.isFinite(zahl) || zahl < 1) {
+      setText(alsText(wert));
+      return;
+    }
+    if (zahl !== wert) onSetzen(zahl);
+  };
 
   return (
     <input
       type="number"
       min={1}
-      value={wert}
-      aria-label={`Startnummer von ${team.name}`}
-      onChange={(e) => setWert(e.target.value)}
+      value={text}
+      aria-label={label}
+      placeholder={erlaubtLeer ? "–" : undefined}
+      onChange={(e) => setText(e.target.value)}
       onFocus={(e) => e.target.select()}
-      onBlur={() => {
-        const nummer = parseInt(wert, 10);
-        if (!Number.isFinite(nummer) || nummer < 1) {
-          setWert(String(team.nummer));
-          return;
-        }
-        onSetzen(team, nummer);
-      }}
+      onBlur={uebernehmen}
       onKeyDown={(e) => {
         if (e.key === "Enter") e.currentTarget.blur();
         if (e.key === "Escape") {
-          setWert(String(team.nummer));
+          setText(alsText(wert));
           e.currentTarget.blur();
         }
       }}
-      className="tnum h-7 w-[38px] rounded-[6px] border border-transparent bg-transparent px-1 text-xs font-semibold text-ink-3 outline-none transition-colors duration-150 hover:border-line-strong focus:border-action focus:bg-sunken focus:text-ink"
+      className={`tnum h-7 rounded-[6px] border border-transparent bg-transparent px-1 text-xs font-semibold text-ink-3 outline-none transition-colors duration-150 placeholder:text-label hover:border-line-strong focus:border-action focus:bg-sunken focus:text-ink ${extraKlasse}`}
     />
   );
 }
