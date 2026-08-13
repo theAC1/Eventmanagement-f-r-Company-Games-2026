@@ -12,9 +12,26 @@ jobs:
         working-directory: /home/deploy/company-games-2026
         run: git pull origin main
 
+      # Am 13.08.2026 ist ein Deploy nach 13 Minuten mitten im Build-Schritt
+      # weggebrochen (Schritt ohne Abschluss, Job als failure markiert) — im
+      # Log ohne Ursache. Diese Zeilen kosten nichts und stehen beim naechsten
+      # Mal im Protokoll: Platte voll und knapper Speicher sehen im Build-Log
+      # sonst beide gleich aus, naemlich wie ein Haenger.
+      - name: Ressourcen vor dem Build
+        working-directory: /home/deploy/company-games-2026
+        run: |
+          df -h /
+          free -h
+          docker system df
+
+      # Bewusst ohne --no-cache: der Cache wird ueber die kopierten Dateien
+      # ohnehin korrekt invalidiert (package-lock.json aendert sich -> npm ci
+      # laeuft neu). --no-cache hat bei jedem Push ~2,5 Minuten fuer ein
+      # identisches npm ci verbrannt und jedes Mal einen kompletten neuen
+      # Image-Satz auf die Platte geschrieben.
       - name: Build containers
         working-directory: /home/deploy/company-games-2026
-        run: docker compose build --no-cache
+        run: docker compose build
 
       - name: Stop app for migration
         working-directory: /home/deploy/company-games-2026
@@ -41,3 +58,14 @@ jobs:
           done
           echo "❌ Health check failed after 60s"
           exit 1
+
+      # Jeder Deploy laesst den vorherigen Image-Satz als dangling zurueck.
+      # Ohne Aufraeumen waechst die Platte bei jedem Push um die Groesse eines
+      # kompletten node_modules-Layers. Laeuft auch nach einem Fehlschlag,
+      # gerade dann ist Platz zurueckgewinnen wichtig.
+      - name: Alte Images aufraeumen
+        if: always()
+        working-directory: /home/deploy/company-games-2026
+        run: |
+          docker image prune -f
+          df -h /
