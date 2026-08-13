@@ -12,6 +12,19 @@ jobs:
         working-directory: /home/deploy/company-games-2026
         run: git pull origin main
 
+      # Am 13.08.2026 ist ein Deploy nach 13 Minuten mitten im Build-Schritt
+      # weggebrochen — der Schritt blieb ohne Abschluss, der Job wurde als
+      # failure markiert, im Log stand nichts. Diese drei Zeilen kosten nichts
+      # und stehen beim nächsten Mal im Protokoll: volle Platte und knapper
+      # Speicher sehen im Build-Log sonst beide gleich aus, nämlich wie ein
+      # Hänger.
+      - name: Ressourcen vor dem Build
+        working-directory: /home/deploy/company-games-2026
+        run: |
+          df -h /
+          free -h
+          docker system df
+
       # Ohne --no-cache: der deps-Layer (npm ci) wird über package.json und
       # package-lock.json gekeyt und nur bei echten Dependency-Änderungen neu
       # gebaut. Alles ab `COPY . .` invalidiert der Code-Stand ohnehin selbst,
@@ -46,3 +59,15 @@ jobs:
           done
           echo "❌ Health check failed after 60s"
           exit 1
+
+      # Jeder Deploy lässt den vorherigen Image-Satz als dangling zurück. Ohne
+      # Aufräumen wächst die Platte bei jedem Push um die Grösse eines
+      # kompletten node_modules-Layers — der Container stand am 13.08.2026 bei
+      # 84 %. Läuft auch nach einem Fehlschlag: gerade dann ist Platz
+      # zurückgewinnen wichtig.
+      - name: Alte Images aufräumen
+        if: always()
+        working-directory: /home/deploy/company-games-2026
+        run: |
+          docker image prune -f
+          df -h /
