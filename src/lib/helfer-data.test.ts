@@ -38,6 +38,16 @@ describe("helfer-data", () => {
     }
   });
 
+  it("sollte keine Rolle oberhalb dessen führen, was der Einsatzplan hergibt", () => {
+    // Regression: eine frühere Fassung übernahm ADMIN/OWNER aus dem alten
+    // Seed-Script. Der Import hätte damit fünf Leute zu Admins gemacht, die im
+    // Plan als Helfer stehen. Rechte vergibt die App, nicht diese Liste.
+    for (const e of helfer) {
+      const erwartet = e.einsatz.includes("Kampfrichter") ? "SCHIEDSRICHTER" : "HELFER";
+      expect(e.rolle, `${e.name} (${e.einsatz.join(", ") || "kein Einsatz"})`).toBe(erwartet);
+    }
+  });
+
   it("sollte nur auf existierende Posten verweisen", () => {
     for (const e of helfer) {
       if (e.postenSlug) expect(slugs).toContain(e.postenSlug);

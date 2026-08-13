@@ -115,9 +115,12 @@ async function main() {
       console.log(`  ⚠️  ${eintrag.name}: Posten "${eintrag.postenSlug}" existiert nicht`);
       continue;
     }
+    // Der Posten gilt als besetzt, sobald er im Plan steht — sonst meldete die
+    // Vorschau jeden Posten als leer, dessen Kampfrichter erst angelegt wird.
+    besetzt.set(game.name, [...(besetzt.get(game.name) ?? []), eintrag.name]);
+
     const id = personId.get(eintrag.username);
     if (!id) {
-      // Nur in der Vorschau möglich — dort gibt es die neuen Accounts noch nicht.
       console.log(`  · ${game.name} ← ${eintrag.name} (Account wird erst mit --apply angelegt)`);
       continue;
     }
@@ -128,7 +131,6 @@ async function main() {
         update: { rolle: eintrag.rolle },
       });
     }
-    besetzt.set(game.name, [...(besetzt.get(game.name) ?? []), eintrag.name]);
     console.log(`  ✓ ${game.name} ← ${eintrag.name}`);
   }
 

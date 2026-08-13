@@ -14,10 +14,16 @@
  * E-Mail nadia.maeder@ bestätigt sie; ebenso Hausheer→Hausherr,
  * Dominic→Dominique, Janine→Janin).
  *
- * `rolle` ist die Rolle laut Einsatzplan — Kampfrichter werden
- * SCHIEDSRICHTER, alle übrigen HELFER. Für die sechs Accounts, die schon in
- * der App liegen (siehe scripts/create-initial-users.ts), steht hier ihre
- * bestehende, höhere Rolle; der Import stuft ohnehin nie herunter.
+ * `rolle` ist ausnahmslos die Rolle laut Einsatzplan — Kampfrichter werden
+ * SCHIEDSRICHTER, alle übrigen HELFER. Auch bei Juan, Luca, Gian, Levin,
+ * Roger und Sven, die längst Accounts haben: was sie in der App tatsächlich
+ * sind, entscheidet die Datenbank, nicht diese Datei. Der Import stuft nie
+ * herunter, und heraufstufen darf er nur, was der Einsatzplan begründet.
+ *
+ * Das ist bewusst so: eine frühere Fassung übernahm hier die Rollen aus
+ * `scripts/create-initial-users.ts` (dort stehen alle als ADMIN). Die
+ * Vorschau vom 13.08.2026 zeigte, dass die Datenbank inzwischen weiter ist —
+ * der Import hätte fünf Leute stillschweigend zu Admins gemacht.
  *
  * `postenSlug` verweist auf `prisma/games-data.ts`. Drei Posten des
  * Einsatzplans gibt es seit dem Protokoll vom 10.08.2026 nicht mehr
@@ -70,7 +76,7 @@ export const helfer: HelferEintrag[] = [
   { name: "Elin Bohl", username: "elin.bohl", email: "elin@bohl.org", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "menschenkugelbahn", postenAusgemustert: "geschicklichkeits-parcour" },
   { name: "Danja Bühlmann", username: "danja.buehlmann", email: "danja.buehlmann@gmx.ch", rolle: "HELFER", einsatz: ["Festwirtschaft"], postenSlug: null },
   { name: "Raffael Del Mese", username: "raffael.delmese", email: "raffael.del.mese@gmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "cornhole" },
-  { name: "Levin Fischer", username: "levin", email: "levin.robin.fischer@gmail.com", rolle: "ADMIN", einsatz: ["Betreuung Teams"], postenSlug: null },
+  { name: "Levin Fischer", username: "levin", email: "levin.robin.fischer@gmail.com", rolle: "HELFER", einsatz: ["Betreuung Teams"], postenSlug: null },
   { name: "Lorena Fischer", username: "lorena.fischer", email: "lori_93_fischer@hotmail.com", rolle: "HELFER", einsatz: ["Aufräumen"], postenSlug: null },
   { name: "Dominique Garmier", username: "dominique.garmier", email: "domi.garmier@gmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "human-soccer" },
   { name: "Jessica Geiger", username: "jessica.geiger", email: "jessica.geiger@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "kisten-stappeln" },
@@ -78,11 +84,11 @@ export const helfer: HelferEintrag[] = [
   { name: "Sarah Geissmann", username: "sarah.geissmann", email: "sarah@geissmann.info", rolle: "HELFER", einsatz: [], postenSlug: null },
   { name: "Corina Haller", username: "corina.haller", email: null, rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "quadrant-chaos" },
   { name: "Marco Hard", username: "marco.hard", email: "marco.hard96@proton.me", rolle: "HELFER", einsatz: [], postenSlug: null },
-  { name: "Juan Hausherr", username: "juan", email: "juan.hausherr@gmail.com", rolle: "OWNER", einsatz: ["Eintrichten Platz"], postenSlug: null, funktion: "Platzkomitee" },
+  { name: "Juan Hausherr", username: "juan", email: "juan.hausherr@gmail.com", rolle: "HELFER", einsatz: ["Eintrichten Platz"], postenSlug: null, funktion: "Platzkomitee" },
   { name: "Janin Herren", username: "janin.herren", email: "j.herren.11@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "lava-becken" },
   { name: "Muriel Hofer", username: "muriel.hofer", email: "muriel.hofer@besonet.ch", rolle: "HELFER", einsatz: ["Eintrichten Platz"], postenSlug: null },
   { name: "Miriam Hug", username: "miriam.hug", email: "miri_wey@hotmail.com", rolle: "HELFER", einsatz: ["Aufräumen"], postenSlug: null },
-  { name: "Sven Keusch", username: "sven", email: null, rolle: "ADMIN", einsatz: ["Kampfrichter"], postenSlug: null, postenAusgemustert: "eierfall" },
+  { name: "Sven Keusch", username: "sven", email: null, rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: null, postenAusgemustert: "eierfall" },
   { name: "Ronja Koch", username: "ronja.koch", email: "ronja.koch@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "lava-becken" },
   { name: "Tanja Koller", username: "tanja.koller", email: "koller.tanja@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "radio-runner" },
   { name: "Sophia Lynn Küng", username: "sophia.kueng", email: "sophialynnkung@icloud.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "schwebender-architekt" },
@@ -98,7 +104,7 @@ export const helfer: HelferEintrag[] = [
   { name: "Lena Niederberger", username: "lena.niederberger", email: "lena.niederberger@quickline.ch", rolle: "HELFER", einsatz: [], postenSlug: null },
   { name: "Pia Oswald", username: "pia.oswald", email: "pia.oswald07@gmail.com", rolle: "HELFER", einsatz: ["Festwirtschaft"], postenSlug: null },
   { name: "Salome Peterhans", username: "salome.peterhans", email: "salomepeterhans2@gmail.com", rolle: "HELFER", einsatz: ["Eintrichten Platz"], postenSlug: null },
-  { name: "Luca Raffi", username: "luca", email: null, rolle: "ADMIN", einsatz: ["Rechnungsbüro"], postenSlug: null },
+  { name: "Luca Raffi", username: "luca", email: null, rolle: "HELFER", einsatz: ["Rechnungsbüro"], postenSlug: null },
   { name: "Michèle Rast", username: "michele.rast", email: "michele.rast@hotmail.com", rolle: "HELFER", einsatz: ["Festwirtschaft"], postenSlug: null },
   { name: "Leonie Rebsamen", username: "leonie.rebsamen", email: "rebsamenleonie@gmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "menschenkugelbahn", postenAusgemustert: "geschicklichkeits-parcour" },
   { name: "Naomi Sarbach", username: "naomi.sarbach", email: "naomi.sarbach@hotmail.com", rolle: "HELFER", einsatz: ["Aufräumen"], postenSlug: null },
@@ -106,7 +112,7 @@ export const helfer: HelferEintrag[] = [
   { name: "Gregor Siegrist", username: "gregor.siegrist", email: "gregor.siegrist@bluewin.ch", rolle: "HELFER", einsatz: ["Eintrichten Platz"], postenSlug: null },
   { name: "Andrine Steimen", username: "andrine.steimen", email: "andrinesteimen@icloud.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: null, postenAusgemustert: "eierfall" },
   { name: "Aline Stierli", username: "aline.stierli", email: "aline.stierli@hotmail.com", rolle: "HELFER", einsatz: [], postenSlug: null },
-  { name: "Roger Strasser", username: "roger", email: "roger.strasser@gmx.de", rolle: "ADMIN", einsatz: ["Speaker"], postenSlug: null },
+  { name: "Roger Strasser", username: "roger", email: "roger.strasser@gmx.de", rolle: "HELFER", einsatz: ["Speaker"], postenSlug: null },
   { name: "Kevin Vazquez", username: "kevin.vazquez", email: null, rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "cornhole" },
-  { name: "Gian Widmer", username: "gian", email: null, rolle: "ADMIN", einsatz: ["Speaker", "Betreuung Teams"], postenSlug: null },
+  { name: "Gian Widmer", username: "gian", email: null, rolle: "HELFER", einsatz: ["Speaker", "Betreuung Teams"], postenSlug: null },
 ];
