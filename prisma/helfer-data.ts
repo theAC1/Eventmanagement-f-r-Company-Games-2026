@@ -21,9 +21,18 @@
  *
  * `postenSlug` verweist auf `prisma/games-data.ts`. Drei Posten des
  * Einsatzplans gibt es seit dem Protokoll vom 10.08.2026 nicht mehr
- * (xxl-basketball, geschicklichkeits-parcour, eierfall). Die betroffenen
- * sechs Kampfrichter tragen `postenAusgemustert` und bleiben ohne Zuteilung,
- * bis die Orga sie neu verteilt — geraten wird hier nichts.
+ * (xxl-basketball, geschicklichkeits-parcour, eierfall) — der Einsatzplan ist
+ * älter als das Protokoll. Ihre sechs Kampfrichter hat Juan am 13.08.2026 so
+ * verteilt:
+ *
+ *   XXL Basketball            → XXL Viergewinnt     (Näpflin, Nardelli)
+ *   Geschicklichkeits Parkour → Menschenkugelbahn   (Bohl, Rebsamen)
+ *   Der grosse Eierfall       → ersatzlos gestrichen, die beiden bleiben
+ *                               als Reserve ohne Posten (Steimen, Keusch)
+ *
+ * Damit sind alle zehn Posten doppelt besetzt. `postenAusgemustert` bleibt als
+ * Herkunftsvermerk stehen: es sagt, was im Einsatzplan stand, `postenSlug`
+ * sagt, wo die Person heute eingeteilt ist.
  *
  * Ausführen:  npm run helfer:import            (Vorschau, ändert nichts)
  *             npm run helfer:import -- --apply (schreibt)
@@ -45,7 +54,11 @@ export type HelferEintrag = {
   postenSlug: string | null;
   /** Zusatz aus dem Plan, z. B. «Platzkomitee», «Verkehr». */
   funktion?: string;
-  /** Gesetzt, wenn der Posten aus dem Plan nicht mehr existiert. */
+  /**
+   * Herkunftsvermerk: der Posten, der im Einsatzplan stand und inzwischen
+   * ausgemustert ist. `postenSlug` daneben sagt, wo die Person heute steht —
+   * oder ist null, wenn sie als Reserve ohne Posten geführt wird.
+   */
   postenAusgemustert?: string;
 };
 
@@ -54,7 +67,7 @@ export const helfer: HelferEintrag[] = [
   { name: "Sofia Barranca", username: "sofia.barranca", email: "sbarranca@gmx.ch", rolle: "HELFER", einsatz: [], postenSlug: null },
   { name: "Silvio Bartucca", username: "silvio.bartucca", email: "silvio.bartucca@gmail.com", rolle: "HELFER", einsatz: ["Eintrichten Platz"], postenSlug: null, funktion: "Verkehr" },
   { name: "Simone Baumann", username: "simone.baumann", email: "mettler.sim@gmail.com", rolle: "HELFER", einsatz: ["Festwirtschaft"], postenSlug: null },
-  { name: "Elin Bohl", username: "elin.bohl", email: "elin@bohl.org", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: null, postenAusgemustert: "geschicklichkeits-parcour" },
+  { name: "Elin Bohl", username: "elin.bohl", email: "elin@bohl.org", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "menschenkugelbahn", postenAusgemustert: "geschicklichkeits-parcour" },
   { name: "Danja Bühlmann", username: "danja.buehlmann", email: "danja.buehlmann@gmx.ch", rolle: "HELFER", einsatz: ["Festwirtschaft"], postenSlug: null },
   { name: "Raffael Del Mese", username: "raffael.delmese", email: "raffael.del.mese@gmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "cornhole" },
   { name: "Levin Fischer", username: "levin", email: "levin.robin.fischer@gmail.com", rolle: "ADMIN", einsatz: ["Betreuung Teams"], postenSlug: null },
@@ -80,14 +93,14 @@ export const helfer: HelferEintrag[] = [
   { name: "Nadia Mäder", username: "nadia.maeder", email: "nadia.maeder@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "stack-attack" },
   { name: "Tanja Moser", username: "tanja.moser", email: "moser-tanja@hotmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "quadrant-chaos" },
   { name: "Lara Müller", username: "lara.mueller", email: "lari.mueller2011@gmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "stack-attack" },
-  { name: "Sabine Näpflin", username: "sabine.naepflin", email: "sabine_jelena@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: null, postenAusgemustert: "xxl-basketball" },
-  { name: "Micaela Nardelli", username: "micaela.nardelli", email: "micaela.nardelli@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: null, postenAusgemustert: "xxl-basketball" },
+  { name: "Sabine Näpflin", username: "sabine.naepflin", email: "sabine_jelena@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "xxl-viergewinnt", postenAusgemustert: "xxl-basketball" },
+  { name: "Micaela Nardelli", username: "micaela.nardelli", email: "micaela.nardelli@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "xxl-viergewinnt", postenAusgemustert: "xxl-basketball" },
   { name: "Lena Niederberger", username: "lena.niederberger", email: "lena.niederberger@quickline.ch", rolle: "HELFER", einsatz: [], postenSlug: null },
   { name: "Pia Oswald", username: "pia.oswald", email: "pia.oswald07@gmail.com", rolle: "HELFER", einsatz: ["Festwirtschaft"], postenSlug: null },
   { name: "Salome Peterhans", username: "salome.peterhans", email: "salomepeterhans2@gmail.com", rolle: "HELFER", einsatz: ["Eintrichten Platz"], postenSlug: null },
   { name: "Luca Raffi", username: "luca", email: null, rolle: "ADMIN", einsatz: ["Rechnungsbüro"], postenSlug: null },
   { name: "Michèle Rast", username: "michele.rast", email: "michele.rast@hotmail.com", rolle: "HELFER", einsatz: ["Festwirtschaft"], postenSlug: null },
-  { name: "Leonie Rebsamen", username: "leonie.rebsamen", email: "rebsamenleonie@gmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: null, postenAusgemustert: "geschicklichkeits-parcour" },
+  { name: "Leonie Rebsamen", username: "leonie.rebsamen", email: "rebsamenleonie@gmail.com", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "menschenkugelbahn", postenAusgemustert: "geschicklichkeits-parcour" },
   { name: "Naomi Sarbach", username: "naomi.sarbach", email: "naomi.sarbach@hotmail.com", rolle: "HELFER", einsatz: ["Aufräumen"], postenSlug: null },
   { name: "Cyrill Schreiber", username: "cyrill.schreiber", email: "cyrillschreiber@gmx.ch", rolle: "SCHIEDSRICHTER", einsatz: ["Kampfrichter"], postenSlug: "human-soccer" },
   { name: "Gregor Siegrist", username: "gregor.siegrist", email: "gregor.siegrist@bluewin.ch", rolle: "HELFER", einsatz: ["Eintrichten Platz"], postenSlug: null },

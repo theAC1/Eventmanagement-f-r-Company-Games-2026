@@ -44,12 +44,21 @@ describe("helfer-data", () => {
     }
   });
 
-  it("sollte ausgemusterte Posten als solche kennzeichnen statt sie zuzuweisen", () => {
-    for (const e of helfer) {
-      if (!e.postenAusgemustert) continue;
+  it("sollte ausgemusterte Posten nur als Herkunft führen, nie als Zuteilung", () => {
+    const betroffen = helfer.filter((e) => e.postenAusgemustert);
+    expect(betroffen).toHaveLength(6);
+    for (const e of betroffen) {
       expect(ausgemusterteSlugs).toContain(e.postenAusgemustert);
-      expect(e.postenSlug).toBeNull();
+      // Entweder auf einen Nachfolge-Posten umgelegt oder bewusst offen —
+      // ein ausgemusterter Slug darf nie in postenSlug landen.
+      if (e.postenSlug) expect(slugs).toContain(e.postenSlug);
     }
+  });
+
+  it("sollte die zwei Eierfall-Kampfrichter als Reserve ohne Posten führen", () => {
+    const reserve = helfer.filter((e) => e.postenAusgemustert && !e.postenSlug);
+    expect(reserve.map((e) => e.name).sort()).toEqual(["Andrine Steimen", "Sven Keusch"]);
+    for (const e of reserve) expect(e.postenAusgemustert).toBe("eierfall");
   });
 
   it("sollte jedem Kampfrichter einen Posten geben — gültig oder ausgemustert", () => {
@@ -60,14 +69,17 @@ describe("helfer-data", () => {
     }
   });
 
-  it("sollte jeden gültigen Posten doppelt besetzen", () => {
+  it("sollte jeden Posten mit genau zwei Kampfrichtern besetzen", () => {
     const proPosten = new Map<string, number>();
     for (const e of helfer) {
       if (e.postenSlug) proPosten.set(e.postenSlug, (proPosten.get(e.postenSlug) ?? 0) + 1);
     }
-    for (const [slug, anzahl] of proPosten) {
-      expect(anzahl, `Posten ${slug}`).toBe(2);
+    // Kein Posten darf leer bleiben — sonst steht am Turniertag ein Spiel ohne
+    // Kampfrichter da, und das fällt erst vor Ort auf.
+    for (const game of games) {
+      expect(proPosten.get(game.slug) ?? 0, `Posten ${game.name} [${game.slug}]`).toBe(2);
     }
+    expect(proPosten.size).toBe(games.length);
   });
 
   it("sollte auf einer leeren Datenbank alle Personen anlegen wollen", () => {
