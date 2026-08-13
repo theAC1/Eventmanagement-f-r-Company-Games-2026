@@ -1,6 +1,6 @@
 {
   "name": "company-games-2026",
-  "version": "0.18.1-alpha",
+  "version": "0.19.0-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -13,6 +13,7 @@
     "db:studio": "prisma studio",
     "users:init": "ts-node --project tsconfig.scripts.json scripts/create-initial-users.ts",
     "games:update": "ts-node --project tsconfig.scripts.json scripts/update-games-protokoll.ts",
+    "helfer:import": "ts-node --project tsconfig.scripts.json scripts/import-helfer.ts",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:build": "docker compose build",

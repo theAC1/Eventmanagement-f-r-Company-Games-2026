@@ -1,0 +1,36 @@
+name: Helfer importieren
+
+# Manuell auslösbar (Actions → "Helfer importieren" → Run workflow).
+#
+# Führt die konsolidierte Helferliste aus prisma/helfer-data.ts mit den
+# bestehenden Accounts zusammen und setzt die Posten-Crew. Standardmässig läuft
+# nur die Vorschau — erst "anwenden = true" schreibt in die Datenbank.
+#
+# Achtung: die Aktivierungscodes neu angelegter Accounts stehen genau einmal im
+# Log dieses Laufs. Vor dem Verlassen der Seite herauskopieren; danach hilft nur
+# noch "Code neu" im Benutzer-Tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      anwenden:
+        description: "Änderungen wirklich schreiben (sonst nur Vorschau)"
+        type: boolean
+        default: false
+
+jobs:
+  import:
+    runs-on: self-hosted
+    steps:
+      - name: Vorschau
+        if: ${{ !inputs.anwenden }}
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose run --rm app npm run helfer:import
+
+      - name: Importieren
+        if: ${{ inputs.anwenden }}
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose run --rm app npm run helfer:import -- --apply
+
+      - name: App erreichbar?
+        run: curl -sf http://localhost:3000/api/health
