@@ -71,6 +71,25 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Wer schon einem anderen Posten zugeteilt ist, kann hier nicht nochmals
+    // zugeteilt werden — Verschieben heisst: zuerst am alten Posten entfernen.
+    if (personIds.length > 0) {
+      const konflikte = await prisma.gameCrew.findMany({
+        where: { personId: { in: personIds }, gameId: { not: id } },
+        select: { person: { select: { name: true } }, game: { select: { name: true } } },
+      });
+      if (konflikte.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Bereits einem anderen Posten zugeteilt: ${konflikte
+              .map((k) => `${k.person.name} (${k.game.name})`)
+              .join(", ")}`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const crew = await prisma.$transaction(async (tx) => {
       await tx.gameCrew.deleteMany({ where: { gameId: id } });
       if (personen.length > 0) {

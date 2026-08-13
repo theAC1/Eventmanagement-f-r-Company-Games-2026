@@ -166,18 +166,19 @@ function PersonenAuswahl({
   const [suche, setSuche] = useState("");
 
   const ausgewaehlt = personen.filter((p) => gewaehlt.includes(p.id));
-  const offen = personen
-    .filter((p) => !gewaehlt.includes(p.id))
-    .filter((p) => p.name.toLowerCase().includes(suche.toLowerCase()));
 
-  // Wer schon woanders steht, kommt nach unten — doppelte Zuteilung ist
-  // erlaubt, soll aber eine bewusste Entscheidung sein.
-  const sortiert = [...offen].sort((a, b) => {
-    const belegtA = a.posten.some((p) => p.id !== eigenerPosten) ? 1 : 0;
-    const belegtB = b.posten.some((p) => p.id !== eigenerPosten) ? 1 : 0;
-    if (belegtA !== belegtB) return belegtA - belegtB;
-    return a.name.localeCompare(b.name);
-  });
+  // Wer schon einem anderen Posten zugeteilt ist, taucht hier gar nicht erst
+  // auf — doppelte Zuteilung ist nicht erlaubt. Verschieben heisst: zuerst am
+  // alten Posten rausnehmen, dann taucht die Person hier auf.
+  const belegtAnderswo = personen.filter(
+    (p) => !gewaehlt.includes(p.id) && p.posten.some((x) => x.id !== eigenerPosten),
+  ).length;
+
+  const sortiert = personen
+    .filter((p) => !gewaehlt.includes(p.id))
+    .filter((p) => !p.posten.some((x) => x.id !== eigenerPosten))
+    .filter((p) => p.name.toLowerCase().includes(suche.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-3">
@@ -222,36 +223,31 @@ function PersonenAuswahl({
         </p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
-          {sortiert.map((p) => {
-            const anderswo = p.posten.filter((x) => x.id !== eigenerPosten);
-            return (
-              <button
-                key={p.id}
-                type="button"
-                disabled={disabled}
-                onClick={() => onChange([...gewaehlt, p.id])}
-                title={
-                  anderswo.length > 0
-                    ? `Bereits zugeteilt: ${anderswo.map((x) => x.name).join(", ")}`
-                    : undefined
-                }
-                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors duration-150 disabled:opacity-50 ${
-                  anderswo.length > 0
-                    ? "border-line text-faint hover:border-action hover:text-ink-2"
-                    : "border-line-strong text-ink-2 hover:border-action hover:text-ink"
-                }`}
-              >
-                + {p.name}
-                <span className="text-[10px] uppercase tracking-[0.06em] opacity-70">
-                  {ROLLEN_KURZ[p.rolle] ?? p.rolle}
-                </span>
-              </button>
-            );
-          })}
+          {sortiert.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange([...gewaehlt, p.id])}
+              className="inline-flex h-7 items-center gap-1.5 rounded-full border border-line-strong px-2.5 text-xs text-ink-2 transition-colors duration-150 hover:border-action hover:text-ink disabled:opacity-50"
+            >
+              + {p.name}
+              <span className="text-[10px] uppercase tracking-[0.06em] opacity-70">
+                {ROLLEN_KURZ[p.rolle] ?? p.rolle}
+              </span>
+            </button>
+          ))}
           {sortiert.length === 0 && (
             <span className="text-xs text-ink-3">Alle passenden Personen zugeteilt.</span>
           )}
         </div>
+      )}
+
+      {belegtAnderswo > 0 && (
+        <p className="text-xs text-ink-3">
+          {belegtAnderswo} weitere {belegtAnderswo === 1 ? "Person ist" : "Personen sind"}{" "}
+          bereits einem anderen Posten zugeteilt und daher hier ausgeblendet.
+        </p>
       )}
     </div>
   );
