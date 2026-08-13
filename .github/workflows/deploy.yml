@@ -12,9 +12,14 @@ jobs:
         working-directory: /home/deploy/company-games-2026
         run: git pull origin main
 
+      # Ohne --no-cache: der deps-Layer (npm ci) wird über package.json und
+      # package-lock.json gekeyt und nur bei echten Dependency-Änderungen neu
+      # gebaut. Alles ab `COPY . .` invalidiert der Code-Stand ohnehin selbst,
+      # es kann also nichts Altes überleben. Spart auf dem Homelab-Container
+      # Zeit, Speicher und Platz bei jedem Deploy.
       - name: Build containers
         working-directory: /home/deploy/company-games-2026
-        run: docker compose build --no-cache
+        run: docker compose build
 
       - name: Stop app for migration
         working-directory: /home/deploy/company-games-2026
