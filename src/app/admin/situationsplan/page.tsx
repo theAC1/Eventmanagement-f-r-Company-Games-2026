@@ -502,15 +502,18 @@ export default function SituationsplanPage() {
   const exportImage = async () => {
     if (!ref.current) return;
     try {
-      const mod = await import(/* webpackIgnore: true */ "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.esm.js" as string);
-      const html2canvas = mod.default;
-      const canvas = await html2canvas(ref.current, { useCORS: true, scale: 2 });
+      // Regulärer Bundle-Import statt CDN-Runtime-Import: der Export darf
+      // nicht davon abhängen, dass jsdelivr.net im Moment des Exports
+      // erreichbar ist (Event-WLAN, Firmenproxy, ...).
+      const { default: html2canvas } = await import("html2canvas");
+      const canvas = await html2canvas(ref.current, { useCORS: true, allowTaint: true, scale: 2 });
       const link = document.createElement("a");
       link.download = "situationsplan-export.png";
       link.href = canvas.toDataURL("image/png");
       link.click();
-    } catch {
-      alert("Export: Bitte mache einen Screenshot (Ctrl+Shift+S) oder installiere html2canvas via npm.");
+    } catch (error) {
+      console.error("Situationsplan-Export fehlgeschlagen:", error);
+      alert("Export fehlgeschlagen. Bitte stattdessen einen Screenshot machen (Ctrl+Shift+S).");
     }
   };
 
