@@ -1,0 +1,25 @@
+name: Accounts prüfen
+
+# Manuell auslösbar (Actions → "Accounts prüfen" → Run workflow).
+#
+# Nur-lesend. Zeigt zweierlei:
+#   1. ob `npm run users:init` gelaufen ist und in welchem Anmelde-Zustand
+#      die persönlichen Accounts sind,
+#   2. ob Zeitplan und Einteilung so stehen, dass Schiedsrichter überhaupt
+#      Einsätze in "Mein Tagesplan" sehen.
+# Es werden keine Daten geschrieben und keine Aktivierungscodes ausgegeben.
+#
+# Zum Anlegen fehlender Accounts weiterhin auf dem Server:
+#   docker compose run --rm app npm run users:init
+# (dort stehen die Aktivierungscodes genau einmal in der Ausgabe)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: self-hosted
+    steps:
+      - name: Account-Status
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose run --rm app npm run users:check

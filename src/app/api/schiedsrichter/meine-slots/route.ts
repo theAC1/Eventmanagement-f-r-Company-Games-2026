@@ -19,9 +19,25 @@ export async function GET() {
         configId: config.id,
         gameId: { not: null },
         OR: [
+          // Feinjustierung für einzelne Runden — schlägt die Posten-Crew.
           { personen: { some: { personId: userId } } },
           // Fallback: alte Direkt-Zuweisung über schiedsrichterId
           { schiedsrichterId: userId },
+          // Posten-Crew — der REGULÄRE Weg: Die Orga teilt im Games-Tab pro
+          // Posten ein (GameCrew), nicht Slot für Slot; genau daraus leitet
+          // auch /api/einsatzplan seine Besetzung ab. Ohne diese Bedingung
+          // blieb der Tagesplan jedes so eingeteilten Schiedsrichters leer,
+          // obwohl der Einsatzplan im Leitstand korrekt aussah.
+          //
+          // Nur für Slots OHNE eigene Personen-Zuweisung: Ist eine Runde
+          // ausdrücklich jemandem zugeteilt, gilt diese Zuteilung — sonst
+          // stünde die Runde bei der ganzen Posten-Crew im Tagesplan.
+          {
+            AND: [
+              { personen: { none: {} } },
+              { game: { crew: { some: { personId: userId } } } },
+            ],
+          },
         ],
       },
       include: {
