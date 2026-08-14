@@ -119,8 +119,11 @@ export default function BadgePage() {
       // nicht mehr davon abhängen, dass jsdelivr.net im Moment des Drucks
       // erreichbar ist (Event-WLAN, Firmenproxy, ...).
       const { default: html2canvas } = await import("html2canvas");
+      // Bei "Alle Teams" kann die Karte aus vielen Badges sehr gross werden —
+      // scale 2 statt 3 hält den Canvas auch bei z.B. 30+ Teams schnell und
+      // den Download handlich. Einzelbadge bleibt auf 3 für beste Druckqualität.
       const canvas = await html2canvas(badgeRef.current, {
-        scale: 3,
+        scale: printAll ? 2 : 3,
         useCORS: true,
         allowTaint: true,
         backgroundColor: null,
