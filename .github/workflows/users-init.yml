@@ -1,0 +1,45 @@
+name: Accounts anlegen/Rollen anheben
+
+# Manuell auslösbar (Actions → "Accounts anlegen/Rollen anheben" → Run workflow).
+#
+# Führt `npm run users:init` aus. Das Script ist idempotent:
+#   - vorhandener Account, Rolle zu niedrig → Rolle wird angehoben (Passwort bleibt)
+#   - vorhandener Account, Rolle passt      → unverändert
+#   - Account fehlt                         → wird NEU angelegt
+#
+# ACHTUNG bei fehlenden Accounts: Für neu angelegte Accounts steht der
+# Aktivierungscode genau einmal in der Ausgabe — und damit dauerhaft im Log
+# dieses Laufs, das alle Repo-Mitarbeitenden lesen können. Sind Accounts zu
+# ERZEUGEN, den Befehl stattdessen direkt auf dem Server ausführen:
+#   docker compose run --rm app npm run users:init
+# Für ein reines Rollen-Upgrade bestehender Accounts entstehen keine Codes.
+#
+# Vorher prüfen, was passieren wird: Workflow "Accounts prüfen".
+
+on:
+  workflow_dispatch:
+    inputs:
+      bestaetigt:
+        description: "Ja, Rollen anheben bzw. fehlende Accounts anlegen"
+        type: boolean
+        default: false
+
+jobs:
+  init:
+    runs-on: self-hosted
+    steps:
+      - name: Abbruch ohne Bestätigung
+        if: ${{ !inputs.bestaetigt }}
+        run: |
+          echo "Nicht bestätigt — es wurde nichts geändert."
+          exit 1
+
+      - name: Accounts anlegen / Rollen anheben
+        if: ${{ inputs.bestaetigt }}
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose run --rm app npm run users:init
+
+      - name: Ergebnis prüfen
+        if: ${{ inputs.bestaetigt }}
+        working-directory: /home/deploy/company-games-2026
+        run: docker compose run --rm app npm run users:check
