@@ -23,6 +23,14 @@ export async function GET(
         runde: true,
         status: true,
         gameId: true,
+        // Erwartete Teams: Der Schiedsrichter muss VOR dem Check-in wissen,
+        // wer bei ihm antreten sollte — sonst ist die Begegnung für ihn
+        // anonym und er kann nur raten, ob die richtigen Leute vor ihm stehen.
+        teams: {
+          select: {
+            team: { select: { id: true, name: true, nummer: true, farbe: true } },
+          },
+        },
       },
     });
 
@@ -41,6 +49,7 @@ export async function GET(
       runde: slot.runde,
       status: slot.status,
       feld: slot.gameId ? (feldNummern.get(slot.gameId) ?? null) : null,
+      teams: slot.teams.map((t) => t.team),
     });
   } catch (error) {
     console.error(`GET /api/zeitplan-slots/${slotId} error:`, error);

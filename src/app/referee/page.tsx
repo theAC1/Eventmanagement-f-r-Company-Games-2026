@@ -311,15 +311,19 @@ export default function RefereePage() {
               onClick={() => handleSlotTap(slot)}
               className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 text-left transition-colors duration-150 hover:bg-sunken/60"
             >
-              <span className="tnum w-11 shrink-0 text-[13px] text-ink-3">
-                {formatTime(slot.startZeit)}
+              <span className="tnum w-[74px] shrink-0 text-[12px] text-ink-3">
+                {formatTime(slot.startZeit)}–{formatTime(slot.endZeit)}
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate text-[16px] font-[550] text-ink">
                   {slot.gameName}
+                  {slot.feld ? (
+                    <span className="text-[12px] font-normal text-ink-3"> · Feld {slot.feld}</span>
+                  ) : null}
                 </span>
-                <span className="truncate text-[12px] text-ink-3">
-                  {slot.feld ? `Feld ${slot.feld} · ` : ""}
+                {/* Die Paarung ist die wichtigste Angabe der Zeile — deshalb
+                    lesbar gross und umbrechend statt abgeschnitten. */}
+                <span className="text-[13px] text-ink-2">
                   {slot.teamNames.length > 0
                     ? slot.teamNames.join(" vs. ")
                     : "Keine Teams zugewiesen"}

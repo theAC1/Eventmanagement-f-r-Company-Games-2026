@@ -9,6 +9,14 @@ import { Button } from "@/components/ui/button";
 
 type Game = { id: string; name: string; slug: string; modus: string; teamsProSlot: number };
 type CheckedInTeam = { teamId: string; teamName: string; teamNummer: number; teamFarbe: string };
+type SlotTeam = { id: string; name: string; nummer: number; farbe: string };
+type SlotInfo = {
+  startZeit: string;
+  endZeit: string;
+  runde: number | null;
+  feld: string | null;
+  teams: SlotTeam[];
+};
 
 export default function CheckinPage() {
   const params = useParams();
@@ -25,6 +33,7 @@ export default function CheckinPage() {
   const [codeInput, setCodeInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checkedIn, setCheckedIn] = useState<CheckedInTeam[]>([]);
+  const [slotInfo, setSlotInfo] = useState<SlotInfo | null>(null);
   const [scanning, setScanning] = useState(false);
   const scanningRef = useRef(false); // Fix: useRef statt Closure für requestAnimationFrame
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -32,10 +41,14 @@ export default function CheckinPage() {
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const codeInputRef = useRef<HTMLInputElement>(null);
 
+  const erwarteteTeams = slotInfo?.teams ?? [];
   const isDuell =
+    erwarteteTeams.length >= 2 ||
     slotTeamIds.length >= 2 ||
     (game?.modus === "DUELL" && (game?.teamsProSlot ?? 1) >= 2);
-  const maxTeams = isDuell ? 2 : 1;
+  // Sind die erwarteten Teams bekannt, gilt deren Anzahl — sonst die Schätzung
+  // aus dem Spielmodus.
+  const maxTeams = erwarteteTeams.length > 0 ? erwarteteTeams.length : isDuell ? 2 : 1;
   const allCheckedIn = checkedIn.length >= maxTeams;
 
   useEffect(() => {
@@ -43,6 +56,22 @@ export default function CheckinPage() {
       .then(r => r.json())
       .then(g => { setGame(g); setLoading(false); });
   }, [slug]);
+
+  // Slot-Details: Zeit, Feld und die erwarteten Teams. Ohne sie wüsste der
+  // Schiedsrichter nicht, wer bei ihm antreten sollte.
+  useEffect(() => {
+    if (!slotId) return;
+    let abgebrochen = false;
+    fetch(`/api/zeitplan-slots/${slotId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!abgebrochen && d && !d.error) setSlotInfo(d as SlotInfo);
+      })
+      .catch(() => {
+        // Nicht kritisch — der Check-in funktioniert auch ohne diese Angaben.
+      });
+    return () => { abgebrochen = true; };
+  }, [slotId]);
 
   // Cleanup: Kamera stoppen bei Unmount
   useEffect(() => {
@@ -277,17 +306,35 @@ export default function CheckinPage() {
         <p className="mt-1 text-[13px] text-ink-3">
           {isDuell ? "2 Teams einchecken" : "Team einchecken"} · {game.name}
         </p>
+        {/* Die Eckdaten der Begegnung: Ohne sie müsste der Schiedsrichter im
+            Zeitplan nachsehen, wer wann bei ihm antritt. */}
+        {slotInfo && (
+          <p className="tnum mt-1.5 text-[13px] text-ink-2">
+            {slotInfo.startZeit}–{slotInfo.endZeit}
+            {slotInfo.runde !== null ? ` · Runde ${slotInfo.runde}` : ""}
+            {slotInfo.feld ? ` · Feld ${slotInfo.feld}` : ""}
+          </p>
+        )}
+        {erwarteteTeams.length > 0 && (
+          <p className="mt-1 text-[15px] font-medium text-ink">
+            {erwarteteTeams.map(t => `#${t.nummer} ${t.name}`).join("  vs.  ")}
+          </p>
+        )}
       </div>
 
       {/* Fortschritt bei Duell-Slots */}
       {isDuell && (
         <div className="flex items-center gap-2 text-[13px]">
           <span className={checkedIn.length >= 1 ? "text-done-tint" : "text-ink-3"}>
-            {checkedIn[0] ? `${checkedIn[0].teamName} ✓` : "Team A ausstehend"}
+            {checkedIn[0]
+              ? `${checkedIn[0].teamName} ✓`
+              : `${erwarteteTeams[0]?.name ?? "Team A"} ausstehend`}
           </span>
           <span className="text-faint">—</span>
           <span className={checkedIn.length >= 2 ? "text-done-tint" : "text-ink-3"}>
-            {checkedIn[1] ? `${checkedIn[1].teamName} ✓` : "Team B ausstehend"}
+            {checkedIn[1]
+              ? `${checkedIn[1].teamName} ✓`
+              : `${erwarteteTeams[1]?.name ?? "Team B"} ausstehend`}
           </span>
           <span className="tnum ml-auto text-[11px] text-label">
             {checkedIn.length}/2
@@ -295,10 +342,21 @@ export default function CheckinPage() {
         </div>
       )}
 
-      {/* Eingecheckte Teams */}
+      {/* Erwartete Teams — wer noch fehlt, steht mit Namen da, damit der
+          Schiedsrichter weiss, auf wen er wartet. Ist der Slot unbekannt
+          (Aufruf ohne slotId), bleiben die neutralen Platzhalter. */}
       <div className="flex flex-col gap-2">
-        {Array.from({ length: maxTeams }, (_, i) => {
-          const t = checkedIn[i];
+        {(erwarteteTeams.length > 0
+          ? erwarteteTeams.map(team => ({
+              erwartet: team,
+              eingecheckt: checkedIn.find(c => c.teamId === team.id) ?? null,
+            }))
+          : Array.from({ length: maxTeams }, (_, i) => ({
+              erwartet: null,
+              eingecheckt: checkedIn[i] ?? null,
+            }))
+        ).map(({ erwartet, eingecheckt }, i) => {
+          const t = eingecheckt;
           return (
             <div
               key={i}
@@ -334,12 +392,24 @@ export default function CheckinPage() {
                 </>
               ) : (
                 <div className="flex items-center gap-3 text-ink-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-line-strong text-lg">
-                    ?
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed text-lg font-bold"
+                    style={
+                      erwartet
+                        ? { borderColor: erwartet.farbe, color: erwartet.farbe }
+                        : undefined
+                    }
+                  >
+                    {erwartet ? erwartet.nummer : "?"}
                   </div>
-                  <p className="text-sm">
-                    {isDuell ? `Team ${i === 0 ? "A" : "B"}` : "Team"} – noch nicht eingecheckt
-                  </p>
+                  <div>
+                    <p className={`text-sm ${erwartet ? "font-medium text-ink-2" : ""}`}>
+                      {erwartet
+                        ? erwartet.name
+                        : `${isDuell ? `Team ${i === 0 ? "A" : "B"}` : "Team"}`}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-ink-3">noch nicht eingecheckt</p>
+                  </div>
                 </div>
               )}
             </div>
