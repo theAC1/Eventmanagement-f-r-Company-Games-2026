@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { TeamUpdateSchema, zodValidationError } from "@/lib/schemas";
 import { loeschFolgen, pruefeLoeschen } from "@/lib/loesch-schutz";
+import { logoAufloesen } from "@/lib/team-logo";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -65,14 +66,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const userId = await getCurrentUserId();
 
+    // Ein fremdes Logo wird beim Speichern einmalig auf unseren Server geholt
+    // (siehe src/lib/logo-quelle.ts). Nur anfassen, wenn das Feld auch
+    // mitgeschickt wurde — sonst würde ein Teil-Update das Logo löschen.
+    const logo =
+      "logoUrl" in parsed.data ? await logoAufloesen(parsed.data.logoUrl) : null;
+
     const team = await prisma.team.update({
       where: { id },
       data: {
         ...parsed.data,
+        ...(logo ? { logoUrl: logo.logoUrl } : {}),
         updatedById: userId,
       },
     });
-    return NextResponse.json(team);
+    return NextResponse.json({ ...team, logoWarnung: logo?.warnung ?? null });
   } catch (error) {
     console.error(`PUT /api/teams/${id} error:`, error);
     return NextResponse.json({ error: "Fehler beim Aktualisieren des Teams" }, { status: 500 });

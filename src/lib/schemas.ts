@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { istGueltigeBildUrl } from "./logo-quelle";
 
 // ─── Wertungslogik ───
 
@@ -79,6 +80,31 @@ export const OptionaleEmailSchema = z
   .optional()
   .transform((wert) => (wert === "" ? null : wert));
 
+/**
+ * Bild-Adresse: absolute http(s)-Adresse ODER ein Pfad auf ein Bild, das schon
+ * bei uns liegt (`/api/uploads/…`).
+ *
+ * Der lokale Pfad MUSS erlaubt sein: Der Server lädt fremde Logos beim
+ * Speichern herunter und schreibt genau so einen Pfad zurück. Ein reines
+ * `z.string().url()` hat das früher abgewiesen — das Formular bot einen
+ * relativen Pfad an, die API antwortete mit 400, und im Formular stand nur
+ * "Fehler beim Speichern".
+ */
+const BILD_URL_FEHLER =
+  "Bild-Adresse muss mit https:// oder http:// beginnen (oder ein hochgeladenes Bild sein)";
+
+export const OptionaleBildUrlSchema = z
+  .union(
+    [
+      z.literal(""),
+      z.null(),
+      z.string().max(500, "Bild-Adresse max. 500 Zeichen").refine(istGueltigeBildUrl, BILD_URL_FEHLER),
+    ],
+    { error: BILD_URL_FEHLER },
+  )
+  .optional()
+  .transform((wert) => (wert === "" ? null : wert));
+
 // ─── Teams ───
 
 export const TeamCreateSchema = z.object({
@@ -87,7 +113,7 @@ export const TeamCreateSchema = z.object({
   captainName: z.string().nullable().optional(),
   captainEmail: OptionaleEmailSchema,
   farbe: z.string().optional(),
-  logoUrl: z.string().url().nullable().optional(),
+  logoUrl: OptionaleBildUrlSchema,
   motto: z.string().nullable().optional(),
   teilnehmerAnzahl: z.number().int().min(1).nullable().optional(),
   teilnehmerNamen: z.any().optional(),

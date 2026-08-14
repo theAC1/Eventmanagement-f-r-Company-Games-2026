@@ -50,4 +50,8 @@ next-env.d.ts
 CODE_REVIEW.md
 
 # Hochgeladene Dateien (lokal)
-uploads/
+# Führender Slash ist wichtig: `uploads/` ohne ihn matcht JEDES Verzeichnis
+# dieses Namens — auch `src/app/api/uploads/`. Die Upload-API war dadurch nie
+# eingecheckt und fehlte auf dem Server (GET /api/uploads/... lief in den 404
+# von Next). Gemeint ist nur das Laufzeit-Verzeichnis im Projektstamm.
+/uploads/

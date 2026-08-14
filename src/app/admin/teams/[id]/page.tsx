@@ -7,6 +7,8 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import { AuditInfo } from "@/components/audit-info";
 import { TopBar, TopBarSpacer } from "@/components/ui/top-bar";
 import { Button, ButtonLink } from "@/components/ui/button";
+import { apiSend } from "@/lib/api-client";
+import { meldung } from "@/lib/api-fehler";
 
 type Team = {
   id: string; name: string; nummer: number; farbe: string;
@@ -39,6 +41,7 @@ export default function TeamDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logoWarnung, setLogoWarnung] = useState<string | null>(null);
   const [teilnehmerText, setTeilnehmerText] = useState("");
 
   const loadTeam = useCallback(() => {
@@ -64,7 +67,7 @@ export default function TeamDetailPage() {
 
   const handleSave = async () => {
     if (!team) return;
-    setSaving(true); setError(null);
+    setSaving(true); setError(null); setLogoWarnung(null);
     try {
       const namen = teilnehmerNamenAus(teilnehmerText);
       // Die gepflegte Zahl gilt: sie ist die verbindliche Meldung für
@@ -72,23 +75,33 @@ export default function TeamDetailPage() {
       // erfasst ist, darf sie nicht überschreiben — nur wenn gar keine Zahl
       // gesetzt ist, springt die Liste ein.
       const gemeldeteAnzahl = team.teilnehmerAnzahl ?? (namen.length > 0 ? namen.length : null);
-      const res = await fetch(`/api/teams/${teamId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // apiSend statt fetch: liefert den Klartext-Grund der API ans Formular.
+      // Vorher stand hier bei jedem Fehler nur "Fehler beim Speichern" — eine
+      // abgelehnte Logo-Adresse sah damit aus wie ein Serverproblem.
+      const gespeichert = await apiSend<Team & { logoWarnung?: string | null }>(
+        `/api/teams/${teamId}`,
+        "PUT",
+        {
           ...team,
           teilnehmerNamen: namen.length > 0 ? namen : null,
           teilnehmerAnzahl: gemeldeteAnzahl,
-        }),
-      });
-      if (!res.ok) throw new Error("Fehler beim Speichern");
-      // Abgeleitete Zahl sichtbar machen, ohne die Audit-Angaben neu zu laden
-      setTeam(vorher => (vorher ? { ...vorher, teilnehmerAnzahl: gemeldeteAnzahl } : vorher));
+        },
+        "Fehler beim Speichern",
+      );
+      // Abgeleitete Zahl sichtbar machen, ohne die Audit-Angaben neu zu laden.
+      // Das Logo kommt als lokaler Pfad zurück (der Server hat es kopiert) —
+      // ohne Übernahme würde der nächste Klick die fremde Adresse erneut senden.
+      setTeam(vorher =>
+        vorher
+          ? { ...vorher, teilnehmerAnzahl: gemeldeteAnzahl, logoUrl: gespeichert.logoUrl }
+          : vorher,
+      );
+      setLogoWarnung(gespeichert.logoWarnung ?? null);
       setDirty(false);
       setSuccessMsg("Gespeichert");
       setTimeout(() => setSuccessMsg(null), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler");
+      setError(meldung(err, "Fehler beim Speichern"));
     } finally {
       setSaving(false);
     }
@@ -139,13 +152,19 @@ export default function TeamDetailPage() {
       >
         <TopBarSpacer />
         {successMsg && <span className="text-xs font-medium text-done">{successMsg}</span>}
-        {error && <span className="text-xs font-medium text-hot-tint">{error}</span>}
         <Button variant="primary" onClick={handleSave} disabled={!dirty || saving}>
           {saving ? "Speichert..." : "Speichern"}
         </Button>
       </TopBar>
 
       <div className="max-w-3xl space-y-4 px-4 py-5 sm:px-[22px]">
+        {/* Eigene Zeile statt Kurztext in der Kopfleiste: Die Meldungen der API
+            nennen jetzt Feld und Grund und passen dort nicht mehr hinein. */}
+        {error && (
+          <p className="rounded-[9px] border border-hot-tint/30 bg-hot-tint/10 px-3 py-2 text-xs text-hot-tint">
+            {error}
+          </p>
+        )}
         {/* Team-Header mit Farbe */}
         <div className="flex items-center gap-4">
           <div
@@ -194,11 +213,28 @@ export default function TeamDetailPage() {
                 className={INPUT_CLASS} />
             </Field>
           </div>
-          <Field label="Logo URL">
-            <input type="text" value={team.logoUrl ?? ""} onChange={e => update("logoUrl", e.target.value || null)}
-              placeholder="https://... oder /images/logos/team1.png"
-              className={INPUT_CLASS} />
+          <Field label="Logo">
+            <div className="flex items-start gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[9px] border border-line bg-sunken">
+                <LogoVorschau key={team.logoUrl ?? ""} url={team.logoUrl} />
+              </div>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <input type="text" value={team.logoUrl ?? ""} onChange={e => update("logoUrl", e.target.value || null)}
+                  placeholder="https://firma.ch/logo.png"
+                  className={INPUT_CLASS} />
+                <p className="text-[11px] text-ink-3">
+                  Bild-Adresse einfügen und speichern — das Logo wird dabei einmalig auf
+                  unseren Server kopiert. Fremd eingebundene Logos erscheinen sonst zwar
+                  in der Vorschau, aber nicht im Badge-Export und nicht im Ausdruck.
+                </p>
+              </div>
+            </div>
           </Field>
+          {logoWarnung && (
+            <p className="rounded-[9px] border border-[var(--warn-border)] bg-warn-dim/50 px-3 py-2 text-[11px] text-ink-2">
+              {logoWarnung}
+            </p>
+          )}
         </section>
 
         {/* Captain */}
@@ -284,6 +320,28 @@ export default function TeamDetailPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+/**
+ * Zeigt sofort, ob die eingetragene Adresse überhaupt ein Bild liefert —
+ * vorher merkte man das erst beim Badge-Druck. Der Aufrufer setzt `key` auf
+ * die Adresse, damit der Fehlerzustand bei einer neuen Adresse zurückfällt.
+ */
+function LogoVorschau({ url }: { url: string | null }) {
+  const [fehler, setFehler] = useState(false);
+
+  if (!url) return <span className="text-[10px] text-ink-3">kein Logo</span>;
+  if (fehler) return <span className="text-[10px] text-hot-tint">defekt</span>;
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- beliebige Bildquelle, next/image bringt hier keinen Vorteil
+    <img
+      src={url}
+      alt="Logo-Vorschau"
+      className="h-12 w-12 object-contain"
+      onError={() => setFehler(true)}
+    />
   );
 }
 

@@ -4,6 +4,7 @@ import { generateUniqueCheckinCode } from "@/lib/checkin-code";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
 import { TeamCreateSchema, zodValidationError } from "@/lib/schemas";
 import { naechsteFreieNummer } from "@/lib/team-nummern";
+import { logoAufloesen } from "@/lib/team-logo";
 
 const TEAM_PUBLIC_SELECT = {
   id: true,
@@ -70,6 +71,10 @@ export async function POST(request: NextRequest) {
 
     const userId = await getCurrentUserId();
 
+    // Fremdes Logo einmalig auf unseren Server holen — sonst fehlt es später
+    // im Badge-Export (siehe src/lib/logo-quelle.ts).
+    const logo = await logoAufloesen(data.logoUrl ?? null);
+
     const team = await prisma.team.create({
       data: {
         name: data.name,
@@ -77,7 +82,7 @@ export async function POST(request: NextRequest) {
         captainName: data.captainName || null,
         captainEmail: data.captainEmail || null,
         farbe: data.farbe || "#6b7280",
-        logoUrl: data.logoUrl || null,
+        logoUrl: logo.logoUrl,
         motto: data.motto || null,
         teilnehmerAnzahl: data.teilnehmerAnzahl || null,
         teilnehmerNamen: data.teilnehmerNamen || null,
@@ -85,7 +90,7 @@ export async function POST(request: NextRequest) {
         createdById: userId,
       },
     });
-    return NextResponse.json(team, { status: 201 });
+    return NextResponse.json({ ...team, logoWarnung: logo.warnung }, { status: 201 });
   } catch (error) {
     console.error("POST /api/teams error:", error);
     return NextResponse.json({ error: "Fehler beim Erstellen des Teams" }, { status: 500 });

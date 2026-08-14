@@ -6,7 +6,10 @@ import crypto from "crypto";
 export const UPLOADS_DIR =
   process.env.UPLOADS_DIR ?? path.join(process.cwd(), "uploads");
 
-const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+// SVG ist dabei, weil viele Firmen ihr Logo nur als SVG anbieten. Ausgeliefert
+// wird es mit einer strengen CSP (siehe GET /api/uploads/[name]), damit ein
+// fremdes SVG im Browser nichts ausführen kann.
+const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"]);
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -43,6 +46,8 @@ export function contentTypeFor(fileName: string): string {
       return "image/webp";
     case ".gif":
       return "image/gif";
+    case ".svg":
+      return "image/svg+xml";
     default:
       return "application/octet-stream";
   }

@@ -16,8 +16,16 @@ describe("isAllowedImageName", () => {
     }
   });
 
+  // SVG ist seit dem Logo-Import erlaubt: viele Firmen bieten ihr Logo nur so
+  // an. Ausgeliefert wird es mit `default-src 'none'; sandbox` (siehe
+  // GET /api/uploads/[name]) — im Browser kann daraus nichts ausgeführt werden.
+  it("lässt SVG durch", () => {
+    expect(isAllowedImageName("logo.svg")).toBe(true);
+    expect(isAllowedImageName("logo.SVG")).toBe(true);
+  });
+
   it("weist alles andere ab", () => {
-    for (const name of ["skript.js", "doc.pdf", "archiv.zip", "ohne-endung", "bild.svg"]) {
+    for (const name of ["skript.js", "doc.pdf", "archiv.zip", "ohne-endung", "bild.svgz"]) {
       expect(isAllowedImageName(name)).toBe(false);
     }
   });
@@ -74,6 +82,7 @@ describe("contentTypeFor", () => {
     expect(contentTypeFor("a.png")).toBe("image/png");
     expect(contentTypeFor("a.webp")).toBe("image/webp");
     expect(contentTypeFor("a.gif")).toBe("image/gif");
+    expect(contentTypeFor("a.svg")).toBe("image/svg+xml");
   });
 
   it("fällt bei Unbekanntem auf einen neutralen Typ zurück", () => {
