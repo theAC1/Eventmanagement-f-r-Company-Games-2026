@@ -5,7 +5,12 @@
 const buckets = new Map<string, number[]>();
 
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-export const LOGIN_MAX_ATTEMPTS = 20;
+// 20 → 60: Beim Tooltest sitzen mehrere Schiedsrichter/Orga am selben
+// Venue-WLAN und teilen sich damit eine öffentliche IP — und damit denselben
+// Bucket. 20 Versuche/15min reichen dann schon bei normalen Tippfehlern für
+// einen Gruppen-Lockout. 60 bleibt immer noch ein enger Brute-Force-Schutz
+// (5s/Versuch händisch macht in 15min keine 60 voll).
+export const LOGIN_MAX_ATTEMPTS = 60;
 
 /**
  * Registriert einen Versuch für `key` und prüft, ob das Limit überschritten ist.

@@ -98,7 +98,7 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
   const resetTestData = async () => {
     if (
       !window.confirm(
-        "Alle Test-Ergebnisse werden gelöscht. Fortfahren?"
+        "Alle Test-Ergebnisse werden gelöscht und der Zeitplan-Slot-Status des aktiven Plans wird auf „geplant“ zurückgesetzt (Einsatzplan-Zuweisungen bleiben). Fortfahren?"
       )
     )
       return;
@@ -106,12 +106,15 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
     setActionLoading(true);
     try {
       const res = await fetch("/api/gameday/reset", { method: "POST" });
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
       await fetchStatus();
       onStatusChange();
+      alert(
+        `Zurückgesetzt: ${data.deleted.ergebnisse} Ergebnisse, ${data.resetSlots} Zeitplan-Slots wieder auf „geplant“.`
+      );
     } catch (err) {
       alert(
         `Fehler: ${err instanceof Error ? err.message : "Unbekannter Fehler"}`

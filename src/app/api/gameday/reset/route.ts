@@ -56,7 +56,23 @@ export async function POST() {
         }
       }
 
-      return { deletedHistory, deletedErgebnisse };
+      // Slot-Status des aktiven Zeitplans zurücksetzen (AKTIV/ABGESCHLOSSEN →
+      // GEPLANT), damit ein zweiter Probelauf ohne Zeitplan-Neuaufbau möglich
+      // ist. Einsatzplan-Zuweisungen (schiedsrichterId) bleiben unangetastet.
+      const aktiverPlan = await tx.zeitplanConfig.findFirst({
+        where: { istAktiv: true },
+        select: { id: true },
+      });
+      let resetSlots = 0;
+      if (aktiverPlan) {
+        const slotsResult = await tx.zeitplanSlot.updateMany({
+          where: { configId: aktiverPlan.id, status: { not: "GEPLANT" } },
+          data: { status: "GEPLANT" },
+        });
+        resetSlots = slotsResult.count;
+      }
+
+      return { deletedHistory, deletedErgebnisse, resetSlots };
     });
 
     return NextResponse.json({
@@ -64,6 +80,7 @@ export async function POST() {
         ergebnisse: result.deletedErgebnisse,
         history: result.deletedHistory,
       },
+      resetSlots: result.resetSlots,
     });
   } catch (error) {
     console.error("POST /api/gameday/reset error:", error);
