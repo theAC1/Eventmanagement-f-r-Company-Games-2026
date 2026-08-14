@@ -10,7 +10,28 @@
 // Ausführen:
 //   docker compose run --rm app npm run users:check
 import { prisma } from "../src/lib/prisma";
-import { getCurrentZeitplanConfig } from "../src/lib/zeitplan-config";
+
+/**
+ * Aktiver Zeitplan; Fallback: zuletzt erstellter.
+ *
+ * Bewusst hier nachgebaut statt aus `src/lib/zeitplan-config` importiert:
+ * Jenes Modul zieht über `@/lib/...`-Aliase weitere Dateien nach, die die
+ * Script-TypeScript-Konfiguration nicht auflöst. Die Regel muss mit
+ * getCurrentZeitplanConfig() übereinstimmen — sonst prüft dieses Script einen
+ * anderen Plan als den, den die Schiedsrichter tatsächlich sehen.
+ */
+async function aktuellerZeitplan() {
+  const aktiv = await prisma.zeitplanConfig.findFirst({
+    where: { istAktiv: true },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true, istAktiv: true },
+  });
+  if (aktiv) return aktiv;
+  return prisma.zeitplanConfig.findFirst({
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, istAktiv: true },
+  });
+}
 
 const ERWARTET: { username: string; rolle: "OWNER" | "ADMIN" }[] = [
   { username: "juan", rolle: "OWNER" },
@@ -92,7 +113,7 @@ async function einsatzbereitschaft() {
   });
   console.log(`  Gameday: ${gameday?.modus ?? "INAKTIV"}${gameday ? "" : "  ← ohne aktiven Gameday zeigt die Schiedsrichter-Seite nur einen Hinweis"}`);
 
-  const config = await getCurrentZeitplanConfig();
+  const config = await aktuellerZeitplan();
   if (!config) {
     console.log("  KEIN ZEITPLAN vorhanden → niemand sieht Einsätze. Zuerst im Leitstand einen Zeitplan erzeugen.");
     return;
