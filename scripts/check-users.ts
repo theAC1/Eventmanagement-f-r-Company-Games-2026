@@ -133,6 +133,41 @@ async function einsatzbereitschaft() {
   console.log(`  Posten-Crew-Zuteilungen (GameCrew): ${crew.length}`);
   console.log(`  Slot-Feinzuteilungen (ZeitplanSlotPerson): ${slotPersonen}`);
 
+  // Team-Zuordnung: ohne sie steht beim Schiedsrichter "Keine Teams
+  // zugewiesen" — er weiss dann nicht, wer bei ihm antritt.
+  const slotTeams = await prisma.zeitplanSlotTeam.count({
+    where: { slot: { configId: config.id } },
+  });
+  const slotsOhneTeams = await prisma.zeitplanSlot.count({
+    where: { configId: config.id, gameId: { not: null }, teams: { none: {} } },
+  });
+  console.log(`  Team-Zuordnungen (ZeitplanSlotTeam): ${slotTeams}`);
+  if (slotsOhneTeams > 0) {
+    console.log(`  !! ${slotsOhneTeams} von ${slotsMitGame} Begegnungen OHNE Teams → dort steht "Keine Teams zugewiesen"`);
+  }
+
+  // Zwei Beispiele, damit man sieht, was der Schiedsrichter tatsächlich liest.
+  const beispiele = await prisma.zeitplanSlot.findMany({
+    where: { configId: config.id, gameId: { not: null } },
+    select: {
+      runde: true,
+      startZeit: true,
+      endZeit: true,
+      game: { select: { name: true } },
+      teams: { select: { team: { select: { name: true, nummer: true } } } },
+    },
+    orderBy: [{ startZeit: "asc" }, { runde: "asc" }],
+    take: 3,
+  });
+  console.log("  Beispiel-Begegnungen:");
+  for (const b of beispiele) {
+    const teamText =
+      b.teams.length > 0
+        ? b.teams.map((t) => `#${t.team.nummer} ${t.team.name}`).join(" vs. ")
+        : "KEINE TEAMS";
+    console.log(`    ${b.startZeit}–${b.endZeit}  ${b.game?.name ?? "?"}  —  ${teamText}`);
+  }
+
   if (crew.length === 0 && slotPersonen === 0) {
     console.log("  → NIEMAND ist eingeteilt. Deshalb ist jeder Tagesplan leer.");
     console.log("    Einteilen im Leitstand: Games-Tab → Posten → Crew zuweisen.");
