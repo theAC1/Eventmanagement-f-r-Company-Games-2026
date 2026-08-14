@@ -125,6 +125,29 @@ export function GamedayControls({ onStatusChange }: GamedayControlsProps) {
   };
 
   const switchToHot = async () => {
+    // Der HOT-Start wird serverseitig abgelehnt, solange Test-Ergebnisse
+    // existieren. Diese Bedingung MUSS vor dem Beenden des Test-Gamedays
+    // geprüft werden: Sonst ist der Test-Gameday weg, der HOT-Start scheitert,
+    // und sämtliche Schiedsrichter-Geräte zeigen schlagartig "Kein aktiver
+    // Gameday" — ohne dass jemand ausser der Person am Leitstand weiss, warum.
+    // Frisch vom Server holen: `status` wird nur beim Mounten geladen. Nach
+    // einer Stunde Probelauf wäre der Zähler auf dem Bildschirm veraltet und
+    // die Prüfung liefe genau in den Fehler, den sie verhindern soll.
+    let offeneTestErgebnisse = status?.testErgebnisse ?? 0;
+    try {
+      const res = await fetch("/api/gameday");
+      if (res.ok) offeneTestErgebnisse = (await res.json())?.testErgebnisse ?? 0;
+    } catch {
+      // Nicht erreichbar — dann gilt der zuletzt bekannte Stand.
+    }
+    if (offeneTestErgebnisse > 0) {
+      alert(
+        `HOT-Start nicht möglich: Es liegen noch ${offeneTestErgebnisse} Test-Ergebnisse vor.\n\n` +
+          "Zuerst „Test-Daten löschen“ klicken, danach erneut auf HOT wechseln.",
+      );
+      return;
+    }
+
     if (
       !window.confirm(
         "Achtung: HOT-Modus startet den produktiven Gameday. Fortfahren?"

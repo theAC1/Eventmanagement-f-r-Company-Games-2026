@@ -427,20 +427,28 @@ export default function CheckinPage() {
             </div>
           )}
 
-          {error && <p className="text-center text-sm text-hot-tint">{error}</p>}
+          {!allCheckedIn && error && (
+            <p className="text-center text-sm text-hot-tint">{error}</p>
+          )}
         </div>
       )}
 
       {/* Partie starten */}
       {allCheckedIn && (
-        <Button
-          variant="cta"
-          onClick={startPartie}
-          disabled={starting}
-          className="h-16 w-full rounded-[14px]"
-        >
-          {starting ? "Wird gestartet..." : "Begegnung starten →"}
-        </Button>
+        <>
+          {/* Fehler auch HIER anzeigen: Sind alle eingecheckt, ist der Block
+              oben ausgeblendet — ein Fehler beim Starten der Begegnung wäre
+              sonst unsichtbar, und der Knopf spränge nur wortlos zurück. */}
+          {error && <p className="text-center text-sm text-hot-tint">{error}</p>}
+          <Button
+            variant="cta"
+            onClick={startPartie}
+            disabled={starting}
+            className="h-16 w-full rounded-[14px]"
+          >
+            {starting ? "Wird gestartet..." : "Begegnung starten →"}
+          </Button>
+        </>
       )}
     </div>
   );

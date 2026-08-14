@@ -3,7 +3,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { CaretRight, CheckCircle } from "@phosphor-icons/react";
-import { initOfflineQueue, subscribeQueue } from "@/lib/offline-queue";
+import {
+  initOfflineQueue,
+  subscribeQueue,
+  removeEntry,
+  entryKey,
+  type PendingErgebnis,
+} from "@/lib/offline-queue";
+
+/** Erfasste Rohwerte lesbar machen, damit sie notiert werden können. */
+function formatRohdaten(rohdaten: Record<string, unknown>): string {
+  const teile = Object.entries(rohdaten)
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`);
+  return teile.length > 0 ? teile.join(" · ") : "—";
+}
 import { HotPill, StatusPill, ModusChip } from "@/components/ui/pills";
 import { Button } from "@/components/ui/button";
 
@@ -57,11 +71,15 @@ export default function RefereePage() {
   const [zeitplanName, setZeitplanName] = useState<string | null>(null);
   const [slots, setSlots] = useState<MeinSlot[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [abgelehnt, setAbgelehnt] = useState<PendingErgebnis[]>([]);
 
   // Offline-Warteschlange: liegengebliebene Ergebnisse weiter übermitteln
   useEffect(() => {
     initOfflineQueue();
-    return subscribeQueue((queue) => setPendingCount(queue.length));
+    return subscribeQueue((queue) => {
+      setPendingCount(queue.filter((e) => !e.abgelehnt).length);
+      setAbgelehnt(queue.filter((e) => e.abgelehnt));
+    });
   }, []);
 
   const loadData = useCallback(async () => {
@@ -99,7 +117,17 @@ export default function RefereePage() {
   }, [loadData]);
 
   const handleSlotTap = (slot: MeinSlot) => {
-    if (slot.status === "ABGESCHLOSSEN") return;
+    // Im Probelauf dürfen abgeschlossene Begegnungen erneut geöffnet werden —
+    // eine Generalprobe lebt davon, denselben Posten mehrmals durchzuspielen.
+    // Im HOT-Modus bleibt eine abgeschlossene Begegnung abgeschlossen.
+    if (slot.status === "ABGESCHLOSSEN") {
+      if (gamedayModus !== "TEST") return;
+      const params = new URLSearchParams();
+      params.set("slotId", slot.slotId);
+      if (slot.teamIds.length > 0) params.set("teams", slot.teamIds.join(","));
+      router.push(`/referee/${slot.gameSlug}/checkin?${params.toString()}`);
+      return;
+    }
 
     if (slot.status === "AKTIV") {
       // Laufende Begegnung: direkt in die Live-Erfassung mit den offenen Ergebnissen
@@ -196,6 +224,40 @@ export default function RefereePage() {
         </div>
       )}
 
+      {/* Endgültig abgelehnte Einträge — der Schiedsrichter muss wissen, dass
+          dieses Resultat NICHT gespeichert wurde. */}
+      {abgelehnt.map((e) => (
+        <div
+          key={e.commitId}
+          className="flex flex-col gap-2 rounded-xl border border-[var(--hot-border)] bg-hot-dim/60 px-4 py-3 text-[13px] text-ink-2"
+        >
+          <span>
+            <span className="font-semibold text-hot-tint">Nicht gespeichert:</span>{" "}
+            {e.gameName} · {e.teamName}
+            {e.lastError ? ` — ${e.lastError}` : ""}
+          </span>
+          {/* Die erfassten Zahlen anzeigen: Es ist die letzte Kopie, die es
+              noch gibt — so kann die Orga sie abschreiben. */}
+          <span className="tnum text-ink-2">Erfasst: {formatRohdaten(e.rohdaten)}</span>
+          <span className="text-ink-3">Bitte der Orga melden.</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Dieses nicht gespeicherte Ergebnis endgültig ausblenden?\n\n${e.gameName} · ${e.teamName}\nWerte: ${formatRohdaten(e.rohdaten)}\n\nBitte vorher der Orga melden — danach sind die Zahlen weg.`,
+                )
+              ) {
+                removeEntry(entryKey(e));
+              }
+            }}
+            className="self-start rounded-lg border border-line-strong px-3 py-1 text-[12px] font-medium text-ink-3 hover:text-ink"
+          >
+            Verstanden, ausblenden
+          </button>
+        </div>
+      ))}
+
       {/* Leer-Zustand */}
       {slots.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
@@ -275,21 +337,43 @@ export default function RefereePage() {
           <p className="cg-label text-[11px] text-label">
             Erledigt · <span className="tnum">{doneSlots.length}</span>
           </p>
-          {doneSlots.map((slot) => (
-            <div
-              key={slot.slotId}
-              className="flex h-12 items-center gap-3 rounded-xl border border-line-soft px-4"
-            >
-              <CheckCircle size={17} weight="bold" className="shrink-0 text-done" />
-              <span className="tnum w-10 shrink-0 text-[13px] text-label">
-                {formatTime(slot.startZeit)}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[14px] text-ink-3">
-                {slot.gameName}
-                {slot.teamNames.length > 0 && ` · ${slot.teamNames.join(" vs. ")}`}
-              </span>
-            </div>
-          ))}
+          {doneSlots.map((slot) => {
+            // Im Probelauf ist eine erledigte Begegnung wieder anklickbar,
+            // damit derselbe Posten mehrmals durchgespielt werden kann.
+            const wiederholbar = gamedayModus === "TEST";
+            return (
+              <div
+                key={slot.slotId}
+                onClick={wiederholbar ? () => handleSlotTap(slot) : undefined}
+                role={wiederholbar ? "button" : undefined}
+                tabIndex={wiederholbar ? 0 : undefined}
+                onKeyDown={
+                  wiederholbar
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") handleSlotTap(slot);
+                      }
+                    : undefined
+                }
+                className={`flex h-12 items-center gap-3 rounded-xl border border-line-soft px-4${
+                  wiederholbar ? " cursor-pointer transition-colors hover:border-action" : ""
+                }`}
+              >
+                <CheckCircle size={17} weight="bold" className="shrink-0 text-done" />
+                <span className="tnum w-10 shrink-0 text-[13px] text-label">
+                  {formatTime(slot.startZeit)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[14px] text-ink-3">
+                  {slot.gameName}
+                  {slot.teamNames.length > 0 && ` · ${slot.teamNames.join(" vs. ")}`}
+                </span>
+                {wiederholbar && (
+                  <span className="shrink-0 text-[11px] font-medium text-ink-3">
+                    Nochmals
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

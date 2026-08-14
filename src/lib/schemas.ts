@@ -287,11 +287,18 @@ export const KvpStatusUpdateSchema = z.object({
 // ─── Helper ───
 
 export function zodValidationError(error: z.ZodError) {
+  const details = error.issues.map((issue) => ({
+    field: issue.path.join("."),
+    message: issue.message,
+  }));
+  // Das betroffene Feld gehört in `error`, nicht nur in `details`: Die Clients
+  // zeigen ausschliesslich `error` an — ein blosses "Validierungsfehler" lässt
+  // den Schiedsrichter am Posten ohne jeden Anhaltspunkt stehen.
+  const zusammenfassung = details
+    .map((d) => (d.field ? `${d.field}: ${d.message}` : d.message))
+    .join(", ");
   return {
-    error: "Validierungsfehler",
-    details: error.issues.map((issue) => ({
-      field: issue.path.join("."),
-      message: issue.message,
-    })),
+    error: zusammenfassung ? `Validierungsfehler — ${zusammenfassung}` : "Validierungsfehler",
+    details,
   };
 }

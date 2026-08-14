@@ -312,7 +312,10 @@ describe("zodValidationError", () => {
     const result = GameCreateSchema.safeParse({});
     if (!result.success) {
       const formatted = zodValidationError(result.error);
-      expect(formatted.error).toBe("Validierungsfehler");
+      expect(formatted.error).toMatch(/^Validierungsfehler/);
+      // Das betroffene Feld muss in `error` stehen: Die Clients zeigen nur
+      // dieses Feld an — sonst liest der Benutzer bloss "Validierungsfehler".
+      expect(formatted.error).toContain("name");
       expect(formatted.details).toBeInstanceOf(Array);
       expect(formatted.details.length).toBeGreaterThan(0);
       expect(formatted.details[0]).toHaveProperty("field");

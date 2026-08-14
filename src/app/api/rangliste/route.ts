@@ -65,11 +65,16 @@ export async function GET() {
     // korrigierbar — der Rang des betroffenen Teams gilt als provisorisch.
     const offeneErgebnisse = ergebnisse.filter((e) => !istGesperrt(e.eingetragenUm));
     const offeneTeamIds = new Set(offeneErgebnisse.map((e) => e.teamId));
+    // Teams ohne jedes Ergebnis haben noch gar nichts gespielt — ihr Rang ist
+    // weder gesperrt noch provisorisch. Ohne diese Unterscheidung stünde am
+    // Morgen die komplette Rangliste als "endgültig" da, obwohl alle bei 0 sind.
+    const teamsMitErgebnis = new Set(ergebnisse.map((e) => e.teamId));
 
     return NextResponse.json({
       rangliste: rangliste.map((entry) => ({
         ...entry,
-        rangGesperrt: !offeneTeamIds.has(entry.teamId),
+        rangGesperrt:
+          teamsMitErgebnis.has(entry.teamId) && !offeneTeamIds.has(entry.teamId),
       })),
       totalGames: games.length,
       totalTeams: teams.length,

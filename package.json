@@ -1,6 +1,6 @@
 {
   "name": "company-games-2026",
-  "version": "0.19.6-alpha",
+  "version": "0.20.0-alpha",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -43,6 +43,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.6",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",

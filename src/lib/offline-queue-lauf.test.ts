@@ -14,6 +14,7 @@ import {
   getQueue,
   initOfflineQueue,
   removeEntry,
+  entryKey,
   subscribeQueue,
 } from "./offline-queue";
 
@@ -58,7 +59,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   // Warteschlange leeren, damit der Auto-Retry-Timer stoppt
-  for (const e of getQueue()) removeEntry(e.commitId);
+  for (const e of getQueue()) removeEntry(entryKey(e));
   vi.useRealTimers();
   globalThis.fetch = originalFetch;
   // @ts-expect-error Testaufbau zurückräumen
@@ -130,13 +131,52 @@ describe("flushQueue", () => {
     const [offen] = getQueue();
     expect(offen.attempts).toBe(1);
     expect(offen.lastError).toBe("Ergebnis bereits verifiziert");
+    // Endgültig abgelehnt: bleibt sichtbar, wird aber nicht mehr gesendet.
+    expect(offen.abgelehnt).toBe(true);
+  });
+
+  it("REGRESSION: eine Duell-Einreichung verliert das Partnerteam nicht", async () => {
+    // Beide Teams einer Duell-Begegnung werden mit DERSELBEN commitId
+    // eingereiht (die Duell-Route findet darüber das Partner-Ergebnis).
+    // Wird der erste Eintrag nach erfolgreicher Übermittlung entfernt, darf
+    // das Ergebnis des Partnerteams nicht mitverschwinden.
+    const geschickt: string[] = [];
+    globalThis.fetch = vi.fn(async (_url: unknown, init: unknown) => {
+      const body = JSON.parse((init as { body: string }).body);
+      geschickt.push(body.teamId);
+      return antwort(201);
+    }) as unknown as typeof fetch;
+
+    enqueueErgebnis({ ...eintrag(1), commitId: "duell-commit", teamId: "team-a" });
+    enqueueErgebnis({ ...eintrag(1), commitId: "duell-commit", teamId: "team-b" });
+    expect(getQueue()).toHaveLength(2);
+
+    expect(await flushQueue()).toBe(2);
+    expect(geschickt).toEqual(["team-a", "team-b"]);
+    expect(getQueue()).toHaveLength(0);
+  });
+
+  it("sendet endgültig abgelehnte Einträge nicht erneut", async () => {
+    const gerufen = vi.fn(async () => antwort(409, { error: "abgelehnt" }));
+    globalThis.fetch = gerufen as unknown as typeof fetch;
+
+    enqueueErgebnis(eintrag(1));
+    await flushQueue();
+    expect(gerufen).toHaveBeenCalledTimes(1);
+
+    // Zweiter Durchlauf darf den abgelehnten Eintrag nicht nochmals schicken —
+    // sonst läuft auf dem Handy dauerhaft ein zweckloser Retry.
+    await flushQueue();
+    expect(gerufen).toHaveBeenCalledTimes(1);
+    expect(getQueue()).toHaveLength(1);
   });
 
   it("arbeitet nach einer endgültigen Ablehnung weiter", async () => {
     let aufruf = 0;
     globalThis.fetch = vi.fn(async () => {
       aufruf++;
-      return aufruf === 1 ? antwort(400, { error: "ungültig" }) : antwort(201);
+      // 403 = Korrekturfrist abgelaufen: endgültig, ein Retry kann nie helfen.
+      return aufruf === 1 ? antwort(403, { error: "Korrekturfrist abgelaufen" }) : antwort(201);
     }) as unknown as typeof fetch;
 
     enqueueErgebnis(eintrag(1));
@@ -144,6 +184,22 @@ describe("flushQueue", () => {
 
     expect(await flushQueue()).toBe(1);
     expect(getQueue().map((e) => e.commitId)).toEqual(["commit-1"]);
+  });
+
+  it("hält bei einem vorübergehenden 4xx an, statt das Ergebnis wegzuwerfen", async () => {
+    // 400 "Kein aktiver Gameday" tritt auf, während die Orga den Gameday
+    // umschaltet — Sekunden später geht dieselbe Eingabe durch. Solche
+    // Antworten dürfen den Eintrag NICHT endgültig abweisen.
+    globalThis.fetch = vi.fn(async () =>
+      antwort(400, { error: "Kein aktiver Gameday" }),
+    ) as unknown as typeof fetch;
+
+    enqueueErgebnis(eintrag(1));
+    expect(await flushQueue()).toBe(0);
+
+    const [offen] = getQueue();
+    expect(offen.abgelehnt).toBeUndefined();
+    expect(offen.lastError).toBe("Kein aktiver Gameday");
   });
 
   it("hält bei einem überlasteten Server an, statt hinterherzufeuern", async () => {
@@ -200,7 +256,7 @@ describe("removeEntry", () => {
   it("entfernt genau den einen Eintrag", () => {
     enqueueErgebnis(eintrag(1));
     enqueueErgebnis(eintrag(2));
-    removeEntry("commit-1");
+    removeEntry(entryKey(eintrag(1)));
     expect(getQueue().map((e) => e.commitId)).toEqual(["commit-2"]);
   });
 });

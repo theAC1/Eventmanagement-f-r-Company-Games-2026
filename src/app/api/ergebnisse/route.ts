@@ -22,6 +22,24 @@ class LockedError extends Error {
   }
 }
 
+/**
+ * Ein anderer Schiedsrichter hat für dieses Team bereits erfasst.
+ *
+ * Ohne diese Prüfung gewinnt stillschweigend, wer zuletzt speichert: Sind zwei
+ * Personen demselben Slot zugeteilt (Schiri + Helfer), sehen beide dieselbe
+ * Begegnung, beide zählen, beide speichern — und einer der beiden Werte
+ * verschwindet, ohne dass irgendwer eine Meldung bekommt. Die Duell-Route
+ * kennt diesen Schutz bereits; der Haupt-Erfassungsweg hatte ihn nicht.
+ */
+class ConflictError extends Error {
+  bestehend: { erfasstVon: string | null; erfasstUm: Date | null; teamName: string | null };
+  constructor(erfasstVon: string | null, erfasstUm: Date | null, teamName: string | null) {
+    super("Bereits von jemand anderem erfasst");
+    this.name = "ConflictError";
+    this.bestehend = { erfasstVon, erfasstUm, teamName };
+  }
+}
+
 // Vertrauliche Gewichtungs-Keys (gewichtungG/gewichtungSieg) aus dem
 // eingebetteten Game strippen — Schiedsrichter sehen die Gewichtung nicht
 function sanitizeErgebnisRows<T extends { game: { wertungslogik: unknown } }>(
@@ -178,6 +196,10 @@ export async function POST(request: NextRequest) {
     const ergebnis = await prisma.$transaction(async (tx) => {
       const existing = await tx.ergebnis.findUnique({
         where: { gameId_teamId: { gameId, teamId } },
+        include: {
+          eingetragenVon: { select: { name: true } },
+          team: { select: { name: true } },
+        },
       });
 
       // LAUFEND-Platzhalter aus /api/partie/start sind kein echtes Ergebnis:
@@ -187,6 +209,24 @@ export async function POST(request: NextRequest) {
       // Sperrfrist: Schiedsrichter dürfen nur innerhalb des Korrekturfensters ändern
       if (existing && !istPlatzhalter && !istOrga && istGesperrt(existing.eingetragenUm)) {
         throw new LockedError(existing.eingetragenUm);
+      }
+
+      // Fremdes Ergebnis nicht kommentarlos überschreiben. Die eigene Korrektur
+      // (gleiche Person) und der Wiederholungs-Versand desselben Commits
+      // bleiben erlaubt, ORGA/Admin korrigieren ohnehin bewusst.
+      if (
+        existing &&
+        !istPlatzhalter &&
+        !istOrga &&
+        existing.eingetragenVonId &&
+        existing.eingetragenVonId !== userId &&
+        (!commitId || existing.commitId !== commitId)
+      ) {
+        throw new ConflictError(
+          existing.eingetragenVon?.name ?? null,
+          existing.eingetragenUm,
+          existing.team?.name ?? null,
+        );
       }
 
       const result = await tx.ergebnis.upsert({
@@ -246,6 +286,21 @@ export async function POST(request: NextRequest) {
           error: "Die Korrekturfrist von 10 Minuten ist abgelaufen — nur ein Admin kann das Ergebnis noch korrigieren.",
         },
         { status: 403 },
+      );
+    }
+    if (error instanceof ConflictError) {
+      const von = error.bestehend.erfasstVon;
+      // Teamname mit in die Meldung: Der Client speichert mehrere Teams in
+      // einer Schleife und zeigt nur EINE Fehlerzeile — ohne Namen wüsste der
+      // Schiedsrichter nicht, welches Team betroffen ist.
+      const team = error.bestehend.teamName;
+      return NextResponse.json(
+        {
+          code: "CONFLICT",
+          bestehend: error.bestehend,
+          error: `${team ? `${team}: ` : ""}${von ?? "Jemand anderes"} hat für dieses Team bereits ein Ergebnis erfasst — deine Eingabe wurde NICHT gespeichert. Bitte mit der Orga abgleichen.`,
+        },
+        { status: 409 },
       );
     }
     console.error("POST /api/ergebnisse error:", error);

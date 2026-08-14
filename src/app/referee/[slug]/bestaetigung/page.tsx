@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, CloudArrowUp } from "@phosphor-icons/react";
-import { enqueueErgebnis } from "@/lib/offline-queue";
+import { enqueueErgebnis, isRetryableStatus } from "@/lib/offline-queue";
 import { KORREKTUR_FENSTER_MS } from "@/lib/ergebnis-sperre";
 import {
   berechneGamePunkteAusRohdaten,
@@ -65,6 +65,7 @@ export default function BestaetigungPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [queued, setQueued] = useState(false);
+  const [queuedGrund, setQueuedGrund] = useState<"offline" | "server">("offline");
   const [eingetragenUm, setEingetragenUm] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -112,7 +113,8 @@ export default function BestaetigungPage() {
 
     // Bei Signalverlust: alle Einträge in die Offline-Warteschlange legen.
     // Dank commitId (Idempotenz) kann ein späterer Retry keine Duplikate erzeugen.
-    const enqueueAll = () => {
+    const enqueueAll = (grund: "offline" | "server" = "offline") => {
+      setQueuedGrund(grund);
       for (const entry of payload.entries) {
         enqueueErgebnis({
           commitId,
@@ -153,9 +155,13 @@ export default function BestaetigungPage() {
 
         if (!res.ok) {
           const data = await res.json().catch(() => null);
-          if (res.status >= 500 || res.status === 408 || res.status === 429) {
-            // Serverseitig temporär — ebenfalls in die Warteschlange
-            enqueueAll();
+          if (isRetryableStatus(res.status)) {
+            // Serverfehler/Überlast: Das Ergebnis kommt in die Warteschlange
+            // und wird automatisch nachgereicht — sonst gingen bereits
+            // erfasste Teams dieser Begegnung verloren. Der Grund wird aber
+            // ehrlich benannt: "keine Verbindung" wäre falsch und schickte
+            // die Schiedsrichter auf WLAN-Suche.
+            enqueueAll("server");
             return;
           }
           if (data?.code === "LOCKED") {
@@ -239,9 +245,9 @@ export default function BestaetigungPage() {
         <div className="max-w-sm text-center">
           <h2 className="text-[22px] font-semibold tracking-tight">Zwischengespeichert</h2>
           <p className="mt-2 text-sm leading-[1.45] text-ink-3">
-            Keine Verbindung zum Server. Das Ergebnis für {payload?.gameName} wird
-            automatisch übermittelt, sobald wieder Empfang besteht — du kannst
-            normal weiterarbeiten.
+            {queuedGrund === "server"
+              ? `Der Server konnte gerade nicht speichern. Das Ergebnis für ${payload?.gameName ?? ""} ist gesichert und wird automatisch nachgereicht — du kannst normal weiterarbeiten.`
+              : `Keine Verbindung zum Server. Das Ergebnis für ${payload?.gameName ?? ""} wird automatisch übermittelt, sobald wieder Empfang besteht — du kannst normal weiterarbeiten.`}
           </p>
         </div>
         <Button variant="cta" onClick={() => router.push("/referee")} className="w-full max-w-xs">

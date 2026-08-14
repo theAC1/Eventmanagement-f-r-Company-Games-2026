@@ -4,9 +4,18 @@ import { requireRole } from "@/lib/auth-helpers";
 import { updateGameRaenge } from "@/lib/game-punkte";
 import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
-// POST /api/gameday/reset
+/**
+ * POST /api/gameday/reset — löscht Test-Ergebnisse und öffnet den Zeitplan
+ * für einen weiteren Probelauf.
+ *
+ * ORGA statt ADMIN: Der Leitstand ist ab ORGA erreichbar, und der Reset ist
+ * die einzige Möglichkeit, zwischen zwei Probeläufen wieder bei null zu
+ * starten. Mit ADMIN-Pflicht stünde die Generalprobe still, sobald kein Admin
+ * am Gerät ist. Gegen Datenverlust schützt weiterhin die HOT-Sperre unten —
+ * im produktiven Gameday ist der Reset komplett gesperrt.
+ */
 export async function POST() {
-  const { error: authError } = await requireRole("ADMIN");
+  const { error: authError } = await requireRole("ORGA");
   if (authError) return authError;
 
   try {
@@ -56,23 +65,28 @@ export async function POST() {
         }
       }
 
-      // Slot-Status des aktiven Zeitplans zurücksetzen (AKTIV/ABGESCHLOSSEN →
-      // GEPLANT), damit ein zweiter Probelauf ohne Zeitplan-Neuaufbau möglich
-      // ist. Einsatzplan-Zuweisungen (schiedsrichterId) bleiben unangetastet.
-      const aktiverPlan = await tx.zeitplanConfig.findFirst({
-        where: { istAktiv: true },
-        select: { id: true },
+      // Slot-Status zurücksetzen (AKTIV/ABGESCHLOSSEN → GEPLANT), damit ein
+      // zweiter Probelauf ohne Zeitplan-Neuaufbau möglich ist. Einsatzplan-
+      // Zuweisungen (schiedsrichterId, Personen) bleiben unangetastet.
+      //
+      // Bewusst OHNE Filter auf den aktiven Zeitplan: Die Schiedsrichter-
+      // Endpoints lösen den Plan über getCurrentZeitplanConfig() auf, das auf
+      // den zuletzt erstellten Plan zurückfällt, wenn keiner istAktiv gesetzt
+      // hat. Ein Filter auf istAktiv würde also genau die Slots stehen lassen,
+      // an denen die Schiedsrichter gerade gearbeitet haben. Der Reset läuft
+      // ohnehin nur ausserhalb des HOT-Modus.
+      const slotsResult = await tx.zeitplanSlot.updateMany({
+        where: { status: { not: "GEPLANT" } },
+        data: { status: "GEPLANT" },
       });
-      let resetSlots = 0;
-      if (aktiverPlan) {
-        const slotsResult = await tx.zeitplanSlot.updateMany({
-          where: { configId: aktiverPlan.id, status: { not: "GEPLANT" } },
-          data: { status: "GEPLANT" },
-        });
-        resetSlots = slotsResult.count;
-      }
 
-      return { deletedHistory, deletedErgebnisse, resetSlots };
+      return { deletedHistory, deletedErgebnisse, resetSlots: slotsResult.count };
+    }, {
+      // Grosszügiger als die 5 s Standard: Der Reset schreibt viele Zeilen und
+      // konkurriert mit laufenden Ergebnis-Transaktionen der Schiedsrichter.
+      // Ein Timeout hier käme beim Schiedsrichter als "keine Verbindung" an.
+      timeout: 20_000,
+      maxWait: 10_000,
     });
 
     return NextResponse.json({

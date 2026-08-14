@@ -34,14 +34,23 @@ export async function updateGameRaenge(
     wertungslogik,
   );
 
-  await Promise.all(
-    raenge.map((rang) =>
-      db.ergebnis.update({
-        where: { id: rang.ergebnisId },
-        data: { rangImGame: rang.rangImGame, rangPunkte: rang.rangPunkte },
-      })
-    )
-  );
+  // Sequenziell und in stabiler Reihenfolge (nach ergebnisId), nicht per
+  // Promise.all in Rang-Reihenfolge.
+  //
+  // Zwei Gründe: (1) parallele Writes auf der einen Connection einer
+  // interaktiven Transaktion sind ein dokumentiertes Prisma-Anti-Pattern —
+  // genau wie in berechneGamePunkteNeu unten. (2) Die Rang-Reihenfolge
+  // unterscheidet sich zwischen gleichzeitigen Transaktionen; zwei
+  // Schiedsrichter, die dasselbe Game gleichzeitig speichern, würden dieselben
+  // Zeilen in unterschiedlicher Reihenfolge sperren und könnten sich
+  // verklemmen. Eine feste Sortierung nimmt die Sperren immer gleich auf.
+  const sortiert = [...raenge].sort((a, b) => a.ergebnisId.localeCompare(b.ergebnisId));
+  for (const rang of sortiert) {
+    await db.ergebnis.update({
+      where: { id: rang.ergebnisId },
+      data: { rangImGame: rang.rangImGame, rangPunkte: rang.rangPunkte },
+    });
+  }
 }
 
 /**

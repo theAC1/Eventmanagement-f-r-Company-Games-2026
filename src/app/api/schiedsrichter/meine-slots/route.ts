@@ -31,10 +31,16 @@ export async function GET() {
         teams: {
           include: { team: { select: { id: true, name: true, nummer: true, farbe: true } } },
         },
-        // Laufende Ergebnisse mitliefern, damit ein AKTIV-Slot direkt in die
-        // Live-Erfassung springen kann (ergebnisIds gehen sonst verloren)
+        // Ergebnisse eines noch offenen Slots mitliefern, damit die
+        // Live-Erfassung sie wiederfindet.
+        //
+        // Bewusst nicht nur LAUFEND: Sobald der Schiedsrichter gespeichert
+        // hat, steht das Ergebnis auf EINGETRAGEN/KORRIGIERT, während der Slot
+        // weiter AKTIV ist. Mit dem alten Filter kam der Slot dann ohne
+        // ergebnisIds zurück, die Live-Seite lud nichts mehr und der
+        // Schiedsrichter landete auf einem leeren Bildschirm ohne Rückweg.
         ergebnisse: {
-          where: { status: "LAUFEND" },
+          where: { status: { in: ["LAUFEND", "EINGETRAGEN", "KORRIGIERT"] } },
           select: { id: true },
         },
       },

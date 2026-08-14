@@ -123,7 +123,11 @@ export default function LivePage() {
   // Offline-Warteschlange beobachten (nur Anzeige der Queue-Pille)
   useEffect(() => {
     initOfflineQueue();
-    return subscribeQueue((queue) => setPendingCount(queue.length));
+    // Endgültig abgelehnte Einträge zählen nicht als "wartet auf Übermittlung"
+    // — sie werden nicht mehr gesendet (siehe referee/page.tsx für die Anzeige).
+    return subscribeQueue((queue) =>
+      setPendingCount(queue.filter((e) => !e.abgelehnt).length),
+    );
   }, []);
 
   // Load game + ergebnisse
