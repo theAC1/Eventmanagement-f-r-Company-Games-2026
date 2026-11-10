@@ -1,0 +1,915 @@
+{
+    "games": [
+        {
+            "typ": "NEU",
+            "name": "Cornhole",
+            "slug": "cornhole",
+            "modus": "DUELL",
+            "regeln": "## Setup\n- Wurfdistanz **6 Meter** (bewusste Abweichung vom klassischen 8-m-Cornhole)\n- **Ein Brett pro Station**, 6 Stationen — 6 Teams können gleichzeitig spielen\n\n## Spielmodus\n- Versus-Format: Team A gegen Team B, mindestens 5 Spieler pro Team\n- Eine **Kleinbegegnung** = 1 Spieler Team A gegen 1 Spieler Team B an einem Brett\n- Pro Kleinbegegnung wirft **jeder Spieler 12 Säcke** (4 Säcke × 3 Wurfrunden), Maximum 36 Punkte\n- Wer beginnt, machen die beiden Spieler unter sich aus\n- Nach einer Kleinbegegnung sucht sich der Spieler einen neuen Gegner aus dem anderen Team\n- Gesamtspielzeit pro Slot: **10 Minuten** (nicht auf Zielpunktzahl gespielt)\n\n## Punkte pro Wurf\n- Sack **im Loch** = 3 Punkte\n- Sack **berührt das Brett** = 1 Punkt — gilt auch für Seitenflächen und indirekte Würfe\n  (über den Boden aufs Brett gesprungen/gerollt)\n- Nur **Beine/Stützen** berührt = 0 Punkte (Beine gehören nicht zum Brett)\n\n## Erfassung (kein Cancellation Scoring)\n- Pro Kleinbegegnung werden **beide Rohpunktzahlen** eingetragen (z. B. 16 : 13)\n- Gleichstand: Stechen über **+4 Würfe** pro Spieler\n- Laufende Kleinbegegnung bei Zeitablauf: Schiedsrichter entscheidet nach Ermessen\n  (Zeitplantreue, Fortschritt der Runde), ob fertiggespielt wird\n\n## Wertung\nScore aus Siegquote und Punkte-Mittelwert über alle Kleinbegegnungen.\nDie Gewichtung legt die Orga im Leitstand fest.\n\n## Offen\n- Verfahren, wenn auch das Stechen unentschieden endet.\n  **Vorläufig implementiert:** Unentschieden zählt als halber Sieg für beide.",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 2,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "punkte",
+            "helferAnzahl": 0,
+            "teamsProSlot": 2,
+            "wertungslogik": {
+                "typ": "duell_kleinbegegnungen",
+                "einheit": "Punkte",
+                "richtung": "hoechster_gewinnt",
+                "gewichtungG": 40
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 20,
+            "flaecheLaengeM": 10,
+            "kurzbeschreibung": "Wurfsäcke auf schräge Bretter, 6 m Distanz, ein Brett pro Station. Kleinbegegnungen 1 gegen 1, je 12 Säcke pro Spieler.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": null,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "RETURNEE",
+            "name": "Human Soccer",
+            "slug": "human-soccer",
+            "modus": "DUELL",
+            "regeln": "## Regeln\n- Spieler auf fixen Reihen (Stangen/Bänder), nur seitliche Bewegung\n- Ball: weich (Schaumstoff)\n- Kein Hands, kein Halten, kein Treten über Hüfthöhe\n- Spielerzahl abhängig vom gemieteten Modell\n\n## Wertung\n**Wie beim Fussball:** Die Torpunkte werden eingetragen. Mehr Tore nach 10 min gewinnt.\nUnentschieden ist möglich und führt zu geteilten Rängen.",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 2,
+            "playtimeMin": 10,
+            "stromNoetig": true,
+            "wertungstyp": "tore",
+            "helferAnzahl": 0,
+            "teamsProSlot": 2,
+            "wertungslogik": {
+                "typ": "punkte_duell",
+                "einheit": "Tore",
+                "richtung": "hoechster_gewinnt",
+                "eingabefelder": [
+                    {
+                        "typ": "number",
+                        "name": "tore_team_a",
+                        "label": "Tore Team A"
+                    },
+                    {
+                        "typ": "number",
+                        "name": "tore_team_b",
+                        "label": "Tore Team B"
+                    }
+                ]
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 12,
+            "flaecheLaengeM": 20,
+            "kurzbeschreibung": "Tischkicker in Lebensgrösse. Spieler auf festen Reihen, nur seitliche Bewegung. Aufblasbare Arena via Arena der Wunder.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": 5,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "NEU",
+            "name": "Kisten stapeln",
+            "slug": "kisten-stappeln",
+            "modus": "SOLO",
+            "regeln": "## Regeln\n- Ziel: so viele Kisten wie möglich aufeinander stapeln, Bauzeit **10 Minuten**\n- Ausrichtung der Kisten ist **frei** (längs oder quer)\n- **Keine Höhenmessung** — gezählt wird ausschliesslich die Anzahl Kisten\n- **Stützen ist erlaubt**, aber nicht am Boden abgestützt und **ohne Fremdhilfsmittel**\n- Der Turm muss **innerhalb des markierten Feldes** (ca. 5 m, Rasenspray) entstehen,\n  sonst keine Wertung\n- Kreativität ist ausdrücklich erwünscht (seitliches Abstützen mit Kisten,\n  Personen als Stütze, Huckepack)\n\n## Wertung\n**Anzahl Kisten = Punktzahl** (1:1, kein Maximum). Punktegleichstände sind in Kauf genommen.\n\n*Einordnung aus dem internen Test: 8 Kisten = mittel, 10 = gut, 11–12 = hervorragend.*\n\n## Offen\n- Genaue Formulierung der Boden-/Stützregel (vermutete Lesart: Stützkonstruktionen\n  dürfen nicht am Boden aufliegen; Personen und weitere Kisten dürfen stützen)\n- Zählzeitpunkt: im gestützten Zustand oder nach kurzem Freistehen?\n- Anzahl bereitgestellter Kisten pro Station",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 1,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "anzahl",
+            "helferAnzahl": 0,
+            "teamsProSlot": 1,
+            "wertungslogik": {
+                "typ": "max_value",
+                "einheit": "Kisten",
+                "messung": "anzahl_kisten",
+                "richtung": "hoechster_gewinnt",
+                "eingabefelder": [
+                    {
+                        "typ": "number",
+                        "name": "anzahl_kisten",
+                        "label": "Anzahl Kisten im Turm"
+                    }
+                ]
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 10,
+            "flaecheLaengeM": 10,
+            "kurzbeschreibung": "Kartonzügelkisten (ca. 50×30×40 cm) in 10 Minuten möglichst hoch stapeln. Anzahl Kisten = Punktzahl.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": null,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "NEU",
+            "name": "Lavabecken",
+            "slug": "lava-becken",
+            "modus": "SOLO",
+            "regeln": "## Setup\n- Austragung im **Unihockey-Feld** (vier Türen werden genutzt)\n- **5 Personen** pro Durchgang, **2 Gymnastik-/Yogamatten** als einziges Fortbewegungsmittel\n- Im Feld: ein **Unihockeyball** und ein **Unihockeystock**; Hindernisse im zweiten\n  Abschnitt (Hürden, Kasten)\n\n## Ablauf\n**Grundregel durchgehend:** Nur auf den Matten stehen, den **Boden nie berühren**.\nFortbewegung durch Weitergeben und Umlegen der Matten.\n\n1. **Abschnitt 1 — Torschuss:** Stock holen und ein Tor schiessen; bei Fehlschuss Ball\n   holen und erneut schiessen, bis das Tor fällt\n2. **Zwischenphase:** Am gegenüberliegenden Feldende kurz aus dem Feld,\n   **Spielerwechsel möglich**, danach Wiedereinstieg\n3. **Abschnitt 2 — Hindernisse:** Hürden und Kasten über-/durchqueren,\n   Lavabecken bis zum Ende durchschreiten\n\n## Strafen\n- **Bodenberührung** → das Team erhält einen **Gegenstand, den es fortan mittragen muss**\n- Strafgegenstände sind **eskalierend** (jede weitere Strafe = ein zusätzlicher,\n  grösserer/schwererer Gegenstand: Kisten, Bänke)\n- Alle Gegenstände müssen **bis zum Schluss** mitgetragen werden\n- Keine Zeitstrafen — die Verlangsamung durch die Gegenstände ist die Strafe\n\n## Wertung\n- **Die Zeit entscheidet**, schnellstes Team gewinnt; maximale Spielzeit **10 Minuten**\n- Nach 10 Minuten nicht fertig → **10:00 wird eingetragen** (schlechteste Rangpunkte)\n\n*Gimmick: Kartonflügel für die Schiedsrichter — sie dürfen als «Hermes» durchs Lavabecken laufen.*",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 1,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "zeit",
+            "helferAnzahl": 0,
+            "teamsProSlot": 1,
+            "wertungslogik": {
+                "typ": "zeit",
+                "einheit": "Sekunden",
+                "richtung": "niedrigster_gewinnt",
+                "maxSekunden": 600
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 17,
+            "flaecheLaengeM": 36,
+            "kurzbeschreibung": "Floor-is-Lava im Unihockey-Feld: 5 Personen, 2 Yogamatten, Torschuss und Hindernisse. Schnellste Zeit gewinnt, Maximum 10:00.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": null,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "NEU",
+            "name": "Menschenkugelbahn",
+            "slug": "menschenkugelbahn",
+            "modus": "SOLO",
+            "regeln": "## Regeln\n- **Parcours, der auf Zeit gerechnet wird**\n\n## Offen\n- Zeitlimit und Umgang mit Nichtabschluss sind nicht festgelegt.\n  **Vorläufig implementiert:** analog Schwebendes Labyrinth und Lavabecken —\n  Maximalzeit 10:00 wird bei Nichtabschluss eingetragen.",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 1,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "zeit",
+            "helferAnzahl": 0,
+            "teamsProSlot": 1,
+            "wertungslogik": {
+                "typ": "zeit",
+                "einheit": "Sekunden",
+                "richtung": "niedrigster_gewinnt",
+                "maxSekunden": 600
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 34,
+            "flaecheLaengeM": 28,
+            "kurzbeschreibung": "Parcours, der auf Zeit gerechnet wird. Details folgen — Zeitlimit und Nichtabschluss-Regel noch offen.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": null,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "NEU",
+            "name": "ChaosQuadrant",
+            "slug": "quadrant-chaos",
+            "modus": "DUELL",
+            "regeln": "## Setup\n- Feld **30 × 15 m**, Mittellinie trennt zwei Quadranten à 15 × 15 m\n- **20 Bälle** zu Beginn mittig auf der Mittellinie, Teams starten an ihrer Grundlinie\n\n## Regeln\n- Auf Startsignal Bälle ins gegnerische Feld werfen\n- **Das gegnerische Feld darf nie betreten werden** (kein Übertritt über die Mittellinie)\n- Ball nur **mit den Händen** fangen und werfen; mehrere Bälle tragen und rennen erlaubt\n- **Kicken/Treten verboten** — auch ein Reflexkick ist ein Foul\n- Ball rollt **ausserhalb** des gegnerischen Feldes: **Strafpunkt**; das werfende Team\n  holt den Ball und darf erst wieder werfen, wenn der Spieler zurück im eigenen Feld ist\n- Ball in der Hand zählt zum Quadranten, in dem der Spieler steht\n- Gewertet wird, **wo der Ball liegen bleibt** — auch seitlich ausserhalb\n- Runde endet, wenn alle Bälle in einem Quadranten sind oder die Zeit abläuft\n- Doppelbestrafung ist gewollt: zu weit geworfene Bälle geben Strafpunkt **und**\n  liegen wieder im eigenen Feld\n\n## Rundenstruktur\n- **Fix 3 Runden** à **1:30 Minuten** pro Slot\n- Pro Runde und Team: Bälle im eigenen Quadranten + Strafpunkte, laufend erfasst\n- Punkte werden über alle Runden **addiert** — **wenigste Punkte gewinnen**\n\n## Schiedsrichter\n- **2 Quadranten-Schiedsrichter** (je einer pro Quadrant) erfassen Fouls **laufend**\n- **1 Haupt-Schiedsrichter** trägt die Punkte in der App ein\n\n## Offen\n- Bestätigung der 3/20-Faulpunkt-Regel. **Implementierte Lesart:** Bälle + Strafpunkte\n  werden schlicht addiert — ein Team, das leerräumt, aber 3 Fouls hat, bekommt damit\n  automatisch 3 Punkte statt 0.",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 2,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "punkte",
+            "helferAnzahl": 0,
+            "teamsProSlot": 2,
+            "wertungslogik": {
+                "typ": "runden_strafpunkte",
+                "runden": 3,
+                "einheit": "Punkte",
+                "richtung": "niedrigster_gewinnt"
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 15,
+            "flaecheLaengeM": 30,
+            "kurzbeschreibung": "Völkerball-Variante auf 30×15 m: Bälle ins gegnerische Feld werfen. 3 fixe Runden à 1:30 — das Team mit den wenigsten Punkten gewinnt.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": 5,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "NEU",
+            "name": "Robert Huber Radio",
+            "slug": "radio-runner",
+            "modus": "SOLO",
+            "regeln": "## Setup\n- Gesponserter **Mercedes-Van**, innen komplett abgedunkelt — Türme werden mit\n  Taschenlampen abgesucht\n- **3 Türme** aus Duplo-/Konstruktionsklötzen (einfach bis schwierig), mit Heissleim fixiert\n- Nachbaustation mit Tisch ausserhalb des Vans\n\n## Spielmodus\n- **2–3 Personen im Van** (Team teilt sich selbst ein), Kommunikation nur über **Funkgeräte**\n- Die übrigen Teammitglieder bauen am Tisch nach den Funkanweisungen nach\n- Spielzeit: **10 Minuten**, Solo-Team gegen die Uhr\n\n## Wertung (max. 19 Punkte)\nBewertung durch den Schiedsrichter anhand **vorbereiteter Referenzfotos** mit Sektionen:\n\n| Turm | Sektionen | Bonusklötze | 100 %-Bonus | Maximum |\n|---|---|---|---|---|\n| Turm 1 | 3 | 0 | 1 | 4 |\n| Turm 2 | 4 | 2 | 1 | 7 |\n| Turm 3 | 4 | 3 (farbig) | 1 | 8 |\n\n- Eine Sektion zählt nur, wenn sie **vollständig korrekt** gebaut ist (jeder Klotz stimmt)\n- Ein Bonusklotz zählt bei **richtigem Ort und richtig anliegend**;\n  bei Turm 3 muss zusätzlich die **Farbe** stimmen\n- Der 100 %-Bonus pro Turm wird von der App **automatisch** vergeben,\n  wenn alle Sektionen und Bonusklötze korrekt sind\n\n## Offen\n- Gewichtung nach Schwierigkeitsgrad (falls ja: nur minimal, ganze Punkte)",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 1,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "punkte",
+            "helferAnzahl": 0,
+            "teamsProSlot": 1,
+            "wertungslogik": {
+                "typ": "tuerme_punkte",
+                "tuerme": [
+                    {
+                        "name": "Turm 1",
+                        "bonus": 0,
+                        "sektionen": 3
+                    },
+                    {
+                        "name": "Turm 2",
+                        "bonus": 2,
+                        "sektionen": 4
+                    },
+                    {
+                        "name": "Turm 3",
+                        "bonus": 3,
+                        "sektionen": 4,
+                        "bonusLabel": "Farbklötze"
+                    }
+                ],
+                "einheit": "Punkte",
+                "richtung": "hoechster_gewinnt"
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 22,
+            "flaecheLaengeM": 17,
+            "kurzbeschreibung": "Abgedunkelter Mercedes-Van mit 3 Klotz-Türmen. 2–3 Personen beschreiben per Funk, der Rest baut an der Nachbaustation nach. Maximal 19 Punkte.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": null,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "NEU",
+            "name": "Schwebendes Labyrinth",
+            "slug": "schwebender-architekt",
+            "modus": "SOLO",
+            "regeln": "## Setup\n- **Murmel-Labyrinth mit Löchern** im Grossformat, an Seilen aufgehängt\n- Auf dem Brett sind **2 Checkpoints** markiert (Minimalziel für jedes Team)\n\n## Spielmodus\n- Die Gruppe hebt das Labyrinth an den Seilen vom Boden ab und navigiert die Murmel ins Ziel\n- Murmel fällt in ein Loch oder vom Brett → **von vorne** starten\n- **Mehrere Versuche** erlaubt, um die schnellste Zeit zu erreichen\n- **Alle Teammitglieder müssen mindestens einmal gespielt haben**\n  (5er-Team: min. 2 Versuche, 10er-Team: min. 3 Versuche)\n- Zeitfenster: **10 Minuten**\n\n## Wertung\n- Schiedsrichter stoppt die Zeit — **die schnellste Zeit des Teams zählt**\n- Nach 10 Minuten nicht fertig → **10:00 wird eingetragen**\n  (Checkpoints spielen für die Wertung keine Rolle)\n- Umrechnung in Rangpunkte erfolgt am Ende des Tages\n\n## Offen\n- Anzahl Seile am Labyrinth (bestimmt, wie viele Personen gleichzeitig spielen)",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 1,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "zeit",
+            "helferAnzahl": 1,
+            "teamsProSlot": 1,
+            "wertungslogik": {
+                "typ": "zeit",
+                "einheit": "Sekunden",
+                "richtung": "niedrigster_gewinnt",
+                "maxSekunden": 600
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 8,
+            "flaecheLaengeM": 8,
+            "kurzbeschreibung": "Grosses Murmel-Labyrinth an Seilen. Team navigiert die Murmel ins Ziel — schnellste Zeit zählt, Maximum 10:00.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": null,
+            "schiedsrichterAnzahl": 1
+        },
+        {
+            "typ": "RETURNEE",
+            "name": "Erussbacher Stack Attack",
+            "slug": "stack-attack",
+            "modus": "SOLO",
+            "regeln": "## Regeln\n- **Bierharassen werden gegeneinander gepresst** und als Reihe vom Boden abgehoben\n- Ziel: möglichst viele Harassen schaffen\n- Mehrere Versuche innerhalb der Spielzeit erlaubt, bester Versuch zählt\n- Aufräumen macht das Team selbst (in der Spielzeit eingerechnet)\n\n**Achtung:** Kisten stapeln und Stack Attack sind **zwei verschiedene Games**\n(Kartonzügelkisten vs. Bierharassen).\n\n## Wertung\n**Anzahl Harassen = Punktzahl** (analog Kisten stapeln).\n\n## Offen\n- Wertungslogik ist noch nicht explizit bestätigt (vermutlich analog Kisten stapeln)",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 1,
+            "playtimeMin": 10,
+            "stromNoetig": false,
+            "wertungstyp": "anzahl",
+            "helferAnzahl": 0,
+            "teamsProSlot": 1,
+            "wertungslogik": {
+                "typ": "max_value",
+                "einheit": "Harassen",
+                "messung": "anzahl_harassen",
+                "richtung": "hoechster_gewinnt",
+                "eingabefelder": [
+                    {
+                        "typ": "number",
+                        "name": "anzahl_harassen",
+                        "label": "Anzahl Harassen im Stack"
+                    }
+                ]
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 15,
+            "flaecheLaengeM": 35,
+            "kurzbeschreibung": "Das Team presst Erusbacher-Bierharassen zu einer möglichst langen Reihe zusammen und hebt sie vom Boden ab. Rekord 2025: 64 Harassen mit 6 Personen.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": 5,
+            "schiedsrichterAnzahl": 2
+        },
+        {
+            "typ": "NEU",
+            "name": "XXL Viergewinnt",
+            "slug": "xxl-viergewinnt",
+            "modus": "DUELL",
+            "regeln": "## Regeln\n- Vier gewinnt im Grossformat, Duell zwischen zwei Teams\n- **Kombiniert mit einer Staffette** — die Spielsteine müssen erlaufen werden;\n  Nichttreffer können Personen kosten\n- Strategie und sportliches Geschick zählen gleichermassen\n\n## Wertung\n- Der **Sieg zählt primär**, die **Zügezahl** der Siegpartien fliesst als Feinwertung ein\n  (eine Viererreihe in 10 Zügen ist besser als eine in 13)\n- Der Schiedsrichter trägt pro Team die gewonnenen Partien und die Summe der Züge\n  in den gewonnenen Partien ein\n\n## Offen\n- Die konkrete Verrechnungsformel Sieg ↔ Zügezahl ist nicht final entschieden.\n  **Vorläufig implementiert:** Sieg primär, Zügezahl als Tiebreaker — ein Verlierer\n  kann einen Sieger nie überholen (analog zur Cornhole-Logik).",
+            "status": "BEREIT",
+            "varianten": [
+            ],
+            "reserveMin": 2,
+            "durchgaenge": 2,
+            "playtimeMin": 10,
+            "stromNoetig": true,
+            "wertungstyp": "sieg_zuege",
+            "helferAnzahl": 0,
+            "teamsProSlot": 2,
+            "wertungslogik": {
+                "typ": "sieg_zuege",
+                "einheit": "Punkte",
+                "richtung": "hoechster_gewinnt",
+                "eingabefelder": [
+                    {
+                        "typ": "number",
+                        "name": "siege",
+                        "label": "Gewonnene Partien"
+                    },
+                    {
+                        "typ": "number",
+                        "name": "zuege",
+                        "label": "Züge in gewonnenen Partien (Summe)"
+                    }
+                ],
+                "gewichtungSieg": 100
+            },
+            "einfuehrungMin": 3,
+            "flaecheBreiteM": 11,
+            "flaecheLaengeM": 20,
+            "kurzbeschreibung": "Vier gewinnt im Grossformat, kombiniert mit einer Staffette — Strategie plus sportliches Geschick. Sieg zählt, weniger Züge sind besser.",
+            "zaehltZurWertung": true,
+            "teilnehmerProTeam": 5,
+            "schiedsrichterAnzahl": 2
+        }
+    ],
+    "teams": [
+        {
+            "name": "Integra",
+            "farbe": "#F18700",
+            "motto": "W r hab nMut z r Lü ke",
+            "nummer": 1,
+            "logoUrl": "https://meinplatz.ch/storage/app/uploads/public/66d/ab1/a21/66dab1a21e763326704271.png",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 10
+        },
+        {
+            "name": "Vlix GmbH",
+            "farbe": "#06F9D0",
+            "motto": "Vlix, alles für (d)ein Unternehmen!",
+            "nummer": 2,
+            "logoUrl": "https://www.vlix.ch/_next/image?url=%2Flogo.png&w=256&q=75",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 5
+        },
+        {
+            "name": "Gemeinderat Wohlen",
+            "farbe": "#BF0202",
+            "motto": "Wohlen – lebendig & mittendrin",
+            "nummer": 3,
+            "logoUrl": "https://www.wohlen.ch/dist/wohlen/2019/images/logo.b4bce2ae65443a949542.png",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 5
+        },
+        {
+            "name": "Einwohnerrat Wohlen",
+            "farbe": "#BF0202",
+            "motto": "Wohlen – lebendig & mittendrin",
+            "nummer": 4,
+            "logoUrl": "https://www.wohlen.ch/dist/wohlen/2019/images/logo.b4bce2ae65443a949542.png",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 6
+        },
+        {
+            "name": "Alesa AG",
+            "farbe": "#005096",
+            "motto": "... us de Schwiiz",
+            "nummer": 5,
+            "logoUrl": "https://www.alesa.ch/_assets/723aa3c07819c847b1c4fb344db7bc30/Images/logo.svg",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 5
+        },
+        {
+            "name": "Gemeinde Egliswil 1",
+            "farbe": "#0094CA",
+            "motto": "für Egliswil und die Region",
+            "nummer": 6,
+            "logoUrl": "https://www.egliswil.ch/public/upload/assets/29/logo-gemeinde-egliswil.svg",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 9
+        },
+        {
+            "name": "TV Wohlen",
+            "farbe": "#6b7280",
+            "motto": null,
+            "nummer": 7,
+            "logoUrl": null,
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 5
+        },
+        {
+            "name": "R. Brunner AG 1",
+            "farbe": "#CC071E",
+            "motto": "Ihr Projekt, unsere Stärken – massgefertigt und mit Herz",
+            "nummer": 8,
+            "logoUrl": "https://brunner-schreinerei.ch/wp-content/uploads/2025/02/brunner_logo_quer_rgb.svg",
+            "captainName": "Vanessa Rüegg",
+            "captainEmail": "v.ruegg@brunner-schreinerei.ch",
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 8
+        },
+        {
+            "name": "R. Brunner AG 2",
+            "farbe": "#CC071E",
+            "motto": "Ihr Projekt, unsere Stärken – massgefertigt und mit Herz",
+            "nummer": 9,
+            "logoUrl": "https://brunner-schreinerei.ch/wp-content/uploads/2025/02/brunner_logo_quer_rgb.svg",
+            "captainName": "Ricardo Russo",
+            "captainEmail": "r.russo@brunner-schreinerei.ch",
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 8
+        },
+        {
+            "name": "HOFSTETTER Notariat + Advokatur",
+            "farbe": "#03447B",
+            "motto": "engagiert, kompetent, effizient",
+            "nummer": 10,
+            "logoUrl": "https://www.notariat-hofstetter.ch/images/logo3.png",
+            "captainName": "Raphael Hofstetter",
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 8
+        },
+        {
+            "name": "Aargauische Kantonalbank",
+            "farbe": "#009EE0",
+            "motto": "Die AKB macht den Unterschied",
+            "nummer": 11,
+            "logoUrl": "https://www.akb.ch/o/akb-portal-theme/images/akb_logo.svg",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 10
+        },
+        {
+            "name": "Die Aargauische Gebäudeversicherung",
+            "farbe": "#285FC3",
+            "motto": "Gut versichert, rundum geschützt.",
+            "nummer": 12,
+            "logoUrl": "https://die-agv.ch/static/images/logo-agv.svg",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 7
+        },
+        {
+            "name": "Oerlikon Metco AG",
+            "farbe": "#EB0000",
+            "motto": "Führender Anbieter von Oberflächenlösungen mit globaler Präsenz",
+            "nummer": 13,
+            "logoUrl": "https://www.oerlikon.com/ecoma/files/oerlikon_metco.svg",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 8
+        },
+        {
+            "name": "Gemeindeverwaltung Wohlen",
+            "farbe": "#BF0202",
+            "motto": "Wohlen – lebendig & mittendrin",
+            "nummer": 14,
+            "logoUrl": "https://www.wohlen.ch/dist/wohlen/2019/images/logo.b4bce2ae65443a949542.png",
+            "captainName": null,
+            "captainEmail": null,
+            "teilnehmerNamen": null,
+            "teilnehmerAnzahl": 7
+        }
+    ],
+    "quelle": "company-games-2026 (Homelab-Postgres)",
+    "material": [
+        {
+            "name": "Cornhole-Bretter (Kauf)",
+            "menge": "2 Stk.",
+            "status": "GELIEFERT",
+            "sponsor": null,
+            "gameSlug": "cornhole",
+            "kategorie": "KAUF",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": 80
+        },
+        {
+            "name": "Cornhole-Bretter (Miete)",
+            "menge": "4 Stk.",
+            "status": "GELIEFERT",
+            "sponsor": null,
+            "gameSlug": "cornhole",
+            "kategorie": "MIETE",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Wurfsaecke",
+            "menge": "24 Stk.",
+            "status": "GELIEFERT",
+            "sponsor": null,
+            "gameSlug": "cornhole",
+            "kategorie": "MIETE",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Zelt",
+            "menge": "1",
+            "status": "GELIEFERT",
+            "sponsor": "AKB",
+            "gameSlug": "cornhole",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Ball (weich)",
+            "menge": "2",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "human-soccer",
+            "kategorie": "KAUF",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Human Soccer Arena (aufblasbar)",
+            "menge": "1",
+            "status": "BESTAETIGT",
+            "sponsor": "Arena der Wunder",
+            "gameSlug": "human-soccer",
+            "kategorie": "MIETE",
+            "beschreibung": "Abholung durch Juan am Freitag\nRückgabe durch Juan am Montag",
+            "kostenEffektiv": 780,
+            "kostenGeschaetzt": 780
+        },
+        {
+            "name": "Zelt",
+            "menge": "1",
+            "status": "GELIEFERT",
+            "sponsor": "AKB",
+            "gameSlug": "human-soccer",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Hüetli",
+            "menge": "10",
+            "status": "GELIEFERT",
+            "sponsor": null,
+            "gameSlug": "kisten-stappeln",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Kartonschachteln (Zuegelkarton)",
+            "menge": "30",
+            "status": "GELIEFERT",
+            "sponsor": null,
+            "gameSlug": "kisten-stappeln",
+            "kategorie": "KAUF",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": 150
+        },
+        {
+            "name": "Zelt",
+            "menge": "1",
+            "status": "VORHANDEN",
+            "sponsor": "AKB",
+            "gameSlug": "kisten-stappeln",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Hochsprunglatte",
+            "menge": "2",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": "Strafobjekte",
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Kipp-Hürde",
+            "menge": "2",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": "Strafobjekte",
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Kugel 7Kg",
+            "menge": "2",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": "Strafobjekte",
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Sportkasten",
+            "menge": "4",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": "Störobjekte",
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Trainingshürden",
+            "menge": "4",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": "Störobjekte",
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "UTZ-Kiste gross",
+            "menge": "4",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": "Strafobjekte",
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Unihockey Material",
+            "menge": "1",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": "Störobjekt",
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Yogamätteli",
+            "menge": "4 Stk.",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "lava-becken",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Holzmurmeln",
+            "menge": "2-4",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "menschenkugelbahn",
+            "kategorie": "KAUF",
+            "beschreibung": null,
+            "kostenEffektiv": 10,
+            "kostenGeschaetzt": 10
+        },
+        {
+            "name": "PVC Rohre",
+            "menge": "5",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "menschenkugelbahn",
+            "kategorie": "KAUF",
+            "beschreibung": null,
+            "kostenEffektiv": 20,
+            "kostenGeschaetzt": 20
+        },
+        {
+            "name": "Markierungsmaterial",
+            "menge": "Set",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "quadrant-chaos",
+            "kategorie": "KAUF",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "XXL-Aufblasbaelle",
+            "menge": "4-6 Stk.",
+            "status": "BESTAETIGT",
+            "sponsor": null,
+            "gameSlug": "quadrant-chaos",
+            "kategorie": "KAUF",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Zelt",
+            "menge": "1",
+            "status": "VORHANDEN",
+            "sponsor": "AKB",
+            "gameSlug": "quadrant-chaos",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Bild-Vorlagen (3 Stufen)",
+            "menge": "3 Stk.",
+            "status": "OFFEN",
+            "sponsor": null,
+            "gameSlug": "radio-runner",
+            "kategorie": "EIGENBAU",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Kapla-Steine",
+            "menge": "100",
+            "status": "GELIEFERT",
+            "sponsor": null,
+            "gameSlug": "radio-runner",
+            "kategorie": "MIETE",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": 0
+        },
+        {
+            "name": "Sprinter-Van",
+            "menge": "1",
+            "status": "BESTAETIGT",
+            "sponsor": null,
+            "gameSlug": "radio-runner",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Walkie-Talkies",
+            "menge": "2-6",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "radio-runner",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Seil-Platte-Konstruktion",
+            "menge": "1",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": "schwebender-architekt",
+            "kategorie": "EIGENBAU",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": 150
+        },
+        {
+            "name": "Zelt",
+            "menge": "1",
+            "status": "VORHANDEN",
+            "sponsor": "AKB",
+            "gameSlug": "schwebender-architekt",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Erusbacher Harassen",
+            "menge": "100 + 50 Reserve",
+            "status": "ANGEFRAGT",
+            "sponsor": "Erusbacher Bier",
+            "gameSlug": "stack-attack",
+            "kategorie": "SPONSOR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Zelt",
+            "menge": "1",
+            "status": "GELIEFERT",
+            "sponsor": "AKB",
+            "gameSlug": "stack-attack",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Vier Gewinnt Basketball",
+            "menge": "1",
+            "status": "BESTAETIGT",
+            "sponsor": null,
+            "gameSlug": "xxl-viergewinnt",
+            "kategorie": "MIETE",
+            "beschreibung": null,
+            "kostenEffektiv": 420,
+            "kostenGeschaetzt": 450
+        },
+        {
+            "name": "Zelt",
+            "menge": "1",
+            "status": "VORHANDEN",
+            "sponsor": "AKB",
+            "gameSlug": "xxl-viergewinnt",
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Absperrband",
+            "menge": "1 Rolle",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": null,
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Leiter 2m/3m",
+            "menge": "1",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": null,
+            "kategorie": "INFRASTRUKTUR",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": null
+        },
+        {
+            "name": "Markierungen Spray",
+            "menge": "5",
+            "status": "VORHANDEN",
+            "sponsor": null,
+            "gameSlug": null,
+            "kategorie": "VERBRAUCH",
+            "beschreibung": null,
+            "kostenEffektiv": null,
+            "kostenGeschaetzt": 0
+        }
+    ],
+    "exportedAt": "2026-08-18T05:53:52Z",
+    "schemaVersion": 2
+}
