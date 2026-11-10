@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:seed": "node prisma/seed.mjs",
     "db:seed:clean": "node prisma/seed-clean.mjs",
+    "db:import:games": "node prisma/import-games.mjs",
     "test": "vitest run"
   },
   "dependencies": {
