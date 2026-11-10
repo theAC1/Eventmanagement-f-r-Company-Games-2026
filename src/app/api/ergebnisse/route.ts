@@ -8,6 +8,9 @@ import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
 // GET /api/ergebnisse
 export async function GET(request: NextRequest) {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(request.url);
     const activity = searchParams.get("activity") === "true";

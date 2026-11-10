@@ -5,6 +5,9 @@ import { MaterialCreateSchema, zodValidationError } from "@/lib/schemas";
 
 // GET /api/materials – Alle Material-Items mit Game + Verantwortlicher
 export async function GET(request: NextRequest) {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(request.url);
     const gameId = searchParams.get("gameId");

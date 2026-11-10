@@ -39,26 +39,15 @@ export default function TeamPortalPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // QR-Token verifizieren und Team laden
-    fetch("/api/qr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ qrToken: token }),
-    })
+    fetch(`/api/team/${token}`)
       .then((r) => {
         if (!r.ok) throw new Error("Ungültiger QR-Code");
         return r.json();
       })
       .then((data) => {
-        setTeam({ id: data.teamId, name: data.teamName, nummer: data.teamNummer });
-        return Promise.all([
-          fetch(`/api/ergebnisse?teamId=${data.teamId}`).then((r) => r.json()),
-          fetch("/api/rangliste").then((r) => r.json()),
-        ]);
-      })
-      .then(([erg, rang]) => {
-        setErgebnisse(erg);
-        setRangliste(rang.rangliste ?? []);
+        setTeam(data.team);
+        setErgebnisse(data.ergebnisse ?? []);
+        setRangliste(data.rangliste ?? []);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -68,16 +57,13 @@ export default function TeamPortalPage() {
   useEffect(() => {
     if (!team) return;
     const interval = setInterval(() => {
-      Promise.all([
-        fetch(`/api/ergebnisse?teamId=${team.id}`).then((r) => r.json()),
-        fetch("/api/rangliste").then((r) => r.json()),
-      ]).then(([erg, rang]) => {
-        setErgebnisse(erg);
-        setRangliste(rang.rangliste ?? []);
+      fetch(`/api/team/${token}`).then((r) => r.json()).then((data) => {
+        setErgebnisse(data.ergebnisse ?? []);
+        setRangliste(data.rangliste ?? []);
       });
     }, 15000);
     return () => clearInterval(interval);
-  }, [team]);
+  }, [team, token]);
 
   if (loading) {
     return (

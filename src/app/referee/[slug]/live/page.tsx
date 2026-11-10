@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -139,12 +139,12 @@ function Stopwatch({
   const startRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  const tick = useCallback(() => {
+  function tick() {
     if (startRef.current !== null) {
-      setTime(Math.floor((Date.now() - startRef.current) / 1000));
+      setTime(Math.floor((new Date().getTime() - startRef.current) / 1000));
       rafRef.current = requestAnimationFrame(tick);
     }
-  }, []);
+  }
 
   const toggleTimer = () => {
     if (running) {
@@ -317,13 +317,14 @@ export default function LivePage() {
     if (!game?.wertungslogik) return false;
     const wl = game.wertungslogik;
 
-    for (const e of ergebnisse) {
+    for (const [idx, e] of ergebnisse.entries()) {
       const rd = rohdatenMap[e.id] ?? {};
 
       switch (wl.typ) {
         case "punkte_duell": {
           const felder = wl.eingabefelder ?? [];
-          if (felder.length > 0 && rd[felder[0].name] === undefined) return false;
+          const field = felder[Math.min(idx, Math.max(0, felder.length - 1))];
+          if (!field || rd[field.name] === undefined) return false;
           break;
         }
         case "zeit": {

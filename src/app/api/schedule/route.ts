@@ -4,6 +4,9 @@ import { requireRole } from "@/lib/auth-helpers";
 
 // GET /api/schedule – Alle gespeicherten Zeitpläne
 export async function GET() {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const configs = await prisma.zeitplanConfig.findMany({
       include: {

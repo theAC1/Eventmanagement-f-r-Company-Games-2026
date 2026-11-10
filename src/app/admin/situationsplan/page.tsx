@@ -412,12 +412,12 @@ export default function SituationsplanPage() {
                     const v = e.target.value;
                     setPlan(prev => prev ? { ...prev, gamePositionen: prev.gamePositionen.map(p => p.id === selGame.id ? { ...p, nummer: v } : p) } : prev);
                   }}
-                  onBlur={() => updateGamePos(selGame.id, { nummer: selGame.nummer } as any)}
+                  onBlur={() => updateGamePos(selGame.id, { nummer: selGame.nummer })}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-center font-mono" />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500">Sichtbarkeit:</span>
-                <button onClick={() => updateGamePos(selGame.id, { oeffentlich: !selGame.oeffentlich } as any)}
+                <button onClick={() => updateGamePos(selGame.id, { oeffentlich: !selGame.oeffentlich })}
                   className={`px-2 py-0.5 rounded border transition ${selGame.oeffentlich ? "border-emerald-700 text-emerald-300" : "border-zinc-700 text-zinc-500"}`}>
                   {selGame.oeffentlich ? "Öffentlich" : "OKW"}
                 </button>

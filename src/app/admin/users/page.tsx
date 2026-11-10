@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type User = {
   id: string;
@@ -35,17 +35,20 @@ export default function UsersPage() {
   const [password, setPassword] = useState("");
   const [rolle, setRolle] = useState<string>("ORGA");
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  async function loadUsers() {
+  const loadUsers = useCallback(async () => {
     const res = await fetch("/api/users");
     if (res.ok) {
       setUsers(await res.json());
     }
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadUsers();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadUsers]);
 
   function resetForm() {
     setName("");

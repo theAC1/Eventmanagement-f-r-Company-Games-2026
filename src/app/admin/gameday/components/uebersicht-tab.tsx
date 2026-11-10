@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type RanglisteEntry = {
@@ -46,6 +47,7 @@ export function UebersichtTab({
   fetchError,
   onRetry,
 }: UebersichtTabProps) {
+  const [now, setNow] = useState(() => Date.now());
   const totalGames = games.length;
   const totalTeams = rangliste.length;
   const totalSlots = totalGames * totalTeams;
@@ -73,6 +75,11 @@ export function UebersichtTab({
 
   // Live-Partien (LAUFEND)
   const laufendePartien = ergebnisse.filter((e) => e.status === "LAUFEND");
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -181,7 +188,7 @@ export function UebersichtTab({
                 : null;
               const minutenSeit = startedAt
                 ? Math.round(
-                    (Date.now() - startedAt.getTime()) / 60000,
+                    (now - startedAt.getTime()) / 60000,
                   )
                 : null;
 

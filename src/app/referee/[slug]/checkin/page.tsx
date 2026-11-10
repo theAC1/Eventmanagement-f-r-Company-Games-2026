@@ -6,6 +6,10 @@ import Link from "next/link";
 
 type Game = { id: string; name: string; slug: string; modus: string; teamsProSlot: number };
 type CheckedInTeam = { teamId: string; teamName: string; teamNummer: number; teamFarbe: string };
+type BarcodeDetectorShape = {
+  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
+};
+type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorShape;
 
 export default function CheckinPage() {
   const params = useParams();
@@ -114,8 +118,11 @@ export default function CheckinPage() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
-        if ("BarcodeDetector" in window) {
-          const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+        const BarcodeDetector = (window as Window & {
+          BarcodeDetector?: BarcodeDetectorConstructor;
+        }).BarcodeDetector;
+        if (BarcodeDetector) {
+          const detector = new BarcodeDetector({ formats: ["qr_code"] });
           const scanLoop = async () => {
             if (!scanningRef.current || !videoRef.current) return;
             try {

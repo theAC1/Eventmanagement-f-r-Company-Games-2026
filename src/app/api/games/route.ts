@@ -5,6 +5,9 @@ import { GameCreateSchema, zodValidationError } from "@/lib/schemas";
 
 // GET /api/games
 export async function GET() {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const games = await prisma.game.findMany({
       include: {

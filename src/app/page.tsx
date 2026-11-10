@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <div
@@ -24,15 +26,15 @@ export default function Home() {
           Event Management System
         </p>
         <div className="flex gap-4 justify-center text-sm pt-2">
-          <a href="/admin" className="px-5 py-2.5 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition">
+          <Link href="/admin" className="px-5 py-2.5 bg-white text-black rounded-lg font-medium hover:bg-zinc-200 transition">
             Admin
-          </a>
-          <a href="/referee" className="px-5 py-2.5 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
+          </Link>
+          <Link href="/referee" className="px-5 py-2.5 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
             Schiedsrichter
-          </a>
-          <a href="/scoreboard" className="px-5 py-2.5 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
+          </Link>
+          <Link href="/scoreboard" className="px-5 py-2.5 border border-white/30 rounded-lg hover:border-white/60 hover:bg-white/10 transition backdrop-blur-sm">
             Scoreboard
-          </a>
+          </Link>
         </div>
       </div>
     </div>

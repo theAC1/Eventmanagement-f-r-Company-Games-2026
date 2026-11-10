@@ -2,9 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateUniqueCheckinCode } from "@/lib/checkin-code";
 import { requireRole, getCurrentUserId } from "@/lib/auth-helpers";
+import { hasMinRole } from "@/lib/roles";
 import { TeamCreateSchema, zodValidationError } from "@/lib/schemas";
 
-const TEAM_PUBLIC_SELECT = {
+const TEAM_REFEREE_SELECT = {
+  id: true,
+  name: true,
+  nummer: true,
+  farbe: true,
+  logoUrl: true,
+  motto: true,
+} as const;
+
+const TEAM_ORGA_SELECT = {
   id: true,
   name: true,
   nummer: true,
@@ -15,15 +25,24 @@ const TEAM_PUBLIC_SELECT = {
   motto: true,
   teilnehmerAnzahl: true,
   teilnehmerNamen: true,
+  qrToken: true,
+  checkinCode: true,
   createdAt: true,
   updatedAt: true,
 } as const;
 
 // GET /api/teams
 export async function GET() {
+  const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
+    const select = hasMinRole(session?.user?.rolle ?? "", "ORGA")
+      ? TEAM_ORGA_SELECT
+      : TEAM_REFEREE_SELECT;
+
     const teams = await prisma.team.findMany({
-      select: TEAM_PUBLIC_SELECT,
+      select,
       orderBy: { nummer: "asc" },
     });
     return NextResponse.json(teams);

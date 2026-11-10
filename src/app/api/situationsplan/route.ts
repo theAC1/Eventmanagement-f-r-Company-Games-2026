@@ -15,6 +15,9 @@ const GAME_INCLUDE = {
 
 // GET /api/situationsplan
 export async function GET() {
+  const { error: authError } = await requireRole("ORGA");
+  if (authError) return authError;
+
   try {
     let plan = await prisma.situationsplan.findFirst({
       where: { istAktiv: true },

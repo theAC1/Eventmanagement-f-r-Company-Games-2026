@@ -13,6 +13,7 @@ type ZeitplanConfig = {
 };
 
 type SlotData = {
+  id?: string;
   runde: number;
   startZeit: string;
   endZeit: string;
@@ -128,26 +129,11 @@ export default function RefereePage() {
       if (!slotsRes.ok) throw new Error("Zeitplan-Slots laden fehlgeschlagen");
       const scheduleData: ScheduleResponse = await slotsRes.json();
 
-      // 3. We need the slot IDs + status — enrich from raw API
-      // The schedule API returns gameName but not gameSlug or slotId, let's also fetch games for slugs
-      const gamesRes = await fetch("/api/games");
-      const games: Game[] = gamesRes.ok ? await gamesRes.json() : [];
-      const gameSlugMap = new Map(games.map((g) => [g.id, g.slug]));
-
-      // Fetch raw slots with IDs from the schedule endpoint
-      // The schedule API already includes slot data but not the slot IDs themselves
-      // We need to get the raw config with slot IDs
-      const rawRes = await fetch(`/api/schedule/${activeConfig.id}`);
-      const rawData = await rawRes.json();
-
-      // Build enriched slots — the API response has slots array
-      // But we need actual DB slot IDs. Let's use the raw prisma response.
-      // Since /api/schedule/[id] returns transformed data without slot IDs,
-      // we'll work with what we have and add gameSlug
-      const enrichedSlots: SlotData[] = (rawData.slots as SlotData[]).map((s: SlotData, idx: number) => ({
+      // 3. Slot IDs/status come directly from the schedule API now.
+      const enrichedSlots: SlotData[] = scheduleData.slots.map((s: SlotData) => ({
         ...s,
-        gameSlug: gameSlugMap.get(s.gameId) ?? s.gameId,
-        slotId: (rawData as { _rawSlotIds?: string[] })._rawSlotIds?.[idx] ?? undefined,
+        gameSlug: s.gameSlug ?? s.gameId,
+        slotId: s.slotId ?? s.id,
       }));
 
       // 4. Group by startZeit (time blocks)

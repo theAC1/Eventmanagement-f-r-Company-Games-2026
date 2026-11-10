@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-helpers";
+import { hasMinRole } from "@/lib/roles";
 import { ErgebnisUpdateSchema, zodValidationError } from "@/lib/schemas";
 import { berechneGamePunkteAusRohdaten, updateGameRaenge } from "@/lib/game-punkte";
 import type { Prisma } from "@prisma/client";
@@ -10,21 +11,30 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // GET /api/ergebnisse/:id
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const { error: authError, session } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   const { id } = await params;
   try {
+    const includeHistory = hasMinRole(session?.user?.rolle ?? "", "ORGA");
     const ergebnis = await prisma.ergebnis.findUnique({
       where: { id },
-      include: {
-        game: { select: { id: true, name: true, slug: true, wertungslogik: true } },
-        team: { select: { id: true, name: true, nummer: true } },
-        eingetragenVon: { select: { id: true, name: true } },
-        histories: {
-          orderBy: { geaendertUm: "desc" },
-          include: {
-            geaendertVon: { select: { id: true, name: true } },
+      include: includeHistory
+        ? {
+            game: { select: { id: true, name: true, slug: true, wertungslogik: true } },
+            team: { select: { id: true, name: true, nummer: true } },
+            eingetragenVon: { select: { id: true, name: true } },
+            histories: {
+              orderBy: { geaendertUm: "desc" },
+              include: {
+                geaendertVon: { select: { id: true, name: true } },
+              },
+            },
+          }
+        : {
+            game: { select: { id: true, name: true, slug: true, wertungslogik: true } },
+            team: { select: { id: true, name: true, nummer: true } },
           },
-        },
-      },
     });
 
     if (!ergebnis) {

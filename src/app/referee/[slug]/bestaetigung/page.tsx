@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // ─── Types ───
@@ -40,6 +40,18 @@ type BestaetigungPayload = {
 
 // ─── Helpers ───
 
+function ersterVorhandenerFeldwert(
+  rohdaten: Record<string, unknown>,
+  felder?: Array<{ name: string }>,
+): number {
+  for (const feld of felder ?? []) {
+    if (rohdaten[feld.name] !== undefined) {
+      return Number(rohdaten[feld.name]) || 0;
+    }
+  }
+  return 0;
+}
+
 function berechneGamePunkte(
   rohdaten: Record<string, unknown>,
   wl: Wertungslogik,
@@ -61,8 +73,7 @@ function berechneGamePunkte(
       return zeit + strafzeit;
     }
     case "punkte_duell": {
-      const felder = wl.eingabefelder ?? [];
-      return felder.length > 0 ? (Number(rohdaten[felder[0].name]) || 0) : 0;
+      return ersterVorhandenerFeldwert(rohdaten, wl.eingabefelder);
     }
     case "formel": {
       const felder = wl.eingabefelder ?? [];
@@ -152,9 +163,7 @@ function formatRohdaten(
 // ─── Component ───
 
 export default function BestaetigungPage() {
-  const params = useParams();
   const router = useRouter();
-  const slug = params.slug as string;
 
   const [payload, setPayload] = useState<BestaetigungPayload | null>(null);
   const [step, setStep] = useState<1 | 2>(1);

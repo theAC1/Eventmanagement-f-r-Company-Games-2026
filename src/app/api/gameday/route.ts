@@ -4,6 +4,9 @@ import { requireRole } from "@/lib/auth-helpers";
 
 // GET /api/gameday
 export async function GET() {
+  const { error: authError } = await requireRole("SCHIEDSRICHTER");
+  if (authError) return authError;
+
   try {
     const config = await prisma.gamedayConfig.findFirst({
       orderBy: { createdAt: "desc" },

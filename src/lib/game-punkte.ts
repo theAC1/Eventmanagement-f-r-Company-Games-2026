@@ -4,6 +4,18 @@ import type { Wertungslogik } from "@/lib/wertungslogik-types";
 
 type DbClient = Pick<typeof prisma, "ergebnis">;
 
+function ersterVorhandenerFeldwert(
+  rohdaten: Record<string, unknown>,
+  felder?: Array<{ name: string }>,
+): number {
+  for (const feld of felder ?? []) {
+    if (rohdaten[feld.name] !== undefined) {
+      return Number(rohdaten[feld.name]) || 0;
+    }
+  }
+  return 0;
+}
+
 export function berechneGamePunkteAusRohdaten(
   rohdaten: Record<string, unknown>,
   wertungslogik: Wertungslogik | null,
@@ -35,11 +47,7 @@ export function berechneGamePunkteAusRohdaten(
     }
 
     case "punkte_duell": {
-      const felder = wertungslogik.eingabefelder;
-      if (felder && felder.length >= 1) {
-        return Number(rohdaten[felder[0].name] ?? 0);
-      }
-      return 0;
+      return ersterVorhandenerFeldwert(rohdaten, wertungslogik.eingabefelder);
     }
 
     case "formel": {

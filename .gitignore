@@ -38,9 +38,6 @@ yarn-error.log*
 # docker
 certs/
 
-# prisma
-prisma/migrations/*.sql
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
